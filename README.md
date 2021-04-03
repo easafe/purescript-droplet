@@ -1,2 +1,5 @@
-# ultra-safe
-Purescript ORM
+## ultra-safe
+
+### DSL for SQL
+
+### Query mapper
