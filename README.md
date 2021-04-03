@@ -1,4 +1,4 @@
-## ultra-safe
+## purescript-droplet
 
 ### DSL for SQL
 
