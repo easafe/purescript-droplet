@@ -3,16 +3,18 @@ module Droplet where
 import Prelude
 
 import Data.Array ((:))
+import Data.Array as DA
 import Data.String as DST
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
+import Prim.Row (class Cons, class Union)
 import Prim.RowList as RL
 import Type.Proxy (Proxy(..))
 
 {-
-select fieldsList | * | function | scalars
+select fieldsList ✓ | * ✓ | function | scalars
 
-from table name | sub select | select without table
+from table name ✓ | sub select | select without table
 
 where field op field | field op parameter | and/or
 
@@ -31,9 +33,13 @@ instance nilRowSelect :: RowSelect RL.Nil where
       toRowFieldList _ = []
 
 instance consRowSelectable :: (RowSelect tail, IsSymbol field) => RowSelect (RL.Cons field v tail) where
-      toRowFieldList _ = DS.reflectSymbol (Proxy :: Proxy field) : toRowFieldList (Proxy :: Proxy tail)
+      toRowFieldList _ = DA.snoc (toRowFieldList (Proxy :: Proxy tail)) $ DS.reflectSymbol (Proxy :: Proxy field)
 
-select :: forall fields fieldsList name. RL.RowToList fields fieldsList => RowSelect fieldsList => IsSymbol name => Proxy fields -> From fields name -> Query
+select :: forall projection extra fields fieldsList name.
+      Union projection extra fields =>
+      RL.RowToList projection fieldsList =>
+      RowSelect fieldsList =>
+      IsSymbol name => Proxy projection -> From fields name -> Query
 select _ = toQuery <<< Select fieldsList
       where fieldsList = DST.joinWith ", " $ toRowFieldList (Proxy :: Proxy fieldsList)
             toQuery = case _ of
@@ -57,15 +63,20 @@ data From (fieldsList :: Row Type) (name :: Symbol) = FromTable (Table fieldsLis
 from :: forall fields fieldsList name. RL.RowToList fields fieldsList => IsSymbol name => RowSelect fieldsList => Table fields name -> From fields name
 from table = FromTable table
 
-
 --where
 
-data Comparision a = Comparision String String (a -> a -> Boolean)
+equals :: forall fields extra field1 field2 t.
+      IsSymbol field1 =>
+      IsSymbol field2 =>
+      Cons field1 t extra fields =>
+      Cons field2 t extra fields =>
+      Proxy field1 -> Proxy field2 -> ?o
+equals _ _ = ?l
 
 newtype Where (fields :: Row Type) = Where String
 
-wher :: forall fields fieldsList. RL.RowToList fields fieldsList => RowSelect fieldsList => Array ?p -> Where fields
-wher _ = ?i
+-- wher :: forall fields fieldsList. RL.RowToList fields fieldsList => RowSelect fieldsList => Array ?p -> Where fields
+-- wher _ = ?i
 
 --select ... from ... wher name .<>. name2 and name .=. name3 or name .>=. name4
 

@@ -21,6 +21,9 @@ messages = table
 sel1 = select (Proxy :: Proxy Users) $ from users
 
 --shouldnt type check
---sel2 = select (Proxy :: Proxy Users) $ from messages
+--selerr1 = select (Proxy :: Proxy Users) $ from messages
+--selerr2 = select (Proxy :: Proxy (id :: Int, when :: Date)) $ from users
 
 --select some fields
+sel2 = select (Proxy :: Proxy (id :: Int)) $ from users
+sel3 = select (Proxy :: Proxy (id :: Int, birthday :: Date)) $ from users
