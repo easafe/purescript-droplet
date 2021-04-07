@@ -4,6 +4,7 @@ import Data.Date
 import Droplet
 import Prelude
 
+import Prim.Row (class Union)
 import Type.Proxy (Proxy(..))
 
 type Users = (id :: Int, name :: String, surname :: String, birthday :: Date, joined :: Date)
@@ -32,4 +33,5 @@ sel2 = select (Proxy :: Proxy (id :: Int)) $ from users
 sel3 = select (Proxy :: Proxy (id :: Int, birthday :: Date)) $ from users
 
 --where
-sel4 = select (Proxy :: Proxy (id :: Int)) (from users) $ wher $ ((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))
+sel4 = select (Proxy :: Proxy (id :: Int)) (from users) $ wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) {}
+sel5 = select (Proxy :: Proxy (id :: Int)) (from users) $ wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "parameter1")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) { parameter1 : "oio"}
