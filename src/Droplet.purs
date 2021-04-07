@@ -2,7 +2,6 @@ module Droplet where
 
 import Prelude
 
-import Data.Array ((:))
 import Data.Array as DA
 import Data.String as DST
 import Data.Symbol (class IsSymbol)
@@ -16,7 +15,7 @@ select fieldsList ✓ | * ✓ | function | scalars
 
 from table name ✓ | sub select | select without table
 
-where field op field | field op parameter | and/or
+where field op field ✓ | field op parameter | and/or ✓
 
 -}
 
@@ -24,7 +23,7 @@ where field op field | field op parameter | and/or
 
 newtype Query = Query String
 
-data Select (fieldsList :: Row Type) (name :: Symbol) = Select String (From fieldsList name)
+data Select (fields :: Row Type) (name :: Symbol) = Select String (From fields name) (Where fields)
 
 class RowSelect (fieldsList :: RL.RowList Type) where
       toRowFieldList :: forall proxy. proxy fieldsList -> Array String
@@ -39,11 +38,11 @@ select :: forall projection extra fields fieldsList name.
       Union projection extra fields =>
       RL.RowToList projection fieldsList =>
       RowSelect fieldsList =>
-      IsSymbol name => Proxy projection -> From fields name -> Query
-select _ = toQuery <<< Select fieldsList
+      IsSymbol name => Proxy projection -> From fields name -> Where fields -> Query
+select _ from = toQuery <<< Select fieldsList from
       where fieldsList = DST.joinWith ", " $ toRowFieldList (Proxy :: Proxy fieldsList)
             toQuery = case _ of
-                  Select fields (FromTable table) -> Query $ "select " <> fields <> " from " <> show table
+                  Select fields (FromTable table) (Where filter) -> Query $ "SELECT " <> fields <> " FROM " <> show table <> " " <> filter
 
 --from
 
@@ -65,18 +64,26 @@ from table = FromTable table
 
 --where
 
-equals :: forall fields extra field1 field2 t.
+newtype Operation (fields :: Row Type) = Operation String
+
+--should make these operators so can avoid brackets
+
+--for whatever reason, using the parameters instead of the types generates an error in the Data.Symbol module
+equals :: forall fields e extra field1 field2 t.
       IsSymbol field1 =>
       IsSymbol field2 =>
-      Cons field1 t extra fields =>
+      Cons field1 t e extra =>
       Cons field2 t extra fields =>
-      Proxy field1 -> Proxy field2 -> ?o
-equals _ _ = ?l
+      Proxy field1 -> Proxy field2 -> Operation fields
+equals _ _ = Operation $ ((DS.reflectSymbol (Proxy :: Proxy field1)) <> " = " <> (DS.reflectSymbol (Proxy :: Proxy field2)))
+
+--need to make sure that these cant generate invalid sql
+and :: forall fields. Operation fields -> Operation fields -> Operation fields
+and (Operation first) (Operation second) = Operation $ first <> " AND " <> second
 
 newtype Where (fields :: Row Type) = Where String
 
--- wher :: forall fields fieldsList. RL.RowToList fields fieldsList => RowSelect fieldsList => Array ?p -> Where fields
--- wher _ = ?i
+wher :: forall fields parameters fieldsList. RL.RowToList (fields + parameters) fieldsList => RowSelect fieldsList => Operation (fields + parameters) -> Where (fields + parameters)
+wher (Operation op) = Where $ "WHERE " <> op
 
---select ... from ... wher name .<>. name2 and name .=. name3 or name .>=. name4
 
