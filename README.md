@@ -1,5 +1,3 @@
 ## purescript-droplet
 
-### DSL for SQL
-
-### Query mapper
+_work in progress, pls come back later_

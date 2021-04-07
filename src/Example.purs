@@ -27,11 +27,10 @@ sel1 = select (Proxy :: Proxy Users) $ from users
 --selerr3 = select (Proxy :: Proxy (id :: Int)) (from users) (wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "id"))))
 
 
-
 --select some fields
 sel2 = select (Proxy :: Proxy (id :: Int)) $ from users
 sel3 = select (Proxy :: Proxy (id :: Int, birthday :: Date)) $ from users
 
 --where
-sel4 = select (Proxy :: Proxy (id :: Int)) (from users) $ wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) {}
-sel5 = select (Proxy :: Proxy (id :: Int)) (from users) $ wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "parameter1")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) { parameter1 : "oio"}
+sel4 = print $ select (Proxy :: Proxy (id :: Int)) (from users) $ wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) {}
+sel5 = print $ select (Proxy :: Proxy (id :: Int)) (from users) $ wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "parameter1")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) { parameter1 : "oio"}
