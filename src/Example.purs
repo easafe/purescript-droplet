@@ -34,3 +34,9 @@ sel3 = select (Proxy :: Proxy (id :: Int, birthday :: Date)) $ from users
 --where
 sel4 = print $ select (Proxy :: Proxy (id :: Int)) (from users) $ wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) {}
 sel5 = print $ select (Proxy :: Proxy (id :: Int)) (from users) $ wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "parameter1")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) { parameter1 : "oio"}
+
+selcom1 = select (Proxy :: Proxy (id :: Int))
+fromcom1 = from users
+wherecom1 = wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "parameter1")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) { parameter1 : "oio"}
+
+sel6 = selcom1 fromcom1 wherecom1
