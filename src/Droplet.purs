@@ -3,7 +3,7 @@ module Droplet where
 import Prelude
 
 import Data.Array as DA
-import Data.Foldable as DF
+import Data.Maybe (Maybe(..))
 import Data.String as DST
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
@@ -13,48 +13,57 @@ import Record.Unsafe as RU
 import Type.Proxy (Proxy(..))
 
 {-
-select fieldsList ✓ | * ✓ | sub select | function | scalars | compose
+select fieldsList ✓ | * ✓ | sub select | function | scalars | compose ✓
 
-from table name ✓ | sub select | compose
+from table name ✓ | sub select | compose ✓
 
-where field op field ✓ | field op parameter ✓ | and/or ✓ | compose
+where field op field ✓ | field op parameter ✓ | and/or ✓ | compose ✓
 
 join right | left | compose
 -}
 
 --select
 
-data Select (fields :: Row Type) parameters = Select String (From fields) (Where fields parameters)
+data Select (fields :: Row Type) = Select String
 
-select :: forall projection e fields fieldsList parameters.
-      Union projection e fields =>
-      RL.RowToList projection fieldsList =>
-      RowSelect fieldsList =>
-      Proxy projection -> From fields -> Where fields parameters -> Select fields parameters
-select _ froms wheres = Select fieldsList froms wheres
-      --only works for this kind of projection!
-      where fieldsList = DST.joinWith ", " $ toRowFieldList (Proxy :: Proxy fieldsList)
+select :: forall s to . ToSelect s to => s -> Select to
+select = toSelect
 
-class RowSelect (fieldsList :: RL.RowList Type) where
+class ToSelect from to | from -> to where
+      toSelect :: from -> Select to
+
+instance intToSelect :: ToSelect Int to where
+      toSelect n = Select $ show n
+
+instance rowToSelect ::
+      (RL.RowToList projection fieldsList,
+       RowListSelect fieldsList,
+       Union projection e fields) =>
+      ToSelect (Proxy projection) fields where
+      toSelect :: Proxy projection -> Select fields
+      toSelect _ = Select fieldsList
+            where fieldsList = DST.joinWith ", " $ toRowFieldList (Proxy :: Proxy fieldsList)
+
+class RowListSelect (fieldsList :: RL.RowList Type) where
       toRowFieldList :: forall proxy. proxy fieldsList -> Array String
 
-instance nilRowSelect :: RowSelect RL.Nil where
+instance nilRowSelect :: RowListSelect RL.Nil where
       toRowFieldList _ = []
 
-instance consRowSelectable :: (RowSelect tail, IsSymbol field) => RowSelect (RL.Cons field v tail) where
+instance consRowSelectable :: (RowListSelect tail, IsSymbol field) => RowListSelect (RL.Cons field v tail) where
       toRowFieldList _ = DA.snoc (toRowFieldList (Proxy :: Proxy tail)) $ DS.reflectSymbol (Proxy :: Proxy field)
 
 --from
 
-data Table (fieldsList :: Row Type) (name :: Symbol) = Table
+data Table (fields :: Row Type) (name :: Symbol) = Table
 
-data From (fieldsList :: Row Type) = FromTable String
+data From (fields :: Row Type) = FromTable String (Select fields)
 
 table :: forall fields name. IsSymbol name => Table fields name
 table = Table
 
-from :: forall fields name. IsSymbol name => Table fields name -> From fields
-from _ = FromTable $ DS.reflectSymbol (Proxy :: Proxy name)
+from :: forall fields name . IsSymbol name => Table fields name -> Select fields -> From fields
+from _ before = FromTable (DS.reflectSymbol (Proxy :: Proxy name)) before
 
 --where
 
@@ -66,7 +75,7 @@ data Filtered =
       Operation String String Operator |
       And Filtered Filtered
 
-data Where (fields :: Row Type) parameters = Where Filtered (Record parameters)
+data Where (fields :: Row Type) parameters = Where Filtered (Record parameters) (From fields)
 
 --should make these operators so can avoid brackets
 --for whatever reason, using the parameters instead of the types generates an error in the Data.Symbol module
@@ -83,27 +92,40 @@ and :: forall fields. Filters fields -> Filters fields -> Filters fields
 and (Filters first) (Filters second) = Filters (And first second)
 
 --it should be a type error for the field list and parameter list to share fields!
-wher :: forall fields parameters all. Union fields parameters all => Filters all -> Record parameters -> Where fields parameters
-wher (Filters filtered) parameters = Where filtered parameters
+wher :: forall fields parameters all. Union fields parameters all => Filters all -> Record parameters -> From fields -> Where fields parameters
+wher (Filters filtered) parameters before = Where filtered parameters before
 
---print
+-- --print
 
-data Query parameters = Query String (Record parameters)
+data Query parameters = Query String (Maybe (Record parameters))
 
-print :: forall fields parameters. Select fields parameters -> Query parameters
-print (Select fieldsList (FromTable tableName) (Where filtered parameters)) = Query query parameters
-      where query = "SELECT " <> fieldsList <> " FROM " <> tableName <> " WHERE " <> filters
+class Print p where
+      print :: forall parameters. p parameters -> Query parameters
 
-            filters = printFilter filtered
-            printFilter = case _ of
-                  Operation field otherField op ->
-                        fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
-                  And filter otherFilter -> printFilter filter <> " AND " <> printFilter otherFilter
-            fieldOrParameter field
-                  | RU.unsafeHas field parameters = "@" <> field
-                  | otherwise = field
-            printOperator = case _ of
-                  Equals -> " = "
+instance selectPrint :: Print Select where
+      print :: forall fields. Select fields -> Query fields
+      print (Select s) = Query ("SELECT " <> s) Nothing
+
+instance fromPrint :: Print From where
+      print :: forall fields. From fields -> Query fields
+      print (FromTable f before) = Query (q <> " FROM " <> f) Nothing
+            where Query q _ = print before
+
+instance wherPrint :: Print (Where fields) where
+      print :: forall parameters. Where fields parameters -> Query parameters
+      print (Where filtered parameters before) = Query (q <> " WHERE " <> filters) $ Just parameters
+            where Query q _ = print before
+
+                  filters = printFilter filtered
+                  printFilter = case _ of
+                        Operation field otherField op ->
+                              fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
+                        And filter otherFilter -> printFilter filter <> " AND " <> printFilter otherFilter
+                  fieldOrParameter field
+                        | RU.unsafeHas field parameters = "@" <> field
+                        | otherwise = field
+                  printOperator = case _ of
+                        Equals -> " = "
 
 instance queryShow :: Show (Query parameters) where
       show (Query q _) = q

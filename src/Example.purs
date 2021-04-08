@@ -17,26 +17,32 @@ type Messages = (id :: Int, name :: String)
 messages :: Table Messages "messages"
 messages = table
 
---select all fields
+--only select
 
-sel1 = select (Proxy :: Proxy Users) $ from users
+selonly1 = select 1
+selonly2 = select (Proxy :: Proxy Users)
+selonly3 = select (Proxy :: Proxy (id :: Int, joined :: Date))
+selonly4 = select (Proxy :: Proxy (id :: Int, name :: String))
 
---shouldnt type check
---selerr1 = select (Proxy :: Proxy Users) $ from messages
---selerr2 = select (Proxy :: Proxy (id :: Int, when :: Date)) $ from users
---selerr3 = select (Proxy :: Proxy (id :: Int)) (from users) (wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "id"))))
+--only from
 
+fromonly1 = from users
+fromonly2 = from messages
 
---select some fields
-sel2 = select (Proxy :: Proxy (id :: Int)) $ from users
-sel3 = select (Proxy :: Proxy (id :: Int, birthday :: Date)) $ from users
+-- only where
 
---where
-sel4 = print $ select (Proxy :: Proxy (id :: Int)) (from users) $ wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) {}
-sel5 = print $ select (Proxy :: Proxy (id :: Int)) (from users) $ wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "parameter1")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) { parameter1 : "oio"}
+whereonly1 = wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) {}
+whereonly2 = wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "parameter1")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) { parameter1 : "oio"}
 
-selcom1 = select (Proxy :: Proxy (id :: Int))
-fromcom1 = from users
-wherecom1 = wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "parameter1")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) { parameter1 : "oio"}
+--select from
 
-sel6 = selcom1 fromcom1 wherecom1
+selfrom1 = selonly2 # fromonly1
+selfrom2 = selonly3 # fromonly1
+selfrom3 = selonly4 # fromonly2
+selfrom4 = selonly1 # fromonly2
+
+--select from where
+selfromwhere1 = selonly2 # fromonly1 # whereonly1
+selfromwhere2 = selonly3 # fromonly1 # whereonly2
+selfromwhere3 = selonly1 # fromonly1 # whereonly2
+
