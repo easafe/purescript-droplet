@@ -13,13 +13,17 @@ import Record.Unsafe as RU
 import Type.Proxy (Proxy(..))
 
 {-
-select fieldsList ✓ | * ✓ | sub select | function | scalars | compose ✓
+select fieldsList ✓ | * ✓ | sub select | function | scalars ✓
 
-from table name ✓ | sub select | compose ✓
+from table name ✓ | sub select
 
-where field op field ✓ | field op parameter ✓ | and/or ✓ | compose ✓
+where field op field ✓ | field op parameter ✓ | and/or ✓ | sub select
 
-join right | left | compose
+group by fields
+
+order by fields
+
+join right | left
 -}
 
 --select
@@ -67,17 +71,19 @@ from _ before = FromTable (DS.reflectSymbol (Proxy :: Proxy name)) before
 
 --where
 
-data Operator = Equals
+data Operator =
+      Equals |
+      NotEquals
 
 newtype Filters (fields :: Row Type) = Filters Filtered
 
 data Filtered =
       Operation String String Operator |
-      And Filtered Filtered
+      And Filtered Filtered |
+      Or Filtered Filtered
 
 data Where (fields :: Row Type) parameters = Where Filtered (Record parameters) (From fields)
 
---should make these operators so can avoid brackets
 --for whatever reason, using the parameters instead of the types generates an error in the Data.Symbol module
 equals :: forall fields e extra field1 field2 t.
       IsSymbol field1 =>
@@ -87,15 +93,32 @@ equals :: forall fields e extra field1 field2 t.
       Proxy field1 -> Proxy field2 -> Filters fields
 equals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) Equals
 
---need to make sure that these cant generate invalid sql
+notEquals :: forall fields e extra field1 field2 t.
+      IsSymbol field1 =>
+      IsSymbol field2 =>
+      Cons field1 t e extra =>
+      Cons field2 t extra fields =>
+      Proxy field1 -> Proxy field2 -> Filters fields
+notEquals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) NotEquals
+
 and :: forall fields. Filters fields -> Filters fields -> Filters fields
 and (Filters first) (Filters second) = Filters (And first second)
 
+or :: forall fields. Filters fields -> Filters fields -> Filters fields
+or (Filters first) (Filters second) = Filters (Or first second)
+
+infix 4 notEquals as .<>.
+infix 4 equals as .=.
+infixr 3 and as .&&.
+infixr 2 or as .||.
+
 --it should be a type error for the field list and parameter list to share fields!
-wher :: forall fields parameters all. Union fields parameters all => Filters all -> Record parameters -> From fields -> Where fields parameters
+wher :: forall fields parameters all.
+      Union fields parameters all =>
+      Filters all -> Record parameters -> From fields -> Where fields parameters
 wher (Filters filtered) parameters before = Where filtered parameters before
 
--- --print
+--print
 
 data Query parameters = Query String (Maybe (Record parameters))
 
@@ -121,11 +144,13 @@ instance wherPrint :: Print (Where fields) where
                         Operation field otherField op ->
                               fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
                         And filter otherFilter -> printFilter filter <> " AND " <> printFilter otherFilter
+                        Or filter otherFilter -> printFilter filter <> " OR " <> printFilter otherFilter
                   fieldOrParameter field
                         | RU.unsafeHas field parameters = "@" <> field
                         | otherwise = field
                   printOperator = case _ of
                         Equals -> " = "
+                        NotEquals -> " <> "
 
 instance queryShow :: Show (Query parameters) where
       show (Query q _) = q

@@ -31,6 +31,7 @@ fromonly2 = from messages
 
 -- only where
 
+--use the operators where
 whereonly1 = wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) {}
 whereonly2 = wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "parameter1")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) { parameter1 : "oio"}
 
