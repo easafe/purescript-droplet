@@ -24,6 +24,8 @@ selonly2 = select (Proxy :: Proxy Users)
 selonly3 = select (Proxy :: Proxy (id :: Int, joined :: Date))
 selonly4 = select (Proxy :: Proxy (id :: Int, name :: String))
 
+subselect1 = select (Proxy :: Proxy (id :: Int, name :: String))
+
 --only from
 
 fromonly1 = from users

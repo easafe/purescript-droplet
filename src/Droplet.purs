@@ -28,7 +28,10 @@ join right | left
 
 --select
 
-data Select (fields :: Row Type) = Select String
+--hack
+data Select (fields :: Row Type) =
+      SelectFields String |
+      SelectScalar String
 
 select :: forall s to . ToSelect s to => s -> Select to
 select = toSelect
@@ -36,17 +39,19 @@ select = toSelect
 class ToSelect from to | from -> to where
       toSelect :: from -> Select to
 
-instance intToSelect :: ToSelect Int to where
-      toSelect n = Select $ show n
-
 instance rowToSelect ::
       (RL.RowToList projection fieldsList,
        RowListSelect fieldsList,
        Union projection e fields) =>
       ToSelect (Proxy projection) fields where
       toSelect :: Proxy projection -> Select fields
-      toSelect _ = Select fieldsList
-            where fieldsList = DST.joinWith ", " $ toRowFieldList (Proxy :: Proxy fieldsList)
+      toSelect _ = SelectFields <<< DST.joinWith ", " $ toRowFieldList (Proxy :: Proxy fieldsList)
+else
+-- instance arrayToSelect :: ToSelect s => ToSelect (Array s) to where
+--       toSelect
+
+instance intToSelect :: Show s => ToSelect s to where
+      toSelect s = SelectScalar $ show s
 
 class RowListSelect (fieldsList :: RL.RowList Type) where
       toRowFieldList :: forall proxy. proxy fieldsList -> Array String
@@ -54,7 +59,7 @@ class RowListSelect (fieldsList :: RL.RowList Type) where
 instance nilRowSelect :: RowListSelect RL.Nil where
       toRowFieldList _ = []
 
-instance consRowSelectable :: (RowListSelect tail, IsSymbol field) => RowListSelect (RL.Cons field v tail) where
+instance consRowSelect :: (RowListSelect tail, IsSymbol field) => RowListSelect (RL.Cons field v tail) where
       toRowFieldList _ = DA.snoc (toRowFieldList (Proxy :: Proxy tail)) $ DS.reflectSymbol (Proxy :: Proxy field)
 
 --from
@@ -127,7 +132,10 @@ class Print p where
 
 instance selectPrint :: Print Select where
       print :: forall fields. Select fields -> Query fields
-      print (Select s) = Query ("SELECT " <> s) Nothing
+      print sel = Query ("SELECT " <> printed) Nothing
+            where printed = case sel of
+                        SelectScalar s -> s
+                        SelectFields fields -> fields
 
 instance fromPrint :: Print From where
       print :: forall fields. From fields -> Query fields
