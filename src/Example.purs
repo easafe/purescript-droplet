@@ -33,9 +33,9 @@ fromonly2 = from messages
 
 -- only where
 
--- --use the operators where
--- whereonly1 = wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "surname")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) {}
--- whereonly2 = wher (((Proxy :: Proxy "name") `equals` (Proxy :: Proxy "parameter1")) `and` ((Proxy :: Proxy "birthday") `equals` (Proxy :: Proxy "joined"))) { parameter1 : "oio"}
+--use the operators where
+whereonly1 = wher ((Proxy :: Proxy "name") .=. (Proxy :: Proxy "surname") .&&. (Proxy :: Proxy "birthday") .=. (Proxy :: Proxy "joined")) {}
+whereonly2 = wher ((Proxy :: Proxy "name") .=. (Proxy :: Proxy "parameter1") .&&. (Proxy :: Proxy "birthday") .=. (Proxy :: Proxy "joined")) { parameter1 : "oio"}
 
 --select from
 
@@ -44,8 +44,8 @@ selfrom2 = selonly3 # fromonly1
 selfrom3 = selonly4 # fromonly2
 selfrom4 = selonly1 # fromonly2
 
--- --select from where
--- selfromwhere1 = selonly2 # fromonly1 # whereonly1
--- selfromwhere2 = selonly3 # fromonly1 # whereonly2
--- selfromwhere3 = selonly1 # fromonly1 # whereonly2
+--select from where
+selfromwhere1 = selonly2 # fromonly1 # whereonly1
+selfromwhere2 = selonly3 # fromonly1 # whereonly2
+selfromwhere3 = selonly1 # fromonly1 # whereonly2
 

@@ -82,55 +82,54 @@ instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields w
       toFrom :: forall s. Table name fields -> Select s fields -> From (FromTable name (Select s fields) fields) (Select s fields) fields
       toFrom _ s = From $ FromTable s
 
--- --where
+--where
 
--- data Operator =
---       Equals |
---       NotEquals
+data Operator =
+      Equals |
+      NotEquals
 
--- newtype Filters (fields :: Row Type) = Filters Filtered
+newtype Filters (fields :: Row Type) = Filters Filtered
 
--- data Filtered =
---       Operation String String Operator |
---       And Filtered Filtered |
---       Or Filtered Filtered
+data Filtered =
+      Operation String String Operator |
+      And Filtered Filtered |
+      Or Filtered Filtered
 
--- data Where before (fields :: Row Type) parameters = Where Filtered (Record parameters) before
+data Where f (fields :: Row Type) parameters = Where Filtered (Record parameters) f
 
--- --for whatever reason, using the proxy parameters instead of the types generates an error in the Data.Symbol module
--- equals :: forall fields e extra field1 field2 t.
---       IsSymbol field1 =>
---       IsSymbol field2 =>
---       Cons field1 t e extra =>
---       Cons field2 t extra fields =>
---       Proxy field1 -> Proxy field2 -> Filters fields
--- equals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) Equals
+--for whatever reason, using the proxy parameters instead of the types generates an error in the Data.Symbol module
+equals :: forall fields e extra field1 field2 t.
+      IsSymbol field1 =>
+      IsSymbol field2 =>
+      Cons field1 t e extra =>
+      Cons field2 t extra fields =>
+      Proxy field1 -> Proxy field2 -> Filters fields
+equals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) Equals
 
--- notEquals :: forall fields e extra field1 field2 t.
---       IsSymbol field1 =>
---       IsSymbol field2 =>
---       Cons field1 t e extra =>
---       Cons field2 t extra fields =>
---       Proxy field1 -> Proxy field2 -> Filters fields
--- notEquals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) NotEquals
+notEquals :: forall fields e extra field1 field2 t.
+      IsSymbol field1 =>
+      IsSymbol field2 =>
+      Cons field1 t e extra =>
+      Cons field2 t extra fields =>
+      Proxy field1 -> Proxy field2 -> Filters fields
+notEquals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) NotEquals
 
--- and :: forall fields. Filters fields -> Filters fields -> Filters fields
--- and (Filters first) (Filters second) = Filters (And first second)
+and :: forall fields. Filters fields -> Filters fields -> Filters fields
+and (Filters first) (Filters second) = Filters (And first second)
 
--- or :: forall fields. Filters fields -> Filters fields -> Filters fields
--- or (Filters first) (Filters second) = Filters (Or first second)
+or :: forall fields. Filters fields -> Filters fields -> Filters fields
+or (Filters first) (Filters second) = Filters (Or first second)
 
--- infix 4 notEquals as .<>.
--- infix 4 equals as .=.
--- infixr 3 and as .&&.
--- infixr 2 or as .||.
+infix 4 notEquals as .<>.
+infix 4 equals as .=.
+infixr 3 and as .&&.
+infixr 2 or as .||.
 
--- --it should be a type error for the field list and parameter list to share fields!
--- wher :: forall from before fields parameters all.
---       Union fields parameters all =>
---       ToFrom from before fields =>
---       Filters all -> Record parameters -> before fields -> Where (before fields) fields parameters
--- wher (Filters filtered) parameters before = Where filtered parameters before
+--it should be a type error for the field list and parameter list to share fields!
+wher :: forall f s fields parameters all.
+      Union fields parameters all =>
+      Filters all -> Record parameters -> From f s fields -> Where (From f s fields) fields parameters
+wher (Filters filtered) parameters before = Where filtered parameters before
 
 --print
 
@@ -179,23 +178,23 @@ instance fromTablePrintFrom :: (IsSymbol name, PrintSelect s) => PrintFrom (From
             where tableName = DS.reflectSymbol (Proxy :: Proxy name)
                   sel = printSelect s
 
--- -- instance wherPrint :: Print (Where fields) where
--- --       print :: forall parameters. Where fields parameters -> Query parameters
--- --       print (Where filtered parameters before) = Query (q <> " WHERE " <> filters) $ Just parameters
--- --             where Query q _ = print before
+-- instance wherPrint :: Print f => Print (Where f fields) where
+--       print :: forall parameters. Where f fields parameters -> Query parameters
+--       print (Where filtered parameters fr) = Query (q <> " WHERE " <> filters) $ Just parameters
+--             where Query q _ = print fr
 
--- --                   filters = printFilter filtered
--- --                   printFilter = case _ of
--- --                         Operation field otherField op ->
--- --                               fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
--- --                         And filter otherFilter -> printFilter filter <> " AND " <> printFilter otherFilter
--- --                         Or filter otherFilter -> printFilter filter <> " OR " <> printFilter otherFilter
--- --                   fieldOrParameter field
--- --                         | RU.unsafeHas field parameters = "@" <> field
--- --                         | otherwise = field
--- --                   printOperator = case _ of
--- --                         Equals -> " = "
--- --                         NotEquals -> " <> "
+--                   filters = printFilter filtered
+--                   printFilter = case _ of
+--                         Operation field otherField op ->
+--                               fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
+--                         And filter otherFilter -> printFilter filter <> " AND " <> printFilter otherFilter
+--                         Or filter otherFilter -> printFilter filter <> " OR " <> printFilter otherFilter
+--                   fieldOrParameter field
+--                         | RU.unsafeHas field parameters = "@" <> field
+--                         | otherwise = field
+--                   printOperator = case _ of
+--                         Equals -> " = "
+--                         NotEquals -> " <> "
 
 instance queryShow :: Show (Query parameters) where
       show (Query q _) = q
