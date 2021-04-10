@@ -28,100 +28,109 @@ join right | left
 
 --select
 
---hack
-data Select (fields :: Row Type) =
-      SelectFields String |
-      SelectScalar String
+newtype Select s (fields :: Row Type) = Select s
 
-select :: forall s to . ToSelect s to => s -> Select to
+data SelectFields (projection :: Row Type) (fields :: Row Type) = SelectFields
+
+newtype SelectScalar s (fields :: Row Type) = SelectScalar s
+
+--newtype SubSelectFrom (fields :: Row Type) = SubSelectFrom (FromTable (SubSelectFrom fields) fields)
+
+--newtype SubSelectWhere parameters (fields :: Row Type) = SubSelectWhere (Where (FromTable (SubSelectFrom fields) fields) fields parameters)
+
+select :: forall from s to . ToSelect from s to => from -> Select (s to) to
 select = toSelect
 
-class ToSelect from to | from -> to where
-      toSelect :: from -> Select to
+class ToSelect from s to | from -> s where
+      toSelect :: from -> Select (s to) to
 
 instance rowToSelect ::
       (RL.RowToList projection fieldsList,
-       RowListSelect fieldsList,
+       PrintRowList fieldsList,
        Union projection e fields) =>
-      ToSelect (Proxy projection) fields where
-      toSelect :: Proxy projection -> Select fields
-      toSelect _ = SelectFields <<< DST.joinWith ", " $ toRowFieldList (Proxy :: Proxy fieldsList)
+      ToSelect (Proxy projection) (SelectFields projection) fields where
+      toSelect :: Proxy projection -> Select (SelectFields projection fields) fields
+      toSelect _ = Select SelectFields
 else
--- instance arrayToSelect :: ToSelect s => ToSelect (Array s) to where
---       toSelect
-
-instance intToSelect :: Show s => ToSelect s to where
-      toSelect s = SelectScalar $ show s
-
-class RowListSelect (fieldsList :: RL.RowList Type) where
-      toRowFieldList :: forall proxy. proxy fieldsList -> Array String
-
-instance nilRowSelect :: RowListSelect RL.Nil where
-      toRowFieldList _ = []
-
-instance consRowSelect :: (RowListSelect tail, IsSymbol field) => RowListSelect (RL.Cons field v tail) where
-      toRowFieldList _ = DA.snoc (toRowFieldList (Proxy :: Proxy tail)) $ DS.reflectSymbol (Proxy :: Proxy field)
+-- instance fromToSelect :: ToSelect (FromTable before fields) SubSelectFrom to where
+--       toSelect from = SubSelectFrom from
+-- else
+-- instance whereToSelect :: ToSelect (Where before fields parameters) (SubSelectWhere parameters) to where
+--       toSelect wher = SubSelectWhere wher
+-- else
+instance showToSelect :: Show s => ToSelect s (SelectScalar s) to where
+      toSelect s = Select $ SelectScalar s
 
 --from
 
-data Table (fields :: Row Type) (name :: Symbol) = Table
+newtype From f s (fields :: Row Type) = From f
 
-data From (fields :: Row Type) = FromTable String (Select fields)
+data Table (name :: Symbol) (fields :: Row Type) = Table
 
-table :: forall fields name. IsSymbol name => Table fields name
+data FromTable (name :: Symbol) s (fields :: Row Type) = FromTable s
+
+table :: forall name fields. IsSymbol name => Table name fields
 table = Table
 
-from :: forall fields name . IsSymbol name => Table fields name -> Select fields -> From fields
-from _ before = FromTable (DS.reflectSymbol (Proxy :: Proxy name)) before
+from :: forall from f s to. ToFrom from f to => from -> Select s to -> From (f (Select s to) to) (Select s to) to
+from = toFrom
 
---where
+class ToFrom from f to | from -> f where
+      toFrom :: forall s. from -> Select s to -> From (f (Select s to) to) (Select s to) to
 
-data Operator =
-      Equals |
-      NotEquals
+instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields where
+      toFrom :: forall s. Table name fields -> Select s fields -> From (FromTable name (Select s fields) fields) (Select s fields) fields
+      toFrom _ s = From $ FromTable s
 
-newtype Filters (fields :: Row Type) = Filters Filtered
+-- --where
 
-data Filtered =
-      Operation String String Operator |
-      And Filtered Filtered |
-      Or Filtered Filtered
+-- data Operator =
+--       Equals |
+--       NotEquals
 
-data Where (fields :: Row Type) parameters = Where Filtered (Record parameters) (From fields)
+-- newtype Filters (fields :: Row Type) = Filters Filtered
 
---for whatever reason, using the parameters instead of the types generates an error in the Data.Symbol module
-equals :: forall fields e extra field1 field2 t.
-      IsSymbol field1 =>
-      IsSymbol field2 =>
-      Cons field1 t e extra =>
-      Cons field2 t extra fields =>
-      Proxy field1 -> Proxy field2 -> Filters fields
-equals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) Equals
+-- data Filtered =
+--       Operation String String Operator |
+--       And Filtered Filtered |
+--       Or Filtered Filtered
 
-notEquals :: forall fields e extra field1 field2 t.
-      IsSymbol field1 =>
-      IsSymbol field2 =>
-      Cons field1 t e extra =>
-      Cons field2 t extra fields =>
-      Proxy field1 -> Proxy field2 -> Filters fields
-notEquals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) NotEquals
+-- data Where before (fields :: Row Type) parameters = Where Filtered (Record parameters) before
 
-and :: forall fields. Filters fields -> Filters fields -> Filters fields
-and (Filters first) (Filters second) = Filters (And first second)
+-- --for whatever reason, using the proxy parameters instead of the types generates an error in the Data.Symbol module
+-- equals :: forall fields e extra field1 field2 t.
+--       IsSymbol field1 =>
+--       IsSymbol field2 =>
+--       Cons field1 t e extra =>
+--       Cons field2 t extra fields =>
+--       Proxy field1 -> Proxy field2 -> Filters fields
+-- equals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) Equals
 
-or :: forall fields. Filters fields -> Filters fields -> Filters fields
-or (Filters first) (Filters second) = Filters (Or first second)
+-- notEquals :: forall fields e extra field1 field2 t.
+--       IsSymbol field1 =>
+--       IsSymbol field2 =>
+--       Cons field1 t e extra =>
+--       Cons field2 t extra fields =>
+--       Proxy field1 -> Proxy field2 -> Filters fields
+-- notEquals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) NotEquals
 
-infix 4 notEquals as .<>.
-infix 4 equals as .=.
-infixr 3 and as .&&.
-infixr 2 or as .||.
+-- and :: forall fields. Filters fields -> Filters fields -> Filters fields
+-- and (Filters first) (Filters second) = Filters (And first second)
 
---it should be a type error for the field list and parameter list to share fields!
-wher :: forall fields parameters all.
-      Union fields parameters all =>
-      Filters all -> Record parameters -> From fields -> Where fields parameters
-wher (Filters filtered) parameters before = Where filtered parameters before
+-- or :: forall fields. Filters fields -> Filters fields -> Filters fields
+-- or (Filters first) (Filters second) = Filters (Or first second)
+
+-- infix 4 notEquals as .<>.
+-- infix 4 equals as .=.
+-- infixr 3 and as .&&.
+-- infixr 2 or as .||.
+
+-- --it should be a type error for the field list and parameter list to share fields!
+-- wher :: forall from before fields parameters all.
+--       Union fields parameters all =>
+--       ToFrom from before fields =>
+--       Filters all -> Record parameters -> before fields -> Where (before fields) fields parameters
+-- wher (Filters filtered) parameters before = Where filtered parameters before
 
 --print
 
@@ -130,35 +139,63 @@ data Query parameters = Query String (Maybe (Record parameters))
 class Print p where
       print :: forall parameters. p parameters -> Query parameters
 
-instance selectPrint :: Print Select where
-      print :: forall fields. Select fields -> Query fields
-      print sel = Query ("SELECT " <> printed) Nothing
-            where printed = case sel of
-                        SelectScalar s -> s
-                        SelectFields fields -> fields
+instance selectPrint :: PrintSelect s => Print (Select s) where
+      print :: forall fields. Select s fields -> Query fields
+      print (Select sel) = Query (printSelect sel) Nothing
 
-instance fromPrint :: Print From where
-      print :: forall fields. From fields -> Query fields
-      print (FromTable f before) = Query (q <> " FROM " <> f) Nothing
-            where Query q _ = print before
+class PrintSelect s where
+      printSelect :: s -> String
 
-instance wherPrint :: Print (Where fields) where
-      print :: forall parameters. Where fields parameters -> Query parameters
-      print (Where filtered parameters before) = Query (q <> " WHERE " <> filters) $ Just parameters
-            where Query q _ = print before
+instance selectFieldPrintSelect ::
+      (RL.RowToList projection fieldsList,
+       PrintRowList fieldsList,
+       Union projection e fields) =>
+      PrintSelect (SelectFields projection fields) where
+      printSelect _ = "SELECT " <> fields
+            where fields = DST.joinWith ", " $ printRowList (Proxy :: Proxy fieldsList)
 
-                  filters = printFilter filtered
-                  printFilter = case _ of
-                        Operation field otherField op ->
-                              fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
-                        And filter otherFilter -> printFilter filter <> " AND " <> printFilter otherFilter
-                        Or filter otherFilter -> printFilter filter <> " OR " <> printFilter otherFilter
-                  fieldOrParameter field
-                        | RU.unsafeHas field parameters = "@" <> field
-                        | otherwise = field
-                  printOperator = case _ of
-                        Equals -> " = "
-                        NotEquals -> " <> "
+instance showPrintSelect :: Show s => PrintSelect (SelectScalar s to) where
+      printSelect (SelectScalar s) = "SELECT " <> show s
+
+class PrintRowList (fieldsList :: RL.RowList Type) where
+      printRowList :: forall proxy. proxy fieldsList -> Array String
+
+instance nilPrintRowList :: PrintRowList RL.Nil where
+      printRowList _ = []
+
+instance consPrintRowList :: (PrintRowList tail, IsSymbol field) => PrintRowList (RL.Cons field v tail) where
+      printRowList _ = DA.snoc (printRowList (Proxy :: Proxy tail)) $ DS.reflectSymbol (Proxy :: Proxy field)
+
+instance fromPrint :: PrintFrom f => Print (From f s) where
+      print :: forall fields. From f s fields -> Query fields
+      print (From fr) = Query (printFrom fr) Nothing
+
+class PrintFrom f where
+      printFrom :: f -> String
+
+instance fromTablePrintFrom :: (IsSymbol name, PrintSelect s) => PrintFrom (FromTable name (Select s fields) fields) where
+      printFrom :: FromTable name (Select s fields) fields -> String
+      printFrom (FromTable (Select s)) = sel <> " FROM " <> tableName
+            where tableName = DS.reflectSymbol (Proxy :: Proxy name)
+                  sel = printSelect s
+
+-- -- instance wherPrint :: Print (Where fields) where
+-- --       print :: forall parameters. Where fields parameters -> Query parameters
+-- --       print (Where filtered parameters before) = Query (q <> " WHERE " <> filters) $ Just parameters
+-- --             where Query q _ = print before
+
+-- --                   filters = printFilter filtered
+-- --                   printFilter = case _ of
+-- --                         Operation field otherField op ->
+-- --                               fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
+-- --                         And filter otherFilter -> printFilter filter <> " AND " <> printFilter otherFilter
+-- --                         Or filter otherFilter -> printFilter filter <> " OR " <> printFilter otherFilter
+-- --                   fieldOrParameter field
+-- --                         | RU.unsafeHas field parameters = "@" <> field
+-- --                         | otherwise = field
+-- --                   printOperator = case _ of
+-- --                         Equals -> " = "
+-- --                         NotEquals -> " <> "
 
 instance queryShow :: Show (Query parameters) where
       show (Query q _) = q
