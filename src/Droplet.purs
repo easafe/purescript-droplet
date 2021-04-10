@@ -178,23 +178,29 @@ instance fromTablePrintFrom :: (IsSymbol name, PrintSelect s) => PrintFrom (From
             where tableName = DS.reflectSymbol (Proxy :: Proxy name)
                   sel = printSelect s
 
--- instance wherPrint :: Print f => Print (Where f fields) where
---       print :: forall parameters. Where f fields parameters -> Query parameters
---       print (Where filtered parameters fr) = Query (q <> " WHERE " <> filters) $ Just parameters
---             where Query q _ = print fr
+instance wherPrint :: PrintWhere f => Print (Where f fields) where
+      print :: forall parameters. Where f fields parameters -> Query parameters
+      print (Where filtered parameters fr) = Query (q <> " WHERE " <> filters) $ Just parameters
+            where q = printWhere fr
 
---                   filters = printFilter filtered
---                   printFilter = case _ of
---                         Operation field otherField op ->
---                               fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
---                         And filter otherFilter -> printFilter filter <> " AND " <> printFilter otherFilter
---                         Or filter otherFilter -> printFilter filter <> " OR " <> printFilter otherFilter
---                   fieldOrParameter field
---                         | RU.unsafeHas field parameters = "@" <> field
---                         | otherwise = field
---                   printOperator = case _ of
---                         Equals -> " = "
---                         NotEquals -> " <> "
+                  filters = printFilter filtered
+                  printFilter = case _ of
+                        Operation field otherField op ->
+                              fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
+                        And filter otherFilter -> printFilter filter <> " AND " <> printFilter otherFilter
+                        Or filter otherFilter -> printFilter filter <> " OR " <> printFilter otherFilter
+                  fieldOrParameter field
+                        | RU.unsafeHas field parameters = "@" <> field
+                        | otherwise = field
+                  printOperator = case _ of
+                        Equals -> " = "
+                        NotEquals -> " <> "
+
+class PrintWhere f where
+      printWhere :: f -> String
+
+instance fromPrintWhere :: PrintFrom f => PrintWhere (From f s fields) where
+      printWhere (From fr) = printFrom fr
 
 instance queryShow :: Show (Query parameters) where
       show (Query q _) = q
