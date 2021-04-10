@@ -7,6 +7,7 @@ import Data.Maybe (Maybe(..))
 import Data.String as DST
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
+import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Union)
 import Prim.RowList as RL
 import Record.Unsafe as RU
@@ -30,11 +31,13 @@ join right | left
 
 newtype Select s (fields :: Row Type) = Select s
 
+newtype SubSelect s (fields :: Row Type) = SubSelect s
+
 data SelectFields (projection :: Row Type) (fields :: Row Type) = SelectFields
 
 newtype SelectScalar s (fields :: Row Type) = SelectScalar s
 
---newtype SubSelectFrom (fields :: Row Type) = SubSelectFrom (FromTable (SubSelectFrom fields) fields)
+newtype SubSelectFrom f s (fields :: Row Type) = SubSelectFrom (From f s fields)
 
 --newtype SubSelectWhere parameters (fields :: Row Type) = SubSelectWhere (Where (FromTable (SubSelectFrom fields) fields) fields parameters)
 
@@ -52,12 +55,15 @@ instance rowToSelect ::
       toSelect :: Proxy projection -> Select (SelectFields projection fields) fields
       toSelect _ = Select SelectFields
 else
--- instance fromToSelect :: ToSelect (FromTable before fields) SubSelectFrom to where
---       toSelect from = SubSelectFrom from
--- else
+instance fromToSelect :: ToSelect (From f s to) (SubSelectFrom f s) to where
+      toSelect fr = Select $ SubSelectFrom fr
+else
 -- instance whereToSelect :: ToSelect (Where before fields parameters) (SubSelectWhere parameters) to where
 --       toSelect wher = SubSelectWhere wher
 -- else
+instance tupleToSelect :: (ToSelect from s to, ToSelect from2 s2 to2) => ToSelect (Tuple from from2) (SubSelect (Tuple (Select (s to) to) (Select (s2 to2) to2))) fields where
+      toSelect (Tuple s s2) = Select <<< SubSelect $ Tuple (toSelect s) (toSelect s2)
+else
 instance showToSelect :: Show s => ToSelect s (SelectScalar s) to where
       toSelect s = Select $ SelectScalar s
 
@@ -67,7 +73,7 @@ newtype From f s (fields :: Row Type) = From f
 
 data Table (name :: Symbol) (fields :: Row Type) = Table
 
-data FromTable (name :: Symbol) s (fields :: Row Type) = FromTable s
+newtype FromTable (name :: Symbol) s (fields :: Row Type) = FromTable s
 
 table :: forall name fields. IsSymbol name => Table name fields
 table = Table
