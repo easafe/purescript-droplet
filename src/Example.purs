@@ -39,7 +39,6 @@ fromonly2 = from messages
 
 --select from
 
-selfrom1 :: From (FromTable "users" _ Users) _ Users
 selfrom1 = selonly2 # fromonly1
 selfrom2 = selonly3 # fromonly1
 selfrom3 = selonly4 # fromonly2

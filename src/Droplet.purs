@@ -41,7 +41,7 @@ newtype SelectScalar s (fields :: Row Type) = SelectScalar s
 select :: forall from s to . ToSelect from s to => from -> Select (s to) to
 select = toSelect
 
-class ToSelect from s to | from -> s where
+class ToSelect from s to | from -> s, s -> from where
       toSelect :: from -> Select (s to) to
 
 instance rowToSelect ::
@@ -73,9 +73,9 @@ table :: forall name fields. IsSymbol name => Table name fields
 table = Table
 
 from :: forall from f s to. ToFrom from f to => from -> Select s to -> From (f (Select s to) to) (Select s to) to
-from = toFrom
+from f s = toFrom f s
 
-class ToFrom from f to | from -> f where
+class ToFrom from f to | from -> f, f -> from where
       toFrom :: forall s. from -> Select s to -> From (f (Select s to) to) (Select s to) to
 
 instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields where
