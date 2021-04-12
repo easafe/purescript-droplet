@@ -18,15 +18,21 @@ type Messages = (id :: Int, name :: String)
 messages :: Table "messages" Messages
 messages = table
 
+id :: Field "id"
+id = Field
+
 --only select
 
 selonly1 = select 1
 selonly2 = select (Proxy :: Proxy Users)
 selonly3 = select (Proxy :: Proxy (id :: Int, joined :: Date))
 selonly4 = select (Proxy :: Proxy (id :: Int, name :: String))
+selonly5 = select (Field :: Field "name")
+selonly6 = select id
 
-subselect1 = select (select (Proxy :: Proxy (id :: Int, name :: String)) # from messages)
-subselect2 = select (Tuple (Proxy :: Proxy Users) (select (Proxy :: Proxy (id :: Int, name :: String)) # from messages))
+subselect1 = select (select (Proxy :: Proxy (id :: Int)) # from messages)
+subselect2 = select (select 23 # from messages)
+--subselect3 = select (Tuple (Proxy :: Proxy Users) (select (Proxy :: Proxy (id :: Int, name :: String)) # from messages))
 
 --only from
 
@@ -45,12 +51,14 @@ selfrom2 = selonly3 # fromonly1
 selfrom3 = selonly4 # fromonly2
 selfrom4 = selonly1 # fromonly2
 
---select from where
+--select from wher
+
 selfromwhere1 = selonly2 # fromonly1 # whereonly1
 selfromwhere2 = selonly3 # fromonly1 # whereonly2
 selfromwhere3 = selonly1 # fromonly1 # whereonly2
 
 --subselect
+
 selsubselect1 = subselect1 # fromonly1
 selsubselect2 = subselect2 # fromonly1
 
