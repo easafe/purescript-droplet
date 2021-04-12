@@ -13,8 +13,11 @@ import Prim.RowList as RL
 import Record.Unsafe as RU
 import Type.Proxy (Proxy(..))
 
+--do the api improvements first
+-- then finish sub selects for from and where
+
 {-
-select fieldsList ✓ | * ✓ | sub select | function | scalars ✓ | column names
+select fieldsList ✓ | * ✓ | sub select ✓ | function | scalars ✓ | column names
 
 limit
 
