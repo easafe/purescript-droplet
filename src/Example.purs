@@ -5,6 +5,7 @@ import Droplet
 import Prelude
 
 import Data.Tuple (Tuple(..))
+import Data.Tuple.Nested ((/\))
 import Prim.Row (class Union)
 import Type.Proxy (Proxy(..))
 
@@ -13,13 +14,16 @@ type Users = (id :: Int, name :: String, surname :: String, birthday :: Date, jo
 users :: Table "users" Users
 users = table
 
-type Messages = (id :: Int, name :: String)
+type Messages = (id :: Int, name :: String, haha :: Boolean)
 
 messages :: Table "messages" Messages
 messages = table
 
 id :: Field "id"
 id = Field
+
+name :: Field "name"
+name = Field
 
 --only select
 
@@ -29,6 +33,7 @@ selonly3 = select (Proxy :: Proxy (id :: Int, joined :: Date))
 selonly4 = select (Proxy :: Proxy (id :: Int, name :: String))
 selonly5 = select (Field :: Field "name")
 selonly6 = select id
+selonly7 = select (id /\ name)
 
 subselect1 = select (select (Proxy :: Proxy (id :: Int)) # from messages)
 subselect2 = select (select 23 # from messages)
@@ -50,6 +55,8 @@ selfrom1 = selonly2 # fromonly1
 selfrom2 = selonly3 # fromonly1
 selfrom3 = selonly4 # fromonly2
 selfrom4 = selonly1 # fromonly2
+selfrom5 = select id # fromonly2
+selfrom6 = selonly7 # fromonly2
 
 --select from wher
 
@@ -61,4 +68,5 @@ selfromwhere3 = selonly1 # fromonly1 # whereonly2
 
 selsubselect1 = subselect1 # fromonly1
 selsubselect2 = subselect2 # fromonly1
+
 
