@@ -25,6 +25,9 @@ id = Field
 name :: Field "name"
 name = Field
 
+haha :: Field "haha"
+haha = Field
+
 --only select
 
 selonly1 = select 1
@@ -37,7 +40,10 @@ selonly7 = select (id /\ name)
 
 subselect1 = select (select (Proxy :: Proxy (id :: Int)) # from messages)
 subselect2 = select (select 23 # from messages)
---subselect3 = select (Tuple (Proxy :: Proxy Users) (select (Proxy :: Proxy (id :: Int, name :: String)) # from messages))
+subselect3 = select (select id # from messages)
+subselect4 = select ((Proxy :: Proxy Users) /\ (select id # from messages))
+subselect5 = select (id /\ (select 55 # from messages))
+subselect6 = select (name /\ id /\ (Field :: Field "joined") /\ (select haha # from messages))
 
 --only from
 
@@ -68,5 +74,9 @@ selfromwhere3 = selonly1 # fromonly1 # whereonly2
 
 selsubselect1 = subselect1 # fromonly1
 selsubselect2 = subselect2 # fromonly1
+selsubselect3 = subselect3 # fromonly2
+selsubselect4 = subselect4 # fromonly1
+selsubselect5 = subselect5 # fromonly2
+selsubselect6 = subselect6 # fromonly1
 
 

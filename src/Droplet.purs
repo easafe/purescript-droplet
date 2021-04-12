@@ -1,6 +1,5 @@
 module Droplet where
 
-import Debug
 import Prelude
 
 import Data.Array as DA
@@ -50,7 +49,6 @@ select = toSelect
 class ToSelect from s to | from -> s, s -> from where
       toSelect :: from -> Select s to
 
---need instance Tuple instance so we can do ToSelect /\ ToSelect ...
 instance rowToSelect ::
       (RL.RowToList projection fieldsList,
        PrintRowList fieldsList,
@@ -64,13 +62,11 @@ instance fieldToSelect :: (Cons name t () projection, Cons name t e2 fields) => 
 else
 instance fromToSelect :: ToSubSelect from s to => ToSelect (From f (Select s to) to) (SubSelectFrom f (Select s to) to) fields where
       toSelect fr = Select $ SubSelectFrom fr
--- instance whereToSelect :: ToSelect (Where before fields parameters) (SubSelectWhere parameters) to where
---       toSelect wher = SubSelectWhere wher
 else
 instance tupleToSelect ::
-      (ToSelect from s to,
-       ToSelect from2 s2 to2) =>
-      ToSelect (Tuple from from2) (SelectTuple (Tuple (Select s to) (Select s2 to2)) fields) fields where
+      (ToSelect from s fields,
+       ToSelect from2 s2 fields) =>
+      ToSelect (Tuple from from2) (SelectTuple (Tuple (Select s fields) (Select s2 fields)) fields) fields where
       toSelect (Tuple t t2) = Select <<< SelectTuple <<< Tuple (toSelect t) $ toSelect t2
 else
 instance showToSelect :: Show s => ToSelect s (SelectScalar s to) to where
