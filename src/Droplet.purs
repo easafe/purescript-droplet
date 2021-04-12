@@ -16,6 +16,8 @@ import Type.Proxy (Proxy(..))
 {-
 select fieldsList ✓ | * ✓ | sub select | function | scalars ✓ | column names
 
+limit
+
 from table name ✓ | sub select | table names
 
 where field op field ✓ | field op parameter ✓ | and/or ✓ | sub select
@@ -29,6 +31,7 @@ join right | left
 
 --select
 
+--it is prolly a better api to only accept Field, Table or tuples
 newtype Select s (fields :: Row Type) = Select s
 
 data SelectFields (projection :: Row Type) (fields :: Row Type) = SelectFields
@@ -39,9 +42,9 @@ newtype SelectTuple s (fields :: Row Type) = SelectTuple s
 
 newtype SubSelectFrom f s (fields :: Row Type) = SubSelectFrom (From f s fields)
 
-data Field (name :: Symbol) = Field
+newtype SubSelectWhere f (fields :: Row Type) parameters = SubSelectWhere (Where f fields parameters)
 
---newtype SubSelectWhere parameters (fields :: Row Type) = SubSelectWhere (Where (FromTable (SubSelectFrom fields) fields) fields parameters)
+data Field (name :: Symbol) = Field
 
 select :: forall from s to . ToSelect from s to => from -> Select s to
 select = toSelect
@@ -62,6 +65,9 @@ instance fieldToSelect :: (Cons name t () projection, Cons name t e2 fields) => 
 else
 instance fromToSelect :: ToSubSelect from s to => ToSelect (From f (Select s to) to) (SubSelectFrom f (Select s to) to) fields where
       toSelect fr = Select $ SubSelectFrom fr
+else
+instance whereToSelect :: ToSubSelect from s to => ToSelect (Where (From f (Select s to) to) to parameters) (SubSelectWhere (From f (Select s to) to) to parameters) fields where
+      toSelect wr = Select $ SubSelectWhere wr
 else
 instance tupleToSelect ::
       (ToSelect from s fields,
@@ -114,6 +120,7 @@ instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields w
 
 --where
 
+--WHERE HAS TO ACCEPT FIELD NOT PROXY
 data Operator =
       Equals |
       NotEquals
