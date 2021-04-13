@@ -12,6 +12,7 @@ You can edit this file as you like.
   , "psci-support"
   , "record"
   , "strings"
+  , "test-unit"
   , "typelevel-prelude"
   ]
 , packages = ./packages.dhall
