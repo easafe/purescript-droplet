@@ -4,21 +4,17 @@ import Data.Date
 import Droplet
 import Prelude
 
-import Data.Maybe (Maybe(..))
-import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
-import Prim.Row (class Union)
-import Type.Proxy (Proxy(..))
 
 type Users = (id :: Int, name :: String, surname :: String, birthday :: Date, joined :: Date)
 
 users :: Table "users" Users
-users = table
+users = Table
 
 type Messages = (id :: Int, name :: String, haha :: Boolean)
 
 messages :: Table "messages" Messages
-messages = table
+messages = Table
 
 id :: Field "id"
 id = Field
@@ -29,23 +25,26 @@ name = Field
 haha :: Field "haha"
 haha = Field
 
+joined :: Field "joined"
+joined = Field
+
 --select
 
 selonly1 = select 1
-selonly2 = select (Just 4)--(Proxy :: Proxy Users)
-selonly3 = select (Proxy :: Proxy (id :: Int, joined :: Date))
-selonly4 = select (Proxy :: Proxy (id :: Int, name :: String))
+selonly2 = select users
+selonly3 = select ((Field :: Field "id") /\ (Field :: Field "joined"))
+selonly4 = select ((Field :: Field "id") /\ (Field :: Field "name"))
 selonly5 = select (Field :: Field "name")
 selonly6 = select id
 selonly7 = select (id /\ name)
 
-subselect1 = select (select (Proxy :: Proxy (id :: Int)) # from messages)
+subselect1 = select (select (Field :: Field "id") # from messages)
 subselect2 = select (select 23 # from messages)
 subselect3 = select (select id # from messages)
-subselect4 = select ((Proxy :: Proxy Users) /\ (select id # from messages))
+subselect4 = select (users /\ (select id # from messages))
 subselect5 = select (id /\ (select 55 # from messages))
 subselect6 = select (name /\ id /\ (Field :: Field "joined") /\ (select haha # from messages))
-subselect7 = select (id /\ (select id # from messages # wher ((Proxy :: Proxy "name") .=. (Proxy :: Proxy "nameP")) {nameP : "jesus"}))
+subselect7 = select (id /\ (select id # from messages # wher ((Field :: Field "name") .=. (Field :: Field "nameP")) {nameP : "jesus"}))
 
 --from
 
@@ -54,8 +53,8 @@ fromonly2 = from messages
 
 -- where
 
-whereonly1 = wher ((Proxy :: Proxy "name") .=. (Proxy :: Proxy "surname") .&&. (Proxy :: Proxy "birthday") .=. (Proxy :: Proxy "joined")) {}
-whereonly2 = wher ((Proxy :: Proxy "name") .=. (Proxy :: Proxy "parameter1") .&&. (Proxy :: Proxy "birthday") .=. (Proxy :: Proxy "joined")) { parameter1 : "oio"}
+whereonly1 = wher (name .=. (Field :: Field "surname") .&&. (Field :: Field "birthday") .=. (Field :: Field "joined")) {}
+whereonly2 = wher (name .=. (Field :: Field "parameter1") .&&. (Field :: Field "birthday") .=. joined) { parameter1 : "oio"}
 
 --select from
 

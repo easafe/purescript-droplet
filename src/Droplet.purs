@@ -2,14 +2,11 @@ module Droplet where
 
 import Prelude
 
-import Data.Array as DA
 import Data.Maybe (Maybe(..))
-import Data.String as DST
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Union)
-import Prim.RowList as RL
 import Record.Unsafe as RU
 import Type.Proxy (Proxy(..))
 
@@ -34,9 +31,12 @@ join right | left
 
 --select
 
+--I can't seem to make this anything like a gadt :(
 newtype Select s (fields :: Row Type) = Select s
 
 data SelectField (field :: Symbol) (fields :: Row Type) = SelectField
+
+data SelectTable (name :: Symbol) (fields :: Row Type) = SelectTable
 
 newtype SelectScalar s (fields :: Row Type) = SelectScalar s
 
@@ -48,14 +48,27 @@ newtype SubSelectWhere f (fields :: Row Type) parameters = SubSelectWhere (Where
 
 data Field (name :: Symbol) = Field
 
-select :: forall from s to . ToSelect from s to => from -> Select s to
+select :: forall from s to . IsSelectable from => ToSelect from s to => from -> Select s to
 select = toSelect
+
+--to catch ill typed selects soon
+class IsSelectable from
+
+instance fieldIsSelectable :: IsSelectable (Field name)
+instance intIsSelectable :: IsSelectable Int
+instance tableIsSelectable :: IsSelectable (Table name fields)
+instance tupleIsSelectable :: (IsSelectable from, IsSelectable from2) => IsSelectable (Tuple from from2)
+instance fromIsSelectable :: IsSelectable (From f (Select s fields) fields)
+instance whereIsSelectable :: IsSelectable (Where (From f (Select s fields) fields) fields parameters)
 
 class ToSelect from s to | from -> s, s -> from where
       toSelect :: from -> Select s to
 
 instance fieldToSelect :: Cons name t e fields => ToSelect (Field name) (SelectField name fields) fields where
       toSelect _ = Select SelectField
+else
+instance tableToSelect :: ToSelect (Table name fields) (SelectTable name fields) fields where
+      toSelect _ = Select SelectTable
 else
 instance fromToSelect :: ToSubSelect from s to => ToSelect (From f (Select s to) to) (SubSelectFrom f (Select s to) to) fields where
       toSelect fr = Select $ SubSelectFrom fr
@@ -84,10 +97,6 @@ instance intToSubSelect :: ToSubSelect Int (SelectScalar Int to) to where
       toSubSelect n = Select $ SelectScalar n
 --needs more instance for scalars
 
-class ToSubSelectColumn (fieldsList :: RL.RowList Type)
-
-instance consToSubSelectColumn :: IsSymbol field => ToSubSelectColumn (RL.Cons field t RL.Nil)
-
 --from
 
 newtype From f s (fields :: Row Type) = From f
@@ -96,11 +105,13 @@ data Table (name :: Symbol) (fields :: Row Type) = Table
 
 newtype FromTable (name :: Symbol) s (fields :: Row Type) = FromTable s
 
-table :: forall name fields. IsSymbol name => Table name fields
-table = Table
-
-from :: forall from f s to. ToFrom from f to => from -> Select s to -> From (f (Select s to) to) (Select s to) to
+from :: forall from f s to. IsFromable from => ToFrom from f to => from -> Select s to -> From (f (Select s to) to) (Select s to) to
 from f s = toFrom f s
+
+--to catch ill typed froms soon
+class IsFromable from
+
+instance fieldIsFromable :: IsFromable (Table name fields)
 
 class ToFrom from f to | from -> f, f -> from where
       toFrom :: forall s. from -> Select s to -> From (f (Select s to) to) (Select s to) to
@@ -111,7 +122,6 @@ instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields w
 
 --where
 
---WHERE HAS TO ACCEPT FIELD NOT PROXY
 data Operator =
       Equals |
       NotEquals
@@ -131,7 +141,7 @@ equals :: forall fields e extra field1 field2 t.
       IsSymbol field2 =>
       Cons field1 t e extra =>
       Cons field2 t extra fields =>
-      Proxy field1 -> Proxy field2 -> Filters fields
+      Field field1 -> Field field2 -> Filters fields
 equals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) Equals
 
 notEquals :: forall fields e extra field1 field2 t.
@@ -139,7 +149,7 @@ notEquals :: forall fields e extra field1 field2 t.
       IsSymbol field2 =>
       Cons field1 t e extra =>
       Cons field2 t extra fields =>
-      Proxy field1 -> Proxy field2 -> Filters fields
+      Field field1 -> Field field2 -> Filters fields
 notEquals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) NotEquals
 
 and :: forall fields. Filters fields -> Filters fields -> Filters fields
@@ -176,9 +186,16 @@ class PrintSelect s where
 instance selectFieldPrintSelect :: IsSymbol name => PrintSelect (SelectField name fields) where
       printSelect _ = DS.reflectSymbol (Proxy :: Proxy name)
 
+instance tablePrintSelect :: IsSymbol name => PrintSelect (SelectTable name fields) where
+      printSelect _ = DS.reflectSymbol (Proxy :: Proxy name) <> ".*"
+
 instance subSelectFromPrintSelect :: PrintFrom f => PrintSelect (SubSelectFrom f s fields) where
       printSelect (SubSelectFrom fr) = "(" <> q <> ")"
             where Query q _ = print fr
+
+instance subSelectWherePrintSelect :: PrintWhere f => PrintSelect (SubSelectWhere f s fields) where
+      printSelect (SubSelectWhere wr) = "(" <> q <> ")"
+            where Query q _ = print wr
 
 instance intScalarPrintSelect :: PrintSelect (SelectScalar Int to) where
       printSelect (SelectScalar n) = show n
