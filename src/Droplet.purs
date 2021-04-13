@@ -34,10 +34,9 @@ join right | left
 
 --select
 
---it is prolly a better api to only accept Field, Table or tuples
 newtype Select s (fields :: Row Type) = Select s
 
-data SelectFields (projection :: Row Type) (fields :: Row Type) = SelectFields
+data SelectField (field :: Symbol) (fields :: Row Type) = SelectField
 
 newtype SelectScalar s (fields :: Row Type) = SelectScalar s
 
@@ -55,16 +54,8 @@ select = toSelect
 class ToSelect from s to | from -> s, s -> from where
       toSelect :: from -> Select s to
 
-instance rowToSelect ::
-      (RL.RowToList projection fieldsList,
-       PrintRowList fieldsList,
-       Union projection e fields) =>
-      ToSelect (Proxy projection) (SelectFields projection fields) fields where
-      toSelect :: Proxy projection -> Select (SelectFields projection fields) fields
-      toSelect _ = Select SelectFields
-else
-instance fieldToSelect :: (Cons name t () projection, Cons name t e2 fields) => ToSelect (Field name) (SelectFields projection fields) fields where
-      toSelect _ = Select SelectFields
+instance fieldToSelect :: Cons name t e fields => ToSelect (Field name) (SelectField name fields) fields where
+      toSelect _ = Select SelectField
 else
 instance fromToSelect :: ToSubSelect from s to => ToSelect (From f (Select s to) to) (SubSelectFrom f (Select s to) to) fields where
       toSelect fr = Select $ SubSelectFrom fr
@@ -78,23 +69,20 @@ instance tupleToSelect ::
       ToSelect (Tuple from from2) (SelectTuple (Tuple (Select s fields) (Select s2 fields)) fields) fields where
       toSelect (Tuple t t2) = Select <<< SelectTuple <<< Tuple (toSelect t) $ toSelect t2
 else
-instance showToSelect :: Show s => ToSelect s (SelectScalar s to) to where
-      toSelect s = Select $ SelectScalar s
+instance intToSelect :: ToSelect Int (SelectScalar Int to) to where
+      toSelect n = Select $ SelectScalar n
+--needs more instance for scalars
 
 --for sub queries only a single column can be returned
 class ToSubSelect from s to | from -> s, s -> from where
       toSubSelect :: from -> Select s to
 
-instance rowToSubSelect ::
-      (RL.RowToList column fieldsList,
-       ToSubSelectColumn fieldsList,
-       Union column e fields) =>
-      ToSubSelect (Proxy column) (SelectFields column fields) fields where
-      toSubSelect :: Proxy column -> Select (SelectFields column fields) fields
-      toSubSelect _ = Select SelectFields
+instance rowToSubSelect :: Cons name t e fields => ToSubSelect (Field name) (SelectField name fields) fields where
+      toSubSelect _ = Select SelectField
 else
-instance showToSubSelect :: Show s => ToSubSelect s (SelectScalar s to) to where
-      toSubSelect s = Select $ SelectScalar s
+instance intToSubSelect :: ToSubSelect Int (SelectScalar Int to) to where
+      toSubSelect n = Select $ SelectScalar n
+--needs more instance for scalars
 
 class ToSubSelectColumn (fieldsList :: RL.RowList Type)
 
@@ -185,20 +173,15 @@ instance selectPrint :: PrintSelect s => Print (Select s) where
 class PrintSelect s where
       printSelect :: s -> String
 
-instance selectFieldPrintSelect ::
-      (RL.RowToList projection fieldsList,
-       PrintRowList fieldsList,
-       Union projection e fields) =>
-      PrintSelect (SelectFields projection fields) where
-      printSelect _ = fields
-            where fields = DST.joinWith ", " $ printRowList (Proxy :: Proxy fieldsList)
+instance selectFieldPrintSelect :: IsSymbol name => PrintSelect (SelectField name fields) where
+      printSelect _ = DS.reflectSymbol (Proxy :: Proxy name)
 
 instance subSelectFromPrintSelect :: PrintFrom f => PrintSelect (SubSelectFrom f s fields) where
       printSelect (SubSelectFrom fr) = "(" <> q <> ")"
             where Query q _ = print fr
 
-instance showPrintSelect :: Show s => PrintSelect (SelectScalar s to) where
-      printSelect (SelectScalar s) = show s
+instance intScalarPrintSelect :: PrintSelect (SelectScalar Int to) where
+      printSelect (SelectScalar n) = show n
 
 instance selectTuplePrintSelect :: (PrintSelect s, PrintSelect s2) => PrintSelect (SelectTuple (Tuple s s2) fields) where
       printSelect (SelectTuple (Tuple s s2)) = printSelect s <> ", " <> printSelect s2
@@ -206,15 +189,6 @@ instance selectTuplePrintSelect :: (PrintSelect s, PrintSelect s2) => PrintSelec
 --coming from SelectTuple
 instance selectPrintSelect :: PrintSelect s => PrintSelect (Select s fields) where
       printSelect (Select s) = printSelect s
-
-class PrintRowList (fieldsList :: RL.RowList Type) where
-      printRowList :: forall proxy. proxy fieldsList -> Array String
-
-instance nilPrintRowList :: PrintRowList RL.Nil where
-      printRowList _ = []
-
-instance consPrintRowList :: (PrintRowList tail, IsSymbol field) => PrintRowList (RL.Cons field v tail) where
-      printRowList _ = DA.snoc (printRowList (Proxy :: Proxy tail)) $ DS.reflectSymbol (Proxy :: Proxy field)
 
 instance fromPrint :: PrintFrom f => Print (From f s) where
       print :: forall fields. From f s fields -> Query fields

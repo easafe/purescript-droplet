@@ -4,6 +4,7 @@ import Data.Date
 import Droplet
 import Prelude
 
+import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
 import Prim.Row (class Union)
@@ -31,7 +32,7 @@ haha = Field
 --select
 
 selonly1 = select 1
-selonly2 = select (Proxy :: Proxy Users)
+selonly2 = select (Just 4)--(Proxy :: Proxy Users)
 selonly3 = select (Proxy :: Proxy (id :: Int, joined :: Date))
 selonly4 = select (Proxy :: Proxy (id :: Int, name :: String))
 selonly5 = select (Field :: Field "name")
