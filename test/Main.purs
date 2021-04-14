@@ -5,7 +5,7 @@ import Prelude
 import Data.Date (Date)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
-import Droplet (Field(..), Query(..), Table(..), from, print, select, wher, (.<>.), (.=.))
+import Droplet
 import Effect (Effect)
 import Test.Unit as TU
 import Test.Unit.Assert as TUA
@@ -80,8 +80,8 @@ main = TUM.runTest do
             --finish
             TU.suite "and" do
                   TU.test "equals" do
-                        let query = print $ select id # from users # wher (name .=. (Field :: Field "namep")) {namep : "josh"}
-                        emptyParameters "SELECT id FROM users WHERE name = @namep" query
+                        let query = print $ select id # from users # wher (name .=. (Field :: Field "namep") .&&. name .=. surname) {namep : "josh"}
+                        emptyParameters "SELECT id FROM users WHERE name = @namep and name = surname" query
 
                   TU.test "not equals" do
                         let query = print $ select id # from users # wher (id .<>. (Field :: Field "idp")) {idp: 3}

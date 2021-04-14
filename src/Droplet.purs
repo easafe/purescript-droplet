@@ -18,9 +18,9 @@ select fieldsList ✓ | * ✓ | sub select ✓ | function | scalars ✓ | column
 
 limit
 
-from table name ✓ | sub select | table names
+from table name ✓ | sub select and table names
 
-where field op field ✓ | field op parameter ✓ | and/or ✓ | sub select
+where field op field ✓ | field op parameter ✓ | and/or ✓ | sub select (maybe only exists?)
 
 group by fields
 
@@ -124,11 +124,13 @@ instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields w
 
 --where
 --THERE SHOULD BE PARAMETER :: PARAMETER SYMBOL
+--gotta check brackets for operators
 data Operator =
       Equals |
       NotEquals
 
 newtype Filters (fields :: Row Type) = Filters Filtered
+
 
 data Filtered =
       Operation String String Operator |
