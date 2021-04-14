@@ -10,7 +10,7 @@ import Prim.Row (class Cons, class Union)
 import Record.Unsafe as RU
 import Type.Proxy (Proxy(..))
 
---do the api improvements first
+--do the api improvements first (in where only now)
 -- then finish sub selects for from and where
 
 {-
@@ -64,6 +64,8 @@ instance whereIsSelectable :: IsSelectable (Where (From f (Select s fields) fiel
 class ToSelect from s to | from -> s, s -> from where
       toSelect :: from -> Select s to
 
+--as it is, we can't express select table.* /\ table2.*
+-- nor sub queries without from (which I dont know if it is ever useful)
 instance fieldToSelect :: Cons name t e fields => ToSelect (Field name) (SelectField name fields) fields where
       toSelect _ = Select SelectField
 else
@@ -121,7 +123,7 @@ instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields w
       toFrom _ s = From $ FromTable s
 
 --where
-
+--THERE SHOULD BE PARAMETER :: PARAMETER SYMBOL
 data Operator =
       Equals |
       NotEquals
@@ -163,7 +165,9 @@ infix 4 equals as .=.
 infixr 3 and as .&&.
 infixr 2 or as .||.
 
---it should be a type error for the field list and parameter list to share fields!
+--it should either be a type error for the field list and parameter list to share fields
+-- or a way to tell which from which
+-- parameter data type and type class (or position argument might help)
 wher :: forall f s fields parameters all.
       Union fields parameters all =>
       Filters all -> Record parameters -> From f s fields -> Where (From f s fields) fields parameters

@@ -80,4 +80,7 @@ selsubselect4 = subselect4 # fromonly1
 selsubselect5 = subselect5 # fromonly2
 selsubselect6 = subselect6 # fromonly1
 
+s = print $ select (3 /\ (select 34 # from messages))
+
+
 
