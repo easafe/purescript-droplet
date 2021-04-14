@@ -73,19 +73,35 @@ main = TUM.runTest do
                   TU.test "equals" do
                         let query = print $ select id # from users # wher (name .=. (Field :: Field "namep")) {namep : "josh"}
                         emptyParameters "SELECT id FROM users WHERE name = @namep" query
-
                   TU.test "not equals" do
                         let query = print $ select id # from users # wher (id .<>. (Field :: Field "idp")) {idp: 3}
                         emptyParameters "SELECT id FROM users WHERE id <> @idp" query
-            --finish
-            TU.suite "and" do
-                  TU.test "equals" do
-                        let query = print $ select id # from users # wher (name .=. (Field :: Field "namep") .&&. name .=. surname) {namep : "josh"}
-                        emptyParameters "SELECT id FROM users WHERE name = @namep and name = surname" query
 
-                  TU.test "not equals" do
-                        let query = print $ select id # from users # wher (id .<>. (Field :: Field "idp")) {idp: 3}
-                        emptyParameters "SELECT id FROM users WHERE id <> @idp" query
+            TU.suite "logical operands" do
+                  TU.suite "and" do
+                        TU.test "single" do
+                              let query = print $ select id # from users # wher (name .=. (Field :: Field "namep") .&&. name .=. surname) {namep : "josh"}
+                              emptyParameters "SELECT id FROM users WHERE (name = @namep AND name = surname)" query
+                        TU.test "many" do
+                              let query = print $ select id # from users # wher (name .=. (Field :: Field "namep") .&&. name .=. surname .&&. surname .<>. (Field :: Field "surnamep")) {namep : "josh", surnamep: "j."}
+                              emptyParameters "SELECT id FROM users WHERE ((name = @namep AND name = surname) AND surname <> @surnamep)" query
+
+                  TU.suite "or" do
+                        TU.test "single" do
+                              let query = print $ select id # from users # wher (name .=. (Field :: Field "namep") .||. name .=. surname) {namep : "josh"}
+                              emptyParameters "SELECT id FROM users WHERE (name = @namep OR name = surname)" query
+                        TU.test "many" do
+                              let query = print $ select id # from users # wher (name .=. (Field :: Field "namep") .||. name .=. surname .||. surname .<>. (Field :: Field "surnamep")) {namep : "josh", surnamep: "j."}
+                              emptyParameters "SELECT id FROM users WHERE ((name = @namep OR name = surname) OR surname <> @surnamep)" query
+
+                  TU.suite "mixed" do
+                        TU.test "not bracketed" do
+                              let query = print $ select id # from users # wher (id .=. (Field :: Field "id3") .||. id .=. (Field :: Field "id33") .&&. id .=. (Field :: Field "id333")) {id3 : 3, id33: 33, id333 : 333}
+                              emptyParameters "SELECT id FROM users WHERE (id = @id3 OR (id = @id33 AND id = @id333))" query
+                        TU.test "bracketed" do
+                              let query = print $ select id # from users # wher ((id .=. (Field :: Field "id3") .||. id .=. (Field :: Field "id33")) .&&. id .=. (Field :: Field "id333")) {id3 : 3, id33: 33, id333 : 333}
+                              emptyParameters "SELECT id FROM users WHERE ((id = @id3 OR id = @id33) AND id = @id333)" query
+
 
       TU.suite "sub query" do
             TU.suite "select" do

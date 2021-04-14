@@ -124,13 +124,13 @@ instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields w
 
 --where
 --THERE SHOULD BE PARAMETER :: PARAMETER SYMBOL
---gotta check brackets for operators
 data Operator =
       Equals |
       NotEquals
 
 newtype Filters (fields :: Row Type) = Filters Filtered
 
+data Parameter (name :: Symbol) = Parameter
 
 data Filtered =
       Operation String String Operator |
@@ -164,8 +164,9 @@ or (Filters first) (Filters second) = Filters (Or first second)
 
 infix 4 notEquals as .<>.
 infix 4 equals as .=.
-infixr 3 and as .&&.
-infixr 2 or as .||.
+--left associativity is what sql uses
+infixl 3 and as .&&.
+infixl 2 or as .||.
 
 --it should either be a type error for the field list and parameter list to share fields
 -- or a way to tell which from which
@@ -235,8 +236,8 @@ instance wherPrint :: PrintWhere f => Print (Where f fields) where
                   printFilter = case _ of
                         Operation field otherField op ->
                               fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
-                        And filter otherFilter -> printFilter filter <> " AND " <> printFilter otherFilter
-                        Or filter otherFilter -> printFilter filter <> " OR " <> printFilter otherFilter
+                        And filter otherFilter -> "(" <> printFilter filter <> " AND " <> printFilter otherFilter <> ")"
+                        Or filter otherFilter -> "(" <> printFilter filter <> " OR " <> printFilter otherFilter <> ")"
                   fieldOrParameter field
                         | RU.unsafeHas field parameters = "@" <> field
                         | otherwise = field
