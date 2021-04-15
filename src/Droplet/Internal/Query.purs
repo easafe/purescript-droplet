@@ -28,10 +28,10 @@ instance selectPrint :: ToSelectQuery s => ToQuery (Select s) where
 class ToSelectQuery s where
       toSelectQuery :: s -> String
 
-instance selectFieldPrintSelect :: IsSymbol name => ToSelectQuery (SelectField name fields) where
+instance selectFieldPrintSelect :: IsSymbol name => ToSelectQuery (SelectField name) where
       toSelectQuery _ = DS.reflectSymbol (Proxy :: Proxy name)
 
-instance tablePrintSelect :: IsSymbol name => ToSelectQuery (SelectTable name fields) where
+instance tablePrintSelect :: IsSymbol name => ToSelectQuery (SelectTable name) where
       toSelectQuery _ = DS.reflectSymbol (Proxy :: Proxy name) <> ".*"
 
 instance subSelectFromPrintSelect :: ToFromQuery f => ToSelectQuery (SubSelectFrom f s fields) where
@@ -42,10 +42,10 @@ instance subSelectWherePrintSelect :: ToWhereQuery f => ToSelectQuery (SubSelect
       toSelectQuery (SubSelectWhere wr) = "(" <> q <> ")"
             where Query q _ = toQuery wr
 
-instance intScalarPrintSelect :: ToSelectQuery (SelectScalar Int to) where
+instance intScalarPrintSelect :: ToSelectQuery (SelectScalar Int) where
       toSelectQuery (SelectScalar n) = show n
 
-instance selectTuplePrintSelect :: (ToSelectQuery s, ToSelectQuery s2) => ToSelectQuery (SelectTuple (Tuple s s2) fields) where
+instance selectTuplePrintSelect :: (ToSelectQuery s, ToSelectQuery s2) => ToSelectQuery (SelectTuple (Tuple s s2)) where
       toSelectQuery (SelectTuple (Tuple s s2)) = toSelectQuery s <> ", " <> toSelectQuery s2
 
 --coming from SelectTuple
