@@ -4,6 +4,7 @@ import Data.Date
 import Droplet
 import Prelude
 
+import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 
 type Users = (id :: Int, name :: String, surname :: String, birthday :: Date, joined :: Date)
@@ -44,7 +45,7 @@ subselect3 = select (select id # from messages)
 subselect4 = select (users /\ (select id # from messages))
 subselect5 = select (id /\ (select 55 # from messages))
 subselect6 = select (name /\ id /\ (Field :: Field "joined") /\ (select haha # from messages))
-subselect7 = select (id /\ (select id # from messages # wher ((Field :: Field "name") .=. (Field :: Field "nameP")) {nameP : "jesus"}))
+subselect7 = select (id /\ (select id # from messages # wher ((Field :: Field "name") .=. (Parameter :: Parameter "name")) {name : "jesus"}))
 
 --from
 
@@ -54,7 +55,7 @@ fromonly2 = from messages
 -- where
 
 whereonly1 = wher (name .=. (Field :: Field "surname") .&&. (Field :: Field "birthday") .=. (Field :: Field "joined")) {}
-whereonly2 = wher (name .=. (Field :: Field "parameter1") .&&. (Field :: Field "birthday") .=. joined) { parameter1 : "oio"}
+whereonly2 = wher (name .=. (Parameter :: Parameter "name") .&&. (Field :: Field "birthday") .=. joined) { name : "oio"}
 
 --select from
 
@@ -80,7 +81,6 @@ selsubselect4 = subselect4 # fromonly1
 selsubselect5 = subselect5 # fromonly2
 selsubselect6 = subselect6 # fromonly1
 
-s = print $ select (3 /\ (select 34 # from messages))
 
 
 

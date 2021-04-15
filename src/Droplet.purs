@@ -123,12 +123,11 @@ instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields w
       toFrom _ s = From $ FromTable s
 
 --where
---THERE SHOULD BE PARAMETER :: PARAMETER SYMBOL
 data Operator =
       Equals |
       NotEquals
 
-newtype Filters (fields :: Row Type) = Filters Filtered
+newtype Filters (fields :: Row Type) (parameters :: Row Type) = Filters Filtered
 
 data Parameter (name :: Symbol) = Parameter
 
@@ -140,26 +139,22 @@ data Filtered =
 data Where f (fields :: Row Type) parameters = Where Filtered (Record parameters) f
 
 --for whatever reason, using the proxy parameters instead of the types generates an error in the Data.Symbol module
-equals :: forall fields e extra field1 field2 t.
-      IsSymbol field1 =>
-      IsSymbol field2 =>
-      Cons field1 t e extra =>
-      Cons field2 t extra fields =>
-      Field field1 -> Field field2 -> Filters fields
-equals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) Equals
+equals :: forall parameters fields field compared.
+      ToCompared field fields parameters =>
+      ToCompared compared fields parameters =>
+      field -> compared -> Filters fields parameters
+equals field compared = Filters $ Operation (toCompared field) (toCompared compared) Equals
 
-notEquals :: forall fields e extra field1 field2 t.
-      IsSymbol field1 =>
-      IsSymbol field2 =>
-      Cons field1 t e extra =>
-      Cons field2 t extra fields =>
-      Field field1 -> Field field2 -> Filters fields
-notEquals _ _ = Filters $ Operation (DS.reflectSymbol (Proxy :: Proxy field1)) (DS.reflectSymbol (Proxy :: Proxy field2)) NotEquals
+notEquals :: forall parameters fields field compared.
+      ToCompared field fields parameters =>
+      ToCompared compared fields parameters =>
+      field -> compared -> Filters fields parameters
+notEquals field compared = Filters $ Operation (toCompared field) (toCompared compared) NotEquals
 
-and :: forall fields. Filters fields -> Filters fields -> Filters fields
+and :: forall fields parameters. Filters fields parameters -> Filters fields parameters -> Filters fields parameters
 and (Filters first) (Filters second) = Filters (And first second)
 
-or :: forall fields. Filters fields -> Filters fields -> Filters fields
+or :: forall fields parameters. Filters fields parameters -> Filters fields parameters -> Filters fields parameters
 or (Filters first) (Filters second) = Filters (Or first second)
 
 infix 4 notEquals as .<>.
@@ -168,13 +163,18 @@ infix 4 equals as .=.
 infixl 3 and as .&&.
 infixl 2 or as .||.
 
---it should either be a type error for the field list and parameter list to share fields
--- or a way to tell which from which
--- parameter data type and type class (or position argument might help)
-wher :: forall f s fields parameters all.
-      Union fields parameters all =>
-      Filters all -> Record parameters -> From f s fields -> Where (From f s fields) fields parameters
+wher :: forall f s fields parameters. Filters fields parameters -> Record parameters -> From f s fields -> Where (From f s fields) fields parameters
 wher (Filters filtered) parameters before = Where filtered parameters before
+
+--it d be nicer if field parsing was entirely in Print....
+class ToCompared c fields parameters | c -> fields, c -> parameters  where
+      toCompared :: c -> String
+
+instance fieldToCompared :: (IsSymbol name, Cons name t e fields) => ToCompared (Field name) fields parameters where
+      toCompared _ = DS.reflectSymbol (Proxy :: Proxy name)
+
+instance parameterToCompared :: (IsSymbol name, Cons name t e parameters) => ToCompared (Parameter name) fields parameters where
+      toCompared _ = "@" <> DS.reflectSymbol (Proxy :: Proxy name)
 
 --print
 
@@ -234,13 +234,9 @@ instance wherPrint :: PrintWhere f => Print (Where f fields) where
 
                   filters = printFilter filtered
                   printFilter = case _ of
-                        Operation field otherField op ->
-                              fieldOrParameter field <> printOperator op <> fieldOrParameter otherField
+                        Operation field otherField op -> field <> printOperator op <> otherField
                         And filter otherFilter -> "(" <> printFilter filter <> " AND " <> printFilter otherFilter <> ")"
                         Or filter otherFilter -> "(" <> printFilter filter <> " OR " <> printFilter otherFilter <> ")"
-                  fieldOrParameter field
-                        | RU.unsafeHas field parameters = "@" <> field
-                        | otherwise = field
                   printOperator = case _ of
                         Equals -> " = "
                         NotEquals -> " <> "
