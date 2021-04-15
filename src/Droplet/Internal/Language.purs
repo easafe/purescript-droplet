@@ -5,13 +5,12 @@ module Droplet.Internal.Language where
 
 import Prelude
 
-import Data.Symbol (class IsSymbol)
-import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons)
-import Type.Proxy (Proxy(..))
+import Droplet.Internal.Filter
+import Droplet.Internal.Definition
 
---SELECT
+----------------------SELECT----------------------------
 
 --I can't seem to make this anything like a gadt :(
 newtype Select s (fields :: Row Type) = Select s
@@ -28,8 +27,6 @@ newtype SubSelectFrom :: forall k. Type -> k -> Row Type -> Type
 newtype SubSelectFrom f s (fields :: Row Type) = SubSelectFrom (From f s fields)
 
 newtype SubSelectWhere f (fields :: Row Type) parameters = SubSelectWhere (Where f fields parameters)
-
-data Field (name :: Symbol) = Field
 
 select :: forall from s to . IsSelectable from => ToSelect from s to => from -> Select s to
 select = toSelect
@@ -83,12 +80,10 @@ instance intToSubSelect :: ToSubSelect Int (SelectScalar Int to) to where
       toSubSelect n = Select $ SelectScalar n
 --needs more instance for scalars
 
---FROM
+----------------------------FROM----------------------------
 
 newtype From :: forall k. Type -> k -> Row Type -> Type
 newtype From f s (fields :: Row Type) = From f
-
-data Table (name :: Symbol) (fields :: Row Type) = Table
 
 newtype FromTable (name :: Symbol) s (fields :: Row Type) = FromTable s
 
@@ -108,58 +103,9 @@ instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields w
       toFrom :: forall s. Table name fields -> Select s fields -> From (FromTable name (Select s fields) fields) (Select s fields) fields
       toFrom _ s = From $ FromTable s
 
---WHERE
-
-data Operator =
-      Equals |
-      NotEquals
-
-newtype Filters (fields :: Row Type) (parameters :: Row Type) = Filters Filtered
-
-data Parameter (name :: Symbol) = Parameter
-
-data Filtered =
-      Operation String String Operator |
-      And Filtered Filtered |
-      Or Filtered Filtered
+----------------------------WHERE----------------------------
 
 data Where f (fields :: Row Type) parameters = Where Filtered (Record parameters) f
 
---for whatever reason, using the proxy parameters instead of the types generates an error in the Data.Symbol module
-equals :: forall parameters fields field compared.
-      ToCompared field fields parameters =>
-      ToCompared compared fields parameters =>
-      field -> compared -> Filters fields parameters
-equals field compared = Filters $ Operation (toCompared field) (toCompared compared) Equals
-
-notEquals :: forall parameters fields field compared.
-      ToCompared field fields parameters =>
-      ToCompared compared fields parameters =>
-      field -> compared -> Filters fields parameters
-notEquals field compared = Filters $ Operation (toCompared field) (toCompared compared) NotEquals
-
-and :: forall fields parameters. Filters fields parameters -> Filters fields parameters -> Filters fields parameters
-and (Filters first) (Filters second) = Filters (And first second)
-
-or :: forall fields parameters. Filters fields parameters -> Filters fields parameters -> Filters fields parameters
-or (Filters first) (Filters second) = Filters (Or first second)
-
-infix 4 notEquals as .<>.
-infix 4 equals as .=.
---left associativity is what sql uses
-infixl 3 and as .&&.
-infixl 2 or as .||.
-
 wher :: forall f s fields parameters. Filters fields parameters -> Record parameters -> From f s fields -> Where (From f s fields) fields parameters
 wher (Filters filtered) parameters before = Where filtered parameters before
-
---it d be nicer if field parsing was entirely in ToQuery....
-class ToCompared :: forall k1 k2. Type -> k1 -> k2 -> Constraint
-class ToCompared c fields parameters | c -> fields, c -> parameters  where
-      toCompared :: c -> String
-
-instance fieldToCompared :: (IsSymbol name, Cons name t e fields) => ToCompared (Field name) fields parameters where
-      toCompared _ = DS.reflectSymbol (Proxy :: Proxy name)
-
-instance parameterToCompared :: (IsSymbol name, Cons name t e parameters) => ToCompared (Parameter name) fields parameters where
-      toCompared _ = "@" <> DS.reflectSymbol (Proxy :: Proxy name)

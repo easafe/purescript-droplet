@@ -4,6 +4,7 @@
 module Droplet.Internal.Query where
 
 import Droplet.Internal.Language
+import Droplet.Internal.Filter
 import Prelude
 
 import Data.Maybe (Maybe(..))
