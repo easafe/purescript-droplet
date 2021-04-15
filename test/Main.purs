@@ -16,6 +16,9 @@ type Users = (id :: Int, name :: String, surname :: String, birthday :: Date, jo
 users :: Table "users" Users
 users = Table
 
+u :: Alias "u"
+u = Alias
+
 id :: Field "id"
 id = Field
 
@@ -112,6 +115,18 @@ main = TUM.runTest do
                         TU.test "bracketed" do
                               let query = toQuery $ select id # from users # wher ((id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33")) .&&. id .=. (Parameter :: Parameter "id333")) {id3 : 3, id33: 33, id333 : 333}
                               withParameters "SELECT id FROM users WHERE ((id = @id3 OR id = @id33) AND id = @id333)" query
+
+      TU.suite "as" do
+            TU.suite "named sub queries" do
+                  TU.test "scalars" do
+                        let query = toQuery $ select 3 # from (select 34 # from users # as u)
+                        noParameters "SELECT 3 FROM (SELECT 34 FROM users) u" query
+                  TU.test "fields" do
+                        let query = toQuery $ select id # from (select (id /\ name) # from users # as u)
+                        noParameters "SELECT id FROM (SELECT id, name FROM users) u" query
+                  TU.test "table" do
+                        let query = toQuery $ select users # from (select users # from users # as u)
+                        noParameters "SELECT u.* FROM (SELECT users.* FROM users) u" query
 
 noParameters :: forall p. String -> Query p -> _
 noParameters s (Query q p) = case p of

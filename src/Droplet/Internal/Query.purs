@@ -3,8 +3,9 @@
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
 module Droplet.Internal.Query where
 
-import Droplet.Internal.Language
+import Droplet.Internal.Definition
 import Droplet.Internal.Filter
+import Droplet.Internal.Language
 import Prelude
 
 import Data.Maybe (Maybe(..))
@@ -60,10 +61,16 @@ class ToFromQuery f where
       toFromQuery :: f -> String
 
 instance fromTablePrintFrom :: (IsSymbol name, ToSelectQuery s) => ToFromQuery (FromTable name (Select s fields) fields) where
-      toFromQuery :: FromTable name (Select s fields) fields -> String
       toFromQuery (FromTable s) = sel <> " FROM " <> tableName
             where tableName = DS.reflectSymbol (Proxy :: Proxy name)
                   Query sel _ = toQuery s
+
+--we gonna need parameters here!
+-- prolly need a ToAsQuery class
+instance fromAsPrintFrom :: (ToFromQuery f, ToSelectQuery s2, IsSymbol name) => ToFromQuery (FromAs (As (From f ss fields) s (Alias name) fields) (Select s2 fields) fields) where
+      toFromQuery (FromAs (As asf) s) = sel <> " FROM (" <> aliased <> ") " <> DS.reflectSymbol (Proxy :: Proxy name)
+            where Query sel _ = toQuery s
+                  Query aliased _ = toQuery asf
 
 instance wherPrint :: ToWhereQuery f => ToQuery (Where f fields) where
       toQuery :: forall parameters. Where f fields parameters -> Query parameters
