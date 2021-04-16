@@ -32,8 +32,8 @@ class ToSelectQuery s where
 instance selectFieldPrintSelect :: IsSymbol name => ToSelectQuery (SelectField name) where
       toSelectQuery _ = DS.reflectSymbol (Proxy :: Proxy name)
 
-instance tablePrintSelect :: IsSymbol name => ToSelectQuery (SelectTable name) where
-      toSelectQuery _ = DS.reflectSymbol (Proxy :: Proxy name) <> ".*"
+instance tablePrintSelect :: ToSelectQuery SelectStar where
+      toSelectQuery _ = "*"
 
 instance subSelectFromPrintSelect :: ToFromQuery f => ToSelectQuery (SubSelectFrom f s fields) where
       toSelectQuery (SubSelectFrom fr) = "(" <> q <> ")"

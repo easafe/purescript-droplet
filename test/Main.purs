@@ -43,9 +43,9 @@ main = TUM.runTest do
                   TU.test "field" do
                         let query = toQuery $ select id
                         noParameters "SELECT id" query
-                  TU.test "table" do
-                        let query = toQuery $ select users
-                        noParameters "SELECT users.*" query
+                  TU.test "star" do
+                        let query = toQuery $ select star
+                        noParameters "SELECT *" query
 
             TU.suite "columns" do
                   TU.test "scalars" do
@@ -55,8 +55,8 @@ main = TUM.runTest do
                         let query = toQuery $ select (id /\ name)
                         noParameters "SELECT id, name" query
                   TU.test "mixed" do
-                        let query = toQuery $ select (users /\ id /\ 5)
-                        noParameters "SELECT users.*, id, 5" query
+                        let query = toQuery $ select (star /\ id /\ 5)
+                        noParameters "SELECT *, id, 5" query
 
             TU.suite "sub query" do
                   TU.test "scalars" do
@@ -66,8 +66,8 @@ main = TUM.runTest do
                         let query = toQuery $ select (id /\ (select (Field :: Field "sent") # from messages))
                         noParameters "SELECT id, (SELECT sent FROM messages)" query
                   TU.test "mixed" do
-                        let query = toQuery $ select (3 /\ (select id # from messages) /\ id /\ name /\ users /\ (select (Field :: Field "sent") # from messages) /\ (select 5 # from messages))
-                        noParameters "SELECT 3, (SELECT id FROM messages), id, name, users.*, (SELECT sent FROM messages), (SELECT 5 FROM messages)" query
+                        let query = toQuery $ select (3 /\ (select id # from messages) /\ id /\ name /\ star /\ (select (Field :: Field "sent") # from messages) /\ (select 5 # from messages))
+                        noParameters "SELECT 3, (SELECT id FROM messages), id, name, *, (SELECT sent FROM messages), (SELECT 5 FROM messages)" query
 
       TU.suite "from" do
             TU.test "table" do
@@ -125,8 +125,8 @@ main = TUM.runTest do
                         let query = toQuery $ select id # from (select (id /\ name) # from users # as u)
                         noParameters "SELECT id FROM (SELECT id, name FROM users) u" query
                   TU.test "table" do
-                        let query = toQuery $ select users # from (select users # from users # as u)
-                        noParameters "SELECT u.* FROM (SELECT users.* FROM users) u" query
+                        let query = toQuery $ select star # from (select star # from users # as u)
+                        noParameters "SELECT * FROM (SELECT * FROM users) u" query
 
 noParameters :: forall p. String -> Query p -> _
 noParameters s (Query q p) = case p of

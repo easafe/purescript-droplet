@@ -12,7 +12,6 @@ import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Union)
 
 
-
 ----------------------SELECT----------------------------
 
 --I can't seem to make this anything like a gadt :(
@@ -21,7 +20,7 @@ newtype Select s (fields :: Row Type) = Select s
 
 data SelectField (field :: Symbol) = SelectField
 
-data SelectTable (name :: Symbol) = SelectTable
+data SelectStar = SelectStar
 
 newtype SelectScalar s = SelectScalar s
 
@@ -40,8 +39,8 @@ class ToSelect from s fields | from -> s, s -> from where
 instance fieldToSelect :: Cons name t e fields => ToSelect (Field name) (SelectField name) fields where
       toSelect _ = Select SelectField
 else
-instance tableToSelect :: ToSelect (Table name fields) (SelectTable name) fields where
-      toSelect _ = Select SelectTable
+instance starToSelect :: ToSelect Star SelectStar fields where
+      toSelect _ = Select SelectStar
 else
 instance fromToSelect :: ToSubSelect from s to => ToSelect (From f (Select s to) to) (SubSelectFrom f (Select s to) to) fields where
       toSelect fr = Select $ SubSelectFrom fr
@@ -72,7 +71,7 @@ class IsSelectable from
 
 instance fieldIsSelectable :: IsSelectable (Field name)
 instance intIsSelectable :: IsSelectable Int
-instance tableIsSelectable :: IsSelectable (Table name fields)
+instance tableIsSelectable :: IsSelectable Star
 instance tupleIsSelectable :: (IsSelectable from, IsSelectable from2) => IsSelectable (Tuple from from2)
 instance fromIsSelectable :: IsSelectable (From f (Select s fields) fields)
 instance whereIsSelectable :: IsSelectable (Where (From f (Select s fields) fields) fields parameters)
@@ -96,6 +95,9 @@ instance selectScalarToAs :: ToAs (Select (SelectScalar s) fields) () where
 instance selectFieldToAs :: (IsSymbol name, Cons name t e fields, Cons name t () single) => ToAs (Select (SelectField name) fields) single where
       toAs _ s = As s
 
+instance selectStarToAs :: ToAs (Select (SelectStar) fields) fields where
+      toAs _ s = As s
+
 instance selectTupleToAs :: (ToAs s projection, ToAs s2 projection2, Union projection projection2 all) => ToAs (Select (SelectTuple (Tuple s s2)) fields) all where
       toAs _ s = As s
 
@@ -107,19 +109,12 @@ as a s = toAs a s
 ----------------------------FROM----------------------------
 
 newtype From :: forall k. Type -> k -> Row Type -> Type
---having `s` helps with type class instances
+--having s helps with type class instances
 newtype From f s (fields :: Row Type) = From f
 
 newtype FromTable (name :: Symbol) s (fields :: Row Type) = FromTable s
 
 data FromAs as s (fields :: Row Type) = FromAs as s
-
---to catch ill typed froms soon
-class IsFromable :: forall k. k -> Constraint
-class IsFromable from
-
-instance fieldIsFromable :: IsFromable (Table name fields)
-instance asIsFromable :: IsFromable (As fw s a projection) --ಠ_ಠ
 
 class ToFrom from f fields | from -> f, f -> from where
       toFrom :: forall s. from -> Select s fields -> From (f (Select s fields) fields) (Select s fields) fields
@@ -129,6 +124,13 @@ instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields w
 --ignore fields from Select so projection can take over
 instance fromAsToFrom :: ToFrom (As f s a projection) (FromAs (As f s a projection)) projection where
       toFrom as s = From $ FromAs as s
+
+--to catch ill typed froms soon
+class IsFromable :: forall k. k -> Constraint
+class IsFromable from
+
+instance fieldIsFromable :: IsFromable (Table name fields)
+instance asIsFromable :: IsFromable (As fw s a projection) --ಠ_ಠ
 
 from :: forall from f s fields. IsFromable from => ToFrom from f fields => from -> Select s fields -> From (f (Select s fields) fields) (Select s fields) fields
 from f s = toFrom f s
