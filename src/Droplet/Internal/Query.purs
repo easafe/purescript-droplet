@@ -66,8 +66,7 @@ instance fromTablePrintFrom :: (IsSymbol name, ToSelectQuery s) => ToFromQuery (
                   Query sel _ = toQuery s
 
 --we gonna need parameters here!
--- prolly need a ToAsQuery class
-instance fromAsPrintFrom :: (ToFromQuery f, ToSelectQuery s2, IsSymbol name) => ToFromQuery (FromAs (As (From f ss fields) s (Alias name) fields) (Select s2 fields) fields) where
+instance fromAsPrintFrom :: (ToFromQuery f, ToSelectQuery s, ToSelectQuery s2, IsSymbol name) => ToFromQuery (FromAs (As (From f (Select s fields) fields) (Select s fields) (Alias name) projection) (Select s2 projection) projection) where
       toFromQuery (FromAs (As asf) s) = sel <> " FROM (" <> aliased <> ") " <> DS.reflectSymbol (Proxy :: Proxy name)
             where Query sel _ = toQuery s
                   Query aliased _ = toQuery asf
