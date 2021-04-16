@@ -15,7 +15,6 @@ import Prim.Row (class Cons, class Union)
 ----------------------SELECT----------------------------
 
 --I can't seem to make this anything like a gadt :(
---fields should be a row list of everything selected?
 newtype Select s (fields :: Row Type) = Select s
 
 data SelectField (field :: Symbol) = SelectField
@@ -83,26 +82,39 @@ select = toSelect
 
 ----------------------------AS----------------------------
 
-data As fw s a (projection :: Row Type) = As fw
+data As q a (projection :: Row Type) = As q
 
---as should work with where too!
-class ToAs s projection | s -> projection where
-      toAs :: forall name f fields. IsSymbol name => Alias name -> From f s fields -> As (From f s fields) s (Alias name) projection
+class ToAs q projection | q -> projection where
+      toAs :: forall name. IsSymbol name => Alias name -> q -> As q (Alias name) projection
 
-instance selectScalarToAs :: ToAs (Select (SelectScalar s) fields) () where
-      toAs _ s = As s
+--this is very tedious, aint we got a better way?
+-- might help if previous statement was always in last position
+instance fromSelectScalarToAs :: ToAs (From f (Select (SelectScalar s) fields) fields) () where
+      toAs _ q = As q
 
-instance selectFieldToAs :: (IsSymbol name, Cons name t e fields, Cons name t () single) => ToAs (Select (SelectField name) fields) single where
-      toAs _ s = As s
+instance fromSelectFieldToAs :: (IsSymbol name, Cons name t e fields, Cons name t () single) => ToAs (From f (Select (SelectField name) fields) fields) single where
+      toAs _ q = As q
 
-instance selectStarToAs :: ToAs (Select (SelectStar) fields) fields where
-      toAs _ s = As s
+instance fromSelectStarToAs :: ToAs (From f (Select (SelectStar) fields) fields) fields where
+      toAs _ q = As q
 
-instance selectTupleToAs :: (ToAs s projection, ToAs s2 projection2, Union projection projection2 all) => ToAs (Select (SelectTuple (Tuple s s2)) fields) all where
-      toAs _ s = As s
+instance fromSelectTupleToAs :: (ToAs (From f s fields) projection, ToAs (From f s2 fields) projection2, Union projection projection2 all) => ToAs (From f (Select (SelectTuple (Tuple s s2)) fields) fields) all where
+      toAs _ q = As q
 
-as :: forall f s projection name fields. IsSymbol name => ToAs s projection => Alias name -> From f s fields -> As (From f s fields) s (Alias name) projection
-as a s = toAs a s
+instance whereSelectScalarToAs :: ToAs (Where (From f (Select (SelectScalar s) fields) fields) fields parameters) () where
+      toAs _ q = As q
+
+instance whereSelectFieldToAs :: (IsSymbol name, Cons name t e fields, Cons name t () single) => ToAs (Where (From f (Select (SelectField name) fields) fields) fields parameters) single where
+      toAs _ q = As q
+
+instance whereSelectStarToAs :: ToAs (Where (From f (Select (SelectStar) fields) fields) fields parameters) fields where
+      toAs _ q = As q
+
+instance whereSelectTupleToAs :: (ToAs (From f s fields) projection, ToAs (From f s2 fields) projection2, Union projection projection2 all) => ToAs (Where (From f (Select (SelectTuple (Tuple s s2)) fields) fields) fields parametes) all where
+      toAs _ q = As q
+
+as :: forall q projection name. IsSymbol name => ToAs q projection => Alias name -> q -> As q (Alias name) projection
+as a q = toAs a q
 
 
 
@@ -121,8 +133,8 @@ class ToFrom from f fields | from -> f, f -> from where
 
 instance fromTableToFrom :: ToFrom (Table name fields) (FromTable name) fields where
       toFrom _ s = From $ FromTable s
---ignore fields from Select so projection can take over
-instance fromAsToFrom :: ToFrom (As f s a projection) (FromAs (As f s a projection)) projection where
+
+instance fromAsToFrom :: ToFrom (As q a projection) (FromAs (As q a projection)) projection where
       toFrom as s = From $ FromAs as s
 
 --to catch ill typed froms soon
@@ -130,7 +142,7 @@ class IsFromable :: forall k. k -> Constraint
 class IsFromable from
 
 instance fieldIsFromable :: IsFromable (Table name fields)
-instance asIsFromable :: IsFromable (As fw s a projection) --ಠ_ಠ
+instance asIsFromable :: IsFromable (As q a projection) --ಠ_ಠ
 
 from :: forall from f s fields. IsFromable from => ToFrom from f fields => from -> Select s fields -> From (f (Select s fields) fields) (Select s fields) fields
 from f s = toFrom f s

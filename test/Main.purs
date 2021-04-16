@@ -127,6 +127,9 @@ main = TUM.runTest do
                   TU.test "table" do
                         let query = toQuery $ select star # from (select star # from users # as u)
                         noParameters "SELECT * FROM (SELECT * FROM users) u" query
+                  TU.test "filtered" do
+                        let query = toQuery $ select star # from (select (id /\ name /\ surname) # from users # wher (name .=. (Parameter :: Parameter "n")) {n : "nn"} # as u)
+                        noParameters "SELECT * FROM (SELECT id, name, surname FROM users WHERE name = @n) u" query
 
 noParameters :: forall p. String -> Query p -> _
 noParameters s (Query q p) = case p of

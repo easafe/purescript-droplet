@@ -58,19 +58,27 @@ instance fromPrint :: ToFromQuery f => ToQuery (From f s) where
       toQuery (From fr) = Query (toFromQuery fr) Nothing
 
 class ToFromQuery f where
-      toFromQuery :: f -> String
+      toFromQuery :: forall parameters. f -> Query parameters
 
 instance fromTablePrintFrom :: (IsSymbol name, ToSelectQuery s) => ToFromQuery (FromTable name (Select s fields) fields) where
-      toFromQuery (FromTable s) = sel <> " FROM " <> tableName
+      toFromQuery (FromTable s) = Query q Nothing
             where tableName = DS.reflectSymbol (Proxy :: Proxy name)
                   Query sel _ = toQuery s
+                  q = sel <> " FROM " <> tableName
 
---we gonna need parameters here!
-instance fromAsPrintFrom :: (ToFromQuery f, ToSelectQuery s, ToSelectQuery s2, IsSymbol name) => ToFromQuery (FromAs (As (From f (Select s fields) fields) (Select s fields) (Alias name) projection) (Select s2 projection) projection) where
-      toFromQuery (FromAs (As asf) s) = sel <> " FROM (" <> aliased <> ") " <> DS.reflectSymbol (Proxy :: Proxy name)
+instance fromAsPrintFrom :: (ToFromQuery f, ToSelectQuery s, ToSelectQuery s2, IsSymbol name) => ToFromQuery (FromAs (As (From f (Select s fields) fields) (Alias name) projection) (Select s2 projection) projection) where
+      toFromQuery (FromAs (As asf) s) = Query q Nothing
             where Query sel _ = toQuery s
                   Query aliased _ = toQuery asf
+                  q = sel <> " FROM (" <> aliased <> ") " <> DS.reflectSymbol (Proxy :: Proxy name)
 
+instance fromAsWherePrintFrom :: (ToWhereQuery f, ToSelectQuery s, ToSelectQuery s2, IsSymbol name) => ToFromQuery (FromAs (As (Where f fields parameters) (Alias name) projection) (Select s projection) projection) where
+      toFromQuery (FromAs (As asf) s) = Query q parameters
+            where Query sel _ = toQuery s
+                  Query aliased parameters = toQuery asf
+                  q = sel <> " FROM (" <> aliased <> ") " <> DS.reflectSymbol (Proxy :: Proxy name)
+--gotta handle parameter union
+-- also not overwrite them
 instance wherPrint :: ToWhereQuery f => ToQuery (Where f fields) where
       toQuery :: forall parameters. Where f fields parameters -> Query parameters
       toQuery (Where filtered parameters fr) = Query (q <> " WHERE " <> filters) $ Just parameters
