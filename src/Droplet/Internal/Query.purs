@@ -3,40 +3,56 @@
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
 module Droplet.Internal.Query where
 
+import Droplet.Internal.Filter
 import Droplet.Internal.Language
 import Prelude
 
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
-import Data.Tuple.Nested ((/\))
-import Prim.Row (class Nub, class Union)
-import Record as R
+import Effect.Exception.Unsafe as EEU
+import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy(..))
+import Unsafe.Coerce as UC
 
-data Query parameters = Query String Suffix (Record parameters)
+--cant be a functor because of parameters kind
+data Query parameters =
+      Parameterized String (Record parameters) |
+      Plain String
 
-newtype Suffix = Suffix Int
+data Prepared
+
+data Other
 
 --for debugging
 instance queryShow :: Show (Query parameters) where
-      show (Query q _ _) = q
+      show = case _ of
+            Parameterized q _ -> q
+            Plain q -> q
 
---for testing
-peek :: forall parameters q. ToQuery q parameters => q -> Tuple String (Record parameters)
-peek q =  s /\ p
-      where Query s _ p = toQuery q $ Suffix 0
+extractPlain :: forall parameters. Query parameters -> String
+extractPlain = case _ of
+      Plain query -> query
+      _ -> EEU.unsafeThrow "Tried to append to parameterized query"
 
 --magic strings
 selectKeyword :: String
 selectKeyword = "SELECT "
 
+fromKeyword :: String
 fromKeyword = " FROM "
 
+whereKeyword :: String
 whereKeyword = " WHERE "
 
-star :: String
-star = "*"
+andKeyword :: String
+andKeyword = " AND "
+
+orKeyword :: String
+orKeyword = " OR "
+
+starToken :: String
+starToken = "*"
 
 comma :: String
 comma = ", "
@@ -47,85 +63,65 @@ openBracket = "("
 closeBracket :: String
 closeBracket = ")"
 
-class ToQuery q parameters | q -> parameters where
-      toQuery :: q -> Suffix -> Query parameters
+--literally only Prepare has parameters, can this be simplified?
+class ToQuery q (starting :: Type) | q -> starting where
+      toQuery :: forall parameters. q -> Query parameters
 
-instance selectToQuery :: ToSelectQuery s parameters => ToQuery (Select s fields) parameters where
-      toQuery (Select s) suffix = Query (selectKeyword <> query) newSuffix parameters
-            where Query query newSuffix parameters = toSelectQuery s suffix
+instance prepareToQuery :: ToQuery q Prepared => ToQuery (Prepare q parameters) Prepared where
+      toQuery (Prepare q parameters) = Parameterized (extractPlain $ toQuery q) $ UC.unsafeCoerce parameters
 
-class ToSelectQuery s parameters | s -> parameters where
-      toSelectQuery :: s -> Suffix -> Query parameters
+instance selectToQuery :: ToQuery s starting => ToQuery (Select s fields) starting where
+      toQuery (Select s) = Plain $ selectKeyword <> extractPlain (toQuery s)
 
-instance selectFieldToSelectQuery :: IsSymbol name => ToSelectQuery (SelectField name) () where
-      toSelectQuery _ suffix = Query (DS.reflectSymbol (Proxy :: Proxy name)) suffix {}
+instance selectFieldToQuery :: IsSymbol name => ToQuery (SelectField name) starting where
+      toQuery _ = Plain $ DS.reflectSymbol (Proxy :: Proxy name)
 
-instance tableToSelectQuery :: ToSelectQuery SelectStar () where
-      toSelectQuery _ suffix = Query star suffix {}
+instance tableToQuery :: ToQuery SelectStar starting where
+      toQuery _ = Plain starToken
 
-instance intScalarToSelectQuery :: ToSelectQuery (SelectScalar Int) () where
-      toSelectQuery (SelectScalar n) suffix = Query (show n) suffix {}
+instance intScalarToQuery :: ToQuery (SelectScalar Int) starting where
+      toQuery (SelectScalar n) = Plain $ show n
 
-instance selectTupleToSelectQuery :: (ToSelectQuery s parameters, ToSelectQuery t otherParameters, Union parameters otherParameters combined, Nub combined final) => ToSelectQuery (SelectTuple (Tuple s t)) final where
-      toSelectQuery (SelectTuple (Tuple s t)) suffix = Query (query <> comma <> otherQuery) otherSuffix $ R.merge parameters otherParameters
-            where Query query firstSuffix parameters = toSelectQuery s suffix
-                  Query otherQuery otherSuffix otherParameters = toSelectQuery t firstSuffix
+instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQuery (SelectTuple (Tuple (Select s f) (Select t g))) starting where
+      toQuery (SelectTuple (Tuple (Select s) (Select t))) = Plain $ extractPlain (toQuery s) <> comma <> extractPlain (toQuery t)
 
---coming from SelectTuple
-instance selectToSelectQuery :: ToSelectQuery s parameters => ToSelectQuery (Select s fields) parameters where
-      toSelectQuery (Select s) suffix = toSelectQuery s suffix
+instance subSelectFromToQuery :: ToQuery f starting => ToQuery (SubSelectFrom f s fields) starting where
+      toQuery (SubSelectFrom fr) = Plain $ openBracket <> extractPlain (toQuery fr) <> closeBracket
 
-instance subSelectFromToSelectQuery :: ToFromQuery f parameters => ToSelectQuery (SubSelectFrom f s fields) parameters where
-      toSelectQuery (SubSelectFrom fr) suffix = Query (openBracket <> query <> closeBracket) newSuffix parameters
-            where Query query newSuffix parameters = toQuery fr suffix
+instance subSelectWherFailToQuery :: Fail (Text "Parameters must be provided via Droplet.prepared") => ToQuery (SubSelectWhere w s Parameterized fields) Other where
+      toQuery _ = Plain ""
+else
+instance subSelectWhereToQuery :: ToQuery w starting=> ToQuery (SubSelectWhere w s has fields) starting where
+      toQuery (SubSelectWhere wr) = Plain $ openBracket <> extractPlain (toQuery wr) <> closeBracket
 
--- instance subSelectWhereToSelectQuery :: ToWhereQuery f => ToSelectQuery (SubSelectWhere f s fields) where
---       toSelectQuery (SubSelectWhere wr) = "(" <> q <> ")"
---             where Query q _ = toQuery wr
+instance fromToQuery :: ToQuery f starting => ToQuery (From f s fields) starting where
+      toQuery (From fr) = toQuery fr
 
---here so From can be a top level
--- actual parsing is done in ToFromQuery
-instance fromToQuery :: ToFromQuery f parameters => ToQuery (From f s fields) parameters where
-      toQuery (From fr) suffix = toFromQuery fr suffix
+instance fromTableToQuery :: (IsSymbol name, ToQuery s starting) => ToQuery (FromTable name s fields) starting where
+      toQuery (FromTable s) = Plain $ extractPlain (toQuery s) <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-class ToFromQuery f parameters | f -> parameters where
-      toFromQuery :: f -> Suffix -> Query parameters
-
-instance fromTableToQueryFrom :: (IsSymbol name, ToSelectQuery s parameters) => ToFromQuery (FromTable name (Select s fields) fields) parameters where
-      toFromQuery (FromTable s) suffix = Query (query <> fromKeyword <> tableName) newSuffix parameters
-            where tableName = DS.reflectSymbol (Proxy :: Proxy name)
-                  Query query newSuffix parameters = toQuery s suffix
-
--- instance fromAsToQueryFrom :: (ToFromQuery f, ToSelectQuery s, ToSelectQuery s2, IsSymbol name) => ToFromQuery (FromAs (As (From f (Select s fields) fields) (Alias name) projection) (Select s2 projection) projection) where
---       toFromQuery (FromAs (As asf) s) = Query q Nothing
+-- instance fromAsToQuery :: (ToQuery f, ToQuery s, ToQuery s2, IsSymbol name) => ToQuery (FromAs (As (From f (Select s fields) fields) (Alias name) projection) (Select s2 projection) projection) starting where
+--       toQuery (FromAs (As asf) s) = Query q Nothing
 --             where Query sel _ = toQuery s
 --                   Query aliased _ = toQuery asf
 --                   q = sel <> " FROM (" <> aliased <> ") " <> DS.reflectSymbol (Proxy :: Proxy name)
 
--- instance fromAsWhereToQueryFrom :: (ToWhereQuery f, ToSelectQuery s, ToSelectQuery s2, IsSymbol name) => ToFromQuery (FromAs (As (Where f fields parameters) (Alias name) projection) (Select s projection) projection) where
---       toFromQuery (FromAs (As asf) s) = Query q parameters
+-- instance fromAsWhereToQuery :: (ToWhereQuery f, ToQuery s, ToQuery s2, IsSymbol name) => ToQuery (FromAs (As (Where f fields parameters) (Alias name) projection) (Select s projection) projection) starting where
+--       toQuery (FromAs (As asf) s) = Query q parameters
 --             where Query sel _ = toQuery s
 --                   Query aliased parameters = toQuery asf
 --                   q = sel <> " FROM (" <> aliased <> ") " <> DS.reflectSymbol (Proxy :: Proxy name)
 
-
-instance wherToQuery :: ToWhereQuery f subParameters => ToQuery (Where f fields parameters) subParameters where
-      toQuery (Where filtered parameters fr) suffix = Query (query <> whereKeyword <> filters) $
-            where Query query newSuffix parameters = toWhereQuery fr suffix
-
-                  filters = printFilter filtered
-                  printFilter = case _ of
+instance wherFailToQuery :: Fail (Text "Parameters must be provided via Droplet.prepared") => ToQuery (Where f fields Parameterized parameters) Other where
+      toQuery _ = Plain ""
+else
+instance wherToQuery :: ToQuery f starting => ToQuery (Where f fields has parameters) starting where
+      toQuery (Where filtered fr) = Plain $ extractPlain (toQuery fr) <> whereKeyword <> printFilter filtered
+            where printFilter = case _ of
                         Operation field otherField op -> field <> printOperator op <> otherField
-                        And filter otherFilter -> "(" <> printFilter filter <> " AND " <> printFilter otherFilter <> ")"
-                        Or filter otherFilter -> "(" <> printFilter filter <> " OR " <> printFilter otherFilter <> ")"
+                        And filter otherFilter -> openBracket <> printFilter filter <> andKeyword <> printFilter otherFilter <> closeBracket
+                        Or filter otherFilter -> openBracket <> printFilter filter <> orKeyword <> printFilter otherFilter <> closeBracket
+
                   printOperator = case _ of
                         Equals -> " = "
                         NotEquals -> " <> "
-
-class ToWhereQuery w parameters | w -> parameters where
-      toWhereQuery :: w -> Query parameters
-
-instance fromToQueryWhere :: ToFromQuery f parameters => ToWhereQuery (From f s fields) parameters where
-      toWhereQuery (From fr) suffix = toFromQuery fr suffix
-
-

@@ -12,6 +12,26 @@ import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Union)
 
 
+----------------------PREPARE----------------------------
+
+--this shouldnt creat an actual prepare statement (since it'd require unique names and $n parameters)
+-- but rather type check all parameter usage in a single place
+data Prepare q (parameters :: Row Type) = Prepare q (Record parameters)
+
+--need to suport from and select
+-- since subqueries might have where
+-- try to avoid adding parameters everywhere tho
+class ToPrepare q parameters | q -> parameters where
+      toPrepare :: Record parameters -> q -> Prepare q parameters
+
+instance whereToPrepare :: ToPrepare (Where f fields has parameters) parameters where
+      toPrepare parameters w = Prepare w parameters
+
+prepare :: forall q parameters. ToPrepare q parameters => Record parameters -> q -> Prepare q parameters
+prepare = toPrepare
+
+
+
 ----------------------SELECT----------------------------
 
 --I can't seem to make this anything like a gadt :(
@@ -28,10 +48,10 @@ newtype SelectTuple s = SelectTuple s
 newtype SubSelectFrom :: forall k. Type -> k -> Row Type -> Type
 newtype SubSelectFrom f s (fields :: Row Type) = SubSelectFrom (From f s fields)
 
-newtype SubSelectWhere f (fields :: Row Type) parameters = SubSelectWhere (Where f fields parameters)
+newtype SubSelectWhere f (fields :: Row Type) (has :: Type) parameters = SubSelectWhere (Where f fields has parameters)
 
-class ToSelect from s fields | from -> s, s -> from where
-      toSelect :: from -> Select s fields
+class ToSelect r s fields | r -> s, s -> r where
+      toSelect :: r -> Select s fields
 
 --as it is, we can't express select table.* /\ table2.*
 -- nor sub queries without from (which I dont know if it is ever useful)
@@ -41,22 +61,22 @@ else
 instance starToSelect :: ToSelect Star SelectStar fields where
       toSelect _ = Select SelectStar
 else
-instance fromToSelect :: ToSubSelect from s to => ToSelect (From f (Select s to) to) (SubSelectFrom f (Select s to) to) fields where
+instance fromToSelect :: ToSubSelect r s to => ToSelect (From f (Select s to) to) (SubSelectFrom f (Select s to) to) fields where
       toSelect fr = Select $ SubSelectFrom fr
 else
-instance whereToSelect :: ToSubSelect from s to => ToSelect (Where (From f (Select s to) to) to parameters) (SubSelectWhere (From f (Select s to) to) to parameters) fields where
+instance whereToSelect :: ToSubSelect r s to => ToSelect (Where (From f (Select s to) to) to has parameters) (SubSelectWhere (From f (Select s to) to) to has parameters) fields where
       toSelect wr = Select $ SubSelectWhere wr
 else
-instance tupleToSelect :: (ToSelect from s fields, ToSelect from2 s2 fields) => ToSelect (Tuple from from2) (SelectTuple (Tuple (Select s fields) (Select s2 fields))) fields where
-      toSelect (Tuple t t2) = Select <<< SelectTuple <<< Tuple (toSelect t) $ toSelect t2
+instance tupleToSelect :: (ToSelect r s fields, ToSelect t u fields) => ToSelect (Tuple r t) (SelectTuple (Tuple (Select s fields) (Select u fields))) fields where
+      toSelect (Tuple s t) = Select <<< SelectTuple <<< Tuple (toSelect s) $ toSelect t
 else
 instance intToSelect :: ToSelect Int (SelectScalar Int) fields where
       toSelect n = Select $ SelectScalar n
 --needs more instance for scalars
 
 --for sub queries only a single column can be returned
-class ToSubSelect from s fields | from -> s, s -> from where
-      toSubSelect :: from -> Select s fields
+class ToSubSelect r s fields | r -> s, s -> r where
+      toSubSelect :: r -> Select s fields
 
 instance rowToSubSelect :: Cons name t e fields => ToSubSelect (Field name) (SelectField name) fields where
       toSubSelect _ = Select SelectField
@@ -65,17 +85,18 @@ instance intToSubSelect :: ToSubSelect Int (SelectScalar Int) fields where
       toSubSelect n = Select $ SelectScalar n
 
 --to catch ill typed selects soon
+--shouldnt functional dependencies be able to do this??
 class IsSelectable :: forall k. k -> Constraint
-class IsSelectable from
+class IsSelectable r
 
 instance fieldIsSelectable :: IsSelectable (Field name)
 instance intIsSelectable :: IsSelectable Int
 instance tableIsSelectable :: IsSelectable Star
-instance tupleIsSelectable :: (IsSelectable from, IsSelectable from2) => IsSelectable (Tuple from from2)
+instance tupleIsSelectable :: (IsSelectable r, IsSelectable s) => IsSelectable (Tuple r s)
 instance fromIsSelectable :: IsSelectable (From f (Select s fields) fields)
-instance whereIsSelectable :: IsSelectable (Where (From f (Select s fields) fields) fields parameters)
+instance whereIsSelectable :: IsSelectable (Where (From f (Select s fields) fields) fields has parameters)
 
-select :: forall from s fields. IsSelectable from => ToSelect from s fields => from -> Select s fields
+select :: forall r s fields. IsSelectable r => ToSelect r s fields => r -> Select s fields
 select = toSelect
 
 
@@ -101,16 +122,16 @@ instance fromSelectStarToAs :: ToAs (From f (Select (SelectStar) fields) fields)
 instance fromSelectTupleToAs :: (ToAs (From f s fields) projection, ToAs (From f s2 fields) projection2, Union projection projection2 all) => ToAs (From f (Select (SelectTuple (Tuple s s2)) fields) fields) all where
       toAs _ q = As q
 
-instance whereSelectScalarToAs :: ToAs (Where (From f (Select (SelectScalar s) fields) fields) fields parameters) () where
+instance whereSelectScalarToAs :: ToAs (Where (From f (Select (SelectScalar s) fields) fields) fields has parameters) () where
       toAs _ q = As q
 
-instance whereSelectFieldToAs :: (IsSymbol name, Cons name t e fields, Cons name t () single) => ToAs (Where (From f (Select (SelectField name) fields) fields) fields parameters) single where
+instance whereSelectFieldToAs :: (IsSymbol name, Cons name t e fields, Cons name t () single) => ToAs (Where (From f (Select (SelectField name) fields) fields) fields has parameters) single where
       toAs _ q = As q
 
-instance whereSelectStarToAs :: ToAs (Where (From f (Select (SelectStar) fields) fields) fields parameters) fields where
+instance whereSelectStarToAs :: ToAs (Where (From f (Select (SelectStar) fields) fields) fields has parameters) fields where
       toAs _ q = As q
 
-instance whereSelectTupleToAs :: (ToAs (From f s fields) projection, ToAs (From f s2 fields) projection2, Union projection projection2 all) => ToAs (Where (From f (Select (SelectTuple (Tuple s s2)) fields) fields) fields parametes) all where
+instance whereSelectTupleToAs :: (ToAs (From f s fields) projection, ToAs (From f s2 fields) projection2, Union projection projection2 all) => ToAs (Where (From f (Select (SelectTuple (Tuple s s2)) fields) fields) fields has parametes) all where
       toAs _ q = As q
 
 as :: forall q projection name. IsSymbol name => ToAs q projection => Alias name -> q -> As q (Alias name) projection
@@ -151,7 +172,7 @@ from f s = toFrom f s
 
 ----------------------------WHERE----------------------------
 
-data Where f (fields :: Row Type) parameters = Where Filtered (Record parameters) f
+data Where f (fields :: Row Type) (has :: Type) parameters = Where Filtered f
 
-wher :: forall f s fields parameters. Filters fields parameters -> Record parameters -> From f s fields -> Where (From f s fields) fields parameters
-wher (Filters filtered) parameters before = Where filtered parameters before
+wher :: forall f s has fields parameters. Filters fields parameters has -> From f s fields -> Where (From f s fields) fields has parameters
+wher (Filters filtered) fr = Where filtered fr
