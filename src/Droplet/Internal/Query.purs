@@ -3,6 +3,7 @@
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
 module Droplet.Internal.Query where
 
+import Droplet.Internal.Definition
 import Droplet.Internal.Filter
 import Droplet.Internal.Language
 import Prelude
@@ -10,6 +11,7 @@ import Prelude
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
+import Debug (spy)
 import Effect.Exception.Unsafe as EEU
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy(..))
@@ -21,7 +23,6 @@ data Query parameters =
       Plain String
 
 data Prepared
-
 data Other
 
 --for debugging
@@ -67,38 +68,44 @@ closeBracket = ")"
 class ToQuery q (starting :: Type) | q -> starting where
       toQuery :: forall parameters. q -> Query parameters
 
-instance prepareToQuery :: ToQuery q Prepared => ToQuery (Prepare q parameters) Prepared where
-      toQuery (Prepare q parameters) = Parameterized (extractPlain $ toQuery q) $ UC.unsafeCoerce parameters
+-- instance prepareToQuery :: ToQuery q Prepared => ToQuery (Prepare q parameters) Prepared where
+--       toQuery (Prepare q parameters) = Parameterized (extractPlain $ toQuery q) $ UC.unsafeCoerce parameters
 
+----------------------SELECT----------------------------
+
+instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQuery (Select (Tuple s t) fields) starting where
+      toQuery (Select (Tuple s t)) = Plain $ extractPlain (toQuery s) <> comma <> extractPlain (toQuery t)
+else
+instance selectFieldToQuery :: IsSymbol name => ToQuery (Select (Field name) fields) starting where
+      toQuery _ = Plain $ DS.reflectSymbol (Proxy :: Proxy name)
+else
+instance tableToQuery :: ToQuery (Select Star fields) starting where
+      toQuery _ = Plain starToken
+else
+instance intScalarToQuery :: ToQuery (Select Int fields) starting where
+      toQuery (Select n) = Plain $ show n
+else
+instance subSelectFromToQuery :: ToQuery (From f s fields) starting => ToQuery (Select (From f s fields) fields) starting where
+      toQuery (Select fr) = spy "sub" $ Plain $ openBracket <> extractPlain (toQuery fr) <> closeBracket
+else
+instance subSelectWherFailToQuery :: Fail (Text "Parameters must be provided via Droplet.prepared") => ToQuery (Select (Where w s Parameterized fields) fields) Other where
+      toQuery _ = Plain ""
+else
+instance subSelectWhereToQuery :: ToQuery (Where w s has fields) starting => ToQuery (Select (Where w s has fields) fields) starting where
+      toQuery (Select wr) = Plain $ openBracket <> extractPlain (toQuery wr) <> closeBracket
+else
 instance selectToQuery :: ToQuery s starting => ToQuery (Select s fields) starting where
       toQuery (Select s) = Plain $ selectKeyword <> extractPlain (toQuery s)
 
-instance selectFieldToQuery :: IsSymbol name => ToQuery (SelectField name) starting where
-      toQuery _ = Plain $ DS.reflectSymbol (Proxy :: Proxy name)
 
-instance tableToQuery :: ToQuery SelectStar starting where
-      toQuery _ = Plain starToken
 
-instance intScalarToQuery :: ToQuery (SelectScalar Int) starting where
-      toQuery (SelectScalar n) = Plain $ show n
+-------------------------------FROM----------------------------
 
-instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQuery (SelectTuple (Tuple (Select s f) (Select t g))) starting where
-      toQuery (SelectTuple (Tuple (Select s) (Select t))) = Plain $ extractPlain (toQuery s) <> comma <> extractPlain (toQuery t)
+instance fromTableToQuery :: (IsSymbol name, ToQuery s starting) => ToQuery (From (Table name fields) s fields) starting where
+      toQuery (From _ s) = Plain $ extractPlain (spy "table" $ toQuery s) <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-instance subSelectFromToQuery :: ToQuery f starting => ToQuery (SubSelectFrom f s fields) starting where
-      toQuery (SubSelectFrom fr) = Plain $ openBracket <> extractPlain (toQuery fr) <> closeBracket
 
-instance subSelectWherFailToQuery :: Fail (Text "Parameters must be provided via Droplet.prepared") => ToQuery (SubSelectWhere w s Parameterized fields) Other where
-      toQuery _ = Plain ""
-else
-instance subSelectWhereToQuery :: ToQuery w starting=> ToQuery (SubSelectWhere w s has fields) starting where
-      toQuery (SubSelectWhere wr) = Plain $ openBracket <> extractPlain (toQuery wr) <> closeBracket
 
-instance fromToQuery :: ToQuery f starting => ToQuery (From f s fields) starting where
-      toQuery (From fr) = toQuery fr
-
-instance fromTableToQuery :: (IsSymbol name, ToQuery s starting) => ToQuery (FromTable name s fields) starting where
-      toQuery (FromTable s) = Plain $ extractPlain (toQuery s) <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 -- instance fromAsToQuery :: (ToQuery f, ToQuery s, ToQuery s2, IsSymbol name) => ToQuery (FromAs (As (From f (Select s fields) fields) (Alias name) projection) (Select s2 projection) projection) starting where
 --       toQuery (FromAs (As asf) s) = Query q Nothing
@@ -111,6 +118,9 @@ instance fromTableToQuery :: (IsSymbol name, ToQuery s starting) => ToQuery (Fro
 --             where Query sel _ = toQuery s
 --                   Query aliased parameters = toQuery asf
 --                   q = sel <> " FROM (" <> aliased <> ") " <> DS.reflectSymbol (Proxy :: Proxy name)
+
+-------------------------------WHERE----------------------------
+
 
 instance wherFailToQuery :: Fail (Text "Parameters must be provided via Droplet.prepared") => ToQuery (Where f fields Parameterized parameters) Other where
       toQuery _ = Plain ""
