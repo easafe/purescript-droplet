@@ -16,30 +16,24 @@ import Prim.Row (class Cons, class Union)
 
 --this shouldnt creat an actual prepare statement (since it'd require unique names and $n parameters)
 -- but rather type check all parameter usage in a single place
--- data Prepare q (parameters :: Row Type) = Prepare q (Record parameters)
+data Prepare q (parameters :: Row Type) = Prepare q (Record parameters)
 
--- --need to suport from and select
--- -- since subqueries might have where
--- -- try to avoid adding parameters everywhere tho
--- class ToPrepare q parameters | q -> parameters where
---       toPrepare :: Record parameters -> q -> Prepare q parameters
 
--- instance whereToPrepare :: ToPrepare (Where f fields has parameters) parameters where
---       toPrepare parameters w = Prepare w parameters
+--CURRENTLY THIS ACCEPTS SUB QUERIES WITH WRONG PARAMETERS
+class ToPrepare q parameters | q -> parameters where
+      toPrepare :: Record parameters -> q -> Prepare q parameters
 
--- prepare :: forall q parameters. ToPrepare q parameters => Record parameters -> q -> Prepare q parameters
--- prepare = toPrepare
+instance whereToPrepare :: ToPrepare (Where f fields has parameters) parameters where
+      toPrepare parameters w = Prepare w parameters
+
+prepare :: forall q parameters. ToPrepare q parameters => Record parameters -> q -> Prepare q parameters
+prepare = toPrepare
 
 
 
 ----------------------SELECT----------------------------
 
 newtype Select s (fields :: Row Type) = Select s
-      -- Column |
-      -- All |
-      -- Scalar s |
-      -- SubQuery s |
-      -- More s
 
 class ToSelect r s fields | r -> s, s -> r where
       toSelect :: r -> Select s fields
@@ -59,11 +53,12 @@ instance intToSelect :: ToSelect Int Int fields where
 instance tupleToSelect :: (ToSelect r s fields, ToSelect t u fields) => ToSelect (Tuple r t) (Tuple (Select s fields) (Select u fields)) fields where
       toSelect (Tuple s t) = Select <<< Tuple (toSelect s) $ toSelect t
 
-instance fromToSelect :: ToSubSelect s to => ToSelect (From f (Select s to) to) (From f (Select s to) to) fields where
-      toSelect fr = Select fr
+--an extra Select to help ToQuery instances
+instance fromToSelect :: ToSubSelect s to => ToSelect (From f (Select s to) to) (Select (From f (Select s to) to) to) fields where
+      toSelect fr = Select $ Select fr
 
-instance whereToSelect :: ToSubSelect s to => ToSelect (Where (From f (Select s to) to) to has parameters) (Where (From f (Select s to) to) to has parameters) fields where
-      toSelect wr = Select wr
+instance whereToSelect :: ToSubSelect s to => ToSelect (Where (From f (Select s to) to) to has parameters) (Select (Where (From f (Select s to) to) to has parameters) to) fields where
+      toSelect wr = Select $ Select wr
 
 --for sub queries only a single column can be returned
 class ToSubSelect r fields
@@ -85,6 +80,42 @@ instance whereIsSelectable :: IsSelectable (Where f fields has parameters)
 
 select :: forall r s fields.  IsSelectable r => ToSelect r s fields => r -> Select s fields
 select = toSelect
+
+
+
+-------------------------------FROM----------------------------
+
+data From f s (fields :: Row Type) = From f s
+
+class ToFrom f fields | f -> fields where
+      toFrom :: forall s. f -> Select s fields -> From f (Select s fields) fields
+
+instance fromTableToFrom :: ToFrom (Table name fields) fields where
+      toFrom table s = From table s
+
+-- data FromAs as s (fields :: Row Type) = FromAs as s
+
+-- instance fromAsToFrom :: ToFrom (As q a projection) (FromAs (As q a projection)) projection where
+--       toFrom as s = From $ FromAs as s
+
+-- --to catch ill typed froms soon
+class IsFromable :: forall k. k -> Constraint
+class IsFromable from
+
+instance fieldIsFromable :: IsFromable (Table name fields)
+-- instance asIsFromable :: IsFromable (As q a projection) --ಠ_ಠ
+
+from :: forall f s fields. IsFromable f => ToFrom f fields => f -> Select s fields -> From f (Select s fields) fields
+from = toFrom
+
+
+
+-------------------------------WHERE----------------------------
+
+data Where f (fields :: Row Type) (has :: Type) parameters = Where Filtered f
+--will likely change to ToWhere
+wher :: forall f s has fields parameters. Filters fields parameters has -> From f s fields -> Where (From f s fields) fields has parameters
+wher (Filters filtered) fr = Where filtered fr
 
 
 
@@ -125,37 +156,3 @@ data As q (alias :: Symbol) (projection :: Row Type) = As q
 -- as a q = toAs a q
 
 
-
--------------------------------FROM----------------------------
-
-data From f s (fields :: Row Type) = From f s
-
-class ToFrom f fields | f -> fields where
-      toFrom :: forall s. f -> Select s fields -> From f (Select s fields) fields
-
-instance fromTableToFrom :: ToFrom (Table name fields) fields where
-      toFrom table s = From table s
-
--- data FromAs as s (fields :: Row Type) = FromAs as s
-
--- instance fromAsToFrom :: ToFrom (As q a projection) (FromAs (As q a projection)) projection where
---       toFrom as s = From $ FromAs as s
-
--- --to catch ill typed froms soon
-class IsFromable :: forall k. k -> Constraint
-class IsFromable from
-
-instance fieldIsFromable :: IsFromable (Table name fields)
--- instance asIsFromable :: IsFromable (As q a projection) --ಠ_ಠ
-
-from :: forall f s fields. IsFromable f => ToFrom f fields => f -> Select s fields -> From f (Select s fields) fields
-from = toFrom
-
-
-
--------------------------------WHERE----------------------------
-
-data Where f (fields :: Row Type) (has :: Type) parameters = Where Filtered f
---will likely change to ToWhere
-wher :: forall f s has fields parameters. Filters fields parameters has -> From f s fields -> Where (From f s fields) fields has parameters
-wher (Filters filtered) fr = Where filtered fr
