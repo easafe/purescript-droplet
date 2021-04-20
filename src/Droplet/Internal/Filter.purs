@@ -19,17 +19,17 @@ data Filtered =
 
 newtype Filters (fields :: Row Type) (parameters :: Row Type) (has :: Type) = Filters Filtered
 
-equals :: forall parameters fields field has compared.
+equals :: forall parameters fields t field has compared.
       HasParameter field compared has =>
-      ToCompared field fields parameters =>
-      ToCompared compared fields parameters =>
+      ToCompared field t fields parameters =>
+      ToCompared compared t fields parameters =>
       field -> compared -> Filters fields parameters has
 equals field compared = Filters $ Operation (toCompared field) (toCompared compared) Equals
 
-notEquals :: forall parameters has fields field compared.
+notEquals :: forall parameters has fields field t compared.
       HasParameter field compared has =>
-      ToCompared field fields parameters =>
-      ToCompared compared fields parameters =>
+      ToCompared field t fields parameters =>
+      ToCompared compared t fields parameters =>
       field -> compared -> Filters fields parameters has
 notEquals field compared = Filters $ Operation (toCompared field) (toCompared compared) NotEquals
 
@@ -46,13 +46,13 @@ infixl 3 and as .&&.
 infixl 2 or as .||.
 
 --it d be nicer if field parsing was entirely in ToQuery....
-class ToCompared c fields parameters | c -> fields, c -> parameters where
+class ToCompared c t fields parameters | c -> fields, c -> t, c -> parameters where
       toCompared :: c -> String
 
-instance fieldToCompared :: (IsSymbol name, Cons name t e fields) => ToCompared (Field name) fields parameters where
+instance fieldToCompared :: (IsSymbol name, Cons name t e fields) => ToCompared (Field name) t fields parameters where
       toCompared _ = DS.reflectSymbol (Proxy :: Proxy name)
 
-instance parameterToCompared :: (IsSymbol name, Cons name t e parameters) => ToCompared (Parameter name) fields parameters where
+instance parameterToCompared :: (IsSymbol name, Cons name t e parameters) => ToCompared (Parameter name) t fields parameters where
       toCompared _ = "@" <> DS.reflectSymbol (Proxy :: Proxy name)
 
 -- oh well...

@@ -67,7 +67,7 @@ instance rowToSubSelect :: Cons name t e fields => ToSubSelect (Field name) fiel
 instance intToSubSelect :: ToSubSelect Int fields
 
 --to catch ill typed selects soon
---shouldnt functional dependencies be able to do this??
+-- can we get rid of this?
 class IsSelectable :: forall k. k -> Constraint
 class IsSelectable r
 
