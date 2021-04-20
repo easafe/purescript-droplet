@@ -28,7 +28,7 @@ class ToPrepare q parameters | q -> parameters where
 instance selecToPrepare :: ToPrepare (Select f parameters fields) parameters where
       toPrepare parameters w = Prepare w parameters
 
-instance whereToPrepare :: ToPrepare (Where f fields has parameters) parameters where
+instance whereToPrepare :: ToPrepare s parameters => ToPrepare (Where (From f s fields) fields has parameters) parameters where
       toPrepare parameters w = Prepare w parameters
 
 prepare :: forall q parameters. ToPrepare q parameters => Record parameters -> q -> Prepare q parameters
