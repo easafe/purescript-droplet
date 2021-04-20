@@ -1,6 +1,7 @@
--- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
--- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
+-- |
+-- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
+
 module Droplet.Internal.Language where
 
 import Droplet.Internal.Definition
@@ -11,7 +12,9 @@ import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Union)
 
--- I feel like that with the proper care, all these types can be turned into a gadt (prolly with something like leibnz equality)
+
+--prepared is not type safe again, check invalid.purs
+
 
 ----------------------PREPARE----------------------------
 
@@ -42,6 +45,7 @@ class ToSelect r s parameters fields | r -> s, s -> r where
 
 --as it is, we can't express select table.* /\ table2.*
 -- nor sub queries without from (which I dont know if it is ever useful)
+--NEEDS TO SUPPORT PARAMETER column
 instance fieldToSelect :: Cons name t e fields => ToSelect (Field name) (Field name) parameters fields where
       toSelect s = Select s
 
@@ -59,7 +63,7 @@ instance tupleToSelect :: (ToSelect r s parameters fields, ToSelect t u paramete
 instance fromToSelect :: ToSubSelect s to => ToSelect (From f (Select s parameters to) to) (Select (From f (Select s parameters to) to) parameters to) parameters fields where
       toSelect fr = Select $ Select fr
 
-instance whereToSelect :: ToSubSelect s to => ToSelect (Where (From f (Select s parameters to) to) to has parameters) (Select (Where (From f (Select s parameters to) to) to has parameters) parameters to) parameters fields where
+instance whereToSelect :: (ToSubSelect s to) => ToSelect (Where (From f (Select s parameters to) to) to has parameters) (Select (Where (From f (Select s parameters to) to) to has parameters) parameters to) parameters fields where
       toSelect wr = Select $ Select wr
 
 --for sub queries only a single column can be returned
@@ -80,7 +84,7 @@ instance tupleIsSelectable :: (IsSelectable r, IsSelectable s) => IsSelectable (
 instance fromIsSelectable :: IsSelectable (From f s fields)
 instance whereIsSelectable :: IsSelectable (Where f fields has parameters)
 
-select :: forall r s parameters fields.  IsSelectable r => ToSelect r s parameters fields => r -> Select s parameters fields
+select :: forall r s parameters fields. IsSelectable r => ToSelect r s parameters fields => r -> Select s parameters fields
 select = toSelect
 
 
@@ -116,6 +120,7 @@ from = toFrom
 
 data Where f (fields :: Row Type) (has :: Type) parameters = Where Filtered f
 --will likely change to ToWhere
+-- and likely that it should have a s type parameter for selects
 wher :: forall f s has fields parameters. Filters fields parameters has -> From f s fields -> Where (From f s fields) fields has parameters
 wher (Filters filtered) fr = Where filtered fr
 

@@ -132,17 +132,21 @@ main = TUM.runTest do
                                           TUA.equal "SELECT id FROM users WHERE ((name = @name OR name = surname) OR surname <> @surname)" s
                                           TUA.equal parameters q
 
-            --       TU.suite "mixed" do
-            --             TU.test "not bracketed" do
-            --                   let parameters = {id3 : 3, id33: 33, id333 : 333}
-            --                   let Query q p = query $ select id # from users # wher (id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33") .&&. id .=. (Parameter :: Parameter "id333")) parameters
-            --                   TUA.equal "SELECT id FROM users WHERE (id = @id3 OR (id = @id33 AND id = @id333))" q
-            --                   TUA.equal (Just parameters) p
-            --             TU.test "bracketed" do
-            --                   let parameters = {id3 : 3, id33: 33, id333 : 333}
-            --                   let Query q p = query $ select id # from users # wher ((id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33")) .&&. id .=. (Parameter :: Parameter "id333")) parameters
-            --                   TUA.equal "SELECT id FROM users WHERE ((id = @id3 OR id = @id33) AND id = @id333)" q
-            --                   TUA.equal (Just parameters) p
+                  TU.suite "mixed" do
+                        TU.test "not bracketed" do
+                              let parameters = {id3 : 3, id33: 33, id333 : 333}
+                              case query <<< prepare parameters $ select id # from users # wher (id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33") .&&. id .=. (Parameter :: Parameter "id333")) of
+                                    Plain s -> TU.failure $ "Expected parameters for " <> s
+                                    Parameterized s q -> do
+                                          TUA.equal "SELECT id FROM users WHERE (id = @id3 OR (id = @id33 AND id = @id333))" s
+                                          TUA.equal parameters q
+                        TU.test "bracketed" do
+                              let parameters = {id3 : 3, id33: 33, id333 : 333}
+                              case query <<< prepare parameters $ select id # from users # wher ((id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33")) .&&. id .=. (Parameter :: Parameter "id333")) of
+                                    Plain s -> TU.failure $ "Expected parameters for " <> s
+                                    Parameterized s q -> do
+                                          TUA.equal "SELECT id FROM users WHERE ((id = @id3 OR id = @id33) AND id = @id333)" s
+                                          TUA.equal parameters q
 
             TU.suite "prepared sub queries" do
                   TU.test "scalar" do
