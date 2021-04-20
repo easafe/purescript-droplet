@@ -67,10 +67,3 @@ else
 instance stillDontHaveParameter :: HasParameter NotParameterized NotParameterized NotParameterized
 else
 instance hasParameter :: HasParameter fp pf Parameterized
-
--- instance fhasParameter :: IsSymbol name => HasParameter (Parameter name) f P
--- else
--- instance shasParameter :: IsSymbol name => HasParameter f (Parameter name) P
--- else
--- instance bhasParameter :: (IsSymbol name, IsSymbol otherName) => HasParameter (Parameter name) (Parameter otherName) P
--- else

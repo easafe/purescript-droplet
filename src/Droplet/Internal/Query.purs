@@ -83,13 +83,13 @@ instance prepareToQuery :: ToQuery q Prepared => ToQuery (Prepare q parameters) 
 ----------------------SELECT----------------------------
 
 
-instance subSelectWhereToQuery :: ToQuery (Where w s has to) starting => ToQuery (Select (Where w s has to) fields) starting where
+instance subSelectWhereToQuery :: ToQuery (Where w s has to) starting => ToQuery (Select (Where w s has to) parameters fields) starting where
       toQuery (Select wr) s = Plain $ openBracket <> extractPlain (toQuery wr s) <> closeBracket
 else
-instance subSelectFromToQuery :: ToQuery (From f s to) starting => ToQuery (Select (From f s to) fields) starting where
+instance subSelectFromToQuery :: ToQuery (From f s to) starting => ToQuery (Select (From f s to) parameters fields) starting where
       toQuery (Select fr) s = Plain $ openBracket <> extractPlain (toQuery fr s) <> closeBracket
 else
-instance selectToQuery :: ToQuery s starting => ToQuery (Select s fields) starting where
+instance selectToQuery :: ToQuery s starting => ToQuery (Select s parameters fields) starting where
       toQuery (Select s) st = Plain $ selectKeyword <> extractPlain (toQuery s st)
 
 instance selectFieldToQuery :: IsSymbol name => ToQuery (Field name) starting where
@@ -101,7 +101,7 @@ instance tableToQuery :: ToQuery Star starting where
 instance intScalarToQuery :: ToQuery Int starting where
       toQuery n _ = Plain $ show n
 
-instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQuery (Tuple (Select s to) (Select t fields)) starting where
+instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQuery (Tuple (Select s parameters to) (Select t parameters fields)) starting where
       toQuery (Tuple (Select s) (Select t)) st = Plain $ extractPlain (toQuery s st)  <> comma <> extractPlain (toQuery t st)
 
 

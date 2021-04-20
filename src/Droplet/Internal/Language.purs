@@ -11,6 +11,7 @@ import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Union)
 
+-- I feel like that with the proper care, all these types can be turned into a gadt (prolly with something like leibnz equality)
 
 ----------------------PREPARE----------------------------
 
@@ -18,10 +19,11 @@ import Prim.Row (class Cons, class Union)
 -- but rather type check all parameter usage in a single place
 data Prepare q (parameters :: Row Type) = Prepare q (Record parameters)
 
-
---CURRENTLY THIS ACCEPTS SUB QUERIES WITH WRONG PARAMETERS
 class ToPrepare q parameters | q -> parameters where
       toPrepare :: Record parameters -> q -> Prepare q parameters
+
+instance selecToPrepare :: ToPrepare (Select f parameters fields) parameters where
+      toPrepare parameters w = Prepare w parameters
 
 instance whereToPrepare :: ToPrepare (Where f fields has parameters) parameters where
       toPrepare parameters w = Prepare w parameters
@@ -33,31 +35,31 @@ prepare = toPrepare
 
 ----------------------SELECT----------------------------
 
-newtype Select s (fields :: Row Type) = Select s
+newtype Select s (parameters :: Row Type) (fields :: Row Type) = Select s
 
-class ToSelect r s fields | r -> s, s -> r where
-      toSelect :: r -> Select s fields
+class ToSelect r s parameters fields | r -> s, s -> r where
+      toSelect :: r -> Select s parameters fields
 
 --as it is, we can't express select table.* /\ table2.*
 -- nor sub queries without from (which I dont know if it is ever useful)
-instance fieldToSelect :: Cons name t e fields => ToSelect (Field name) (Field name) fields where
+instance fieldToSelect :: Cons name t e fields => ToSelect (Field name) (Field name) parameters fields where
       toSelect s = Select s
 
-instance starToSelect :: ToSelect Star Star fields where
+instance starToSelect :: ToSelect Star Star parameters fields where
       toSelect s = Select s
 
-instance intToSelect :: ToSelect Int Int fields where
+instance intToSelect :: ToSelect Int Int parameters fields where
       toSelect n = Select n
 --needs more instance for scalars
 
-instance tupleToSelect :: (ToSelect r s fields, ToSelect t u fields) => ToSelect (Tuple r t) (Tuple (Select s fields) (Select u fields)) fields where
+instance tupleToSelect :: (ToSelect r s parameters fields, ToSelect t u parameters fields) => ToSelect (Tuple r t) (Tuple (Select s parameters fields) (Select u parameters fields)) parameters fields where
       toSelect (Tuple s t) = Select <<< Tuple (toSelect s) $ toSelect t
 
 --an extra Select to help ToQuery instances
-instance fromToSelect :: ToSubSelect s to => ToSelect (From f (Select s to) to) (Select (From f (Select s to) to) to) fields where
+instance fromToSelect :: ToSubSelect s to => ToSelect (From f (Select s parameters to) to) (Select (From f (Select s parameters to) to) parameters to) parameters fields where
       toSelect fr = Select $ Select fr
 
-instance whereToSelect :: ToSubSelect s to => ToSelect (Where (From f (Select s to) to) to has parameters) (Select (Where (From f (Select s to) to) to has parameters) to) fields where
+instance whereToSelect :: ToSubSelect s to => ToSelect (Where (From f (Select s parameters to) to) to has parameters) (Select (Where (From f (Select s parameters to) to) to has parameters) parameters to) parameters fields where
       toSelect wr = Select $ Select wr
 
 --for sub queries only a single column can be returned
@@ -78,7 +80,7 @@ instance tupleIsSelectable :: (IsSelectable r, IsSelectable s) => IsSelectable (
 instance fromIsSelectable :: IsSelectable (From f s fields)
 instance whereIsSelectable :: IsSelectable (Where f fields has parameters)
 
-select :: forall r s fields.  IsSelectable r => ToSelect r s fields => r -> Select s fields
+select :: forall r s parameters fields.  IsSelectable r => ToSelect r s parameters fields => r -> Select s parameters fields
 select = toSelect
 
 
@@ -88,7 +90,7 @@ select = toSelect
 data From f s (fields :: Row Type) = From f s
 
 class ToFrom f fields | f -> fields where
-      toFrom :: forall s. f -> Select s fields -> From f (Select s fields) fields
+      toFrom :: forall s parameters. f -> Select s parameters fields -> From f (Select s parameters fields) fields
 
 instance fromTableToFrom :: ToFrom (Table name fields) fields where
       toFrom table s = From table s
@@ -105,7 +107,7 @@ class IsFromable from
 instance fieldIsFromable :: IsFromable (Table name fields)
 -- instance asIsFromable :: IsFromable (As q a projection) --ಠ_ಠ
 
-from :: forall f s fields. IsFromable f => ToFrom f fields => f -> Select s fields -> From f (Select s fields) fields
+from :: forall f s parameters fields. IsFromable f => ToFrom f fields => f -> Select s parameters fields -> From f (Select s parameters fields) fields
 from = toFrom
 
 

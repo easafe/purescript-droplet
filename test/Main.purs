@@ -144,6 +144,29 @@ main = TUM.runTest do
             --                   TUA.equal "SELECT id FROM users WHERE ((id = @id3 OR id = @id33) AND id = @id333)" q
             --                   TUA.equal (Just parameters) p
 
+            TU.suite "prepared sub queries" do
+                  TU.test "scalar" do
+                        let parameters = { d : "4" }
+                        case query <<< prepare parameters $ select (select 4 # from users # wher (name .=. (Parameter :: Parameter "d"))) of
+                              Plain s -> TU.failure $ "Expected parameters for " <> s
+                              Parameterized s q -> do
+                                    TUA.equal "SELECT (SELECT 4 FROM users WHERE name = @d)" s
+                                    TUA.equal parameters q
+                  TU.test "field" do
+                        let parameters = { d : "4" }
+                        case query <<< prepare parameters $ select (select id # from users # wher (name .=. (Parameter :: Parameter "d"))) of
+                              Plain s -> TU.failure $ "Expected parameters for " <> s
+                              Parameterized s q -> do
+                                    TUA.equal "SELECT (SELECT id FROM users WHERE name = @d)" s
+                                    TUA.equal parameters q
+                  TU.test "mixed" do
+                        let parameters = { d : "4" }
+                        case query <<< prepare parameters $ select (3 /\ name /\ (select id # from users # wher (name .=. (Parameter :: Parameter "d"))) /\ (select name # from users # wher (name .=. (Parameter :: Parameter "d")))) of
+                              Plain s -> TU.failure $ "Expected parameters for " <> s
+                              Parameterized s q -> do
+                                    TUA.equal "SELECT 3, name, (SELECT id FROM users WHERE name = @d), (SELECT name FROM users WHERE name = @d)" s
+                                    TUA.equal parameters q
+
       -- TU.suite "as" do
       --       TU.suite "named sub queries" do
       --             TU.test "scalars" do
