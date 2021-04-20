@@ -1,4 +1,4 @@
--- | This module define `ToQuery`, a type class to generate parameterized SQL statements strings
+-- | This module define `ToQuery`, a type class to generate (intermediate form) parameterized SQL statements strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
 module Droplet.Internal.Query where
@@ -11,7 +11,6 @@ import Prelude
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
-import Debug (spy)
 import Effect.Exception.Unsafe as EEU
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy(..))
@@ -64,14 +63,20 @@ openBracket = "("
 closeBracket :: String
 closeBracket = ")"
 
---staring trick is not working
-class ToQuery q (starting :: Type) | q -> starting where
-      toQuery :: forall parameters. q -> Query parameters
+-- use this instead of toQuery
+query :: forall q parameters. ToQuery q Other => q -> Query parameters
+query q = toQuery q (Proxy :: Proxy Other)
+
+--any way to not have to pass the proxy around?
+class ToQuery q (starting :: Type) where
+      toQuery :: forall parameters. q -> Proxy starting -> Query parameters
+
+
 
 ----------------------PREPARE----------------------------
 
-instance prepareToQuery :: ToQuery q Prepared => ToQuery (Prepare q parameters) Prepared where
-      toQuery (Prepare q parameters) = Parameterized (extractPlain $ toQuery q) $ UC.unsafeCoerce parameters
+instance prepareToQuery :: ToQuery q Prepared => ToQuery (Prepare q parameters) starting where
+      toQuery (Prepare q parameters) _ = Parameterized (extractPlain $ toQuery q (Proxy :: Proxy Prepared)) $ UC.unsafeCoerce parameters
 
 
 
@@ -79,62 +84,50 @@ instance prepareToQuery :: ToQuery q Prepared => ToQuery (Prepare q parameters) 
 
 
 instance subSelectWhereToQuery :: ToQuery (Where w s has to) starting => ToQuery (Select (Where w s has to) fields) starting where
-      toQuery (Select wr) = Plain $ openBracket <> extractPlain (toQuery wr) <> closeBracket
+      toQuery (Select wr) s = Plain $ openBracket <> extractPlain (toQuery wr s) <> closeBracket
 else
 instance subSelectFromToQuery :: ToQuery (From f s to) starting => ToQuery (Select (From f s to) fields) starting where
-      toQuery (Select fr) = Plain $ openBracket <> extractPlain (toQuery fr) <> closeBracket
+      toQuery (Select fr) s = Plain $ openBracket <> extractPlain (toQuery fr s) <> closeBracket
 else
 instance selectToQuery :: ToQuery s starting => ToQuery (Select s fields) starting where
-      toQuery (Select s) = Plain $ selectKeyword <> extractPlain (toQuery s)
+      toQuery (Select s) st = Plain $ selectKeyword <> extractPlain (toQuery s st)
 
 instance selectFieldToQuery :: IsSymbol name => ToQuery (Field name) starting where
-      toQuery _ = Plain $ DS.reflectSymbol (Proxy :: Proxy name)
+      toQuery _ _ = Plain $ DS.reflectSymbol (Proxy :: Proxy name)
 
 instance tableToQuery :: ToQuery Star starting where
-      toQuery _ = Plain starToken
+      toQuery _ _ = Plain starToken
 
 instance intScalarToQuery :: ToQuery Int starting where
-      toQuery n = Plain $ show n
+      toQuery n _ = Plain $ show n
 
-instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQuery (Tuple (Select s to) (Select t to)) starting where
-      toQuery (Tuple (Select s) (Select t)) = Plain $ extractPlain (toQuery s) <> comma <> extractPlain (toQuery t)
+instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQuery (Tuple (Select s to) (Select t fields)) starting where
+      toQuery (Tuple (Select s) (Select t)) st = Plain $ extractPlain (toQuery s st)  <> comma <> extractPlain (toQuery t st)
 
 
 
 -------------------------------FROM----------------------------
 
 instance subSelectfromTableToQuery :: (IsSymbol name, ToQuery s starting) => ToQuery (From (Table name fields) s fields) starting where
-      toQuery (From _ s) = Plain $ extractPlain (toQuery s) <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
+      toQuery (From _ s) st = Plain $ extractPlain (toQuery s st) <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 
 
 -------------------------------WHERE----------------------------
 
-instance wherToQuery :: ToQuery f starting => ToQuery (Where f fields Parameterized parameters) Prepared where
-      toQuery (Where filtered fr) = Plain $ extractPlain (toQuery fr) <> whereKeyword <> printFilter filtered
-            where printFilter = case _ of
-                        Operation field otherField op -> field <> printOperator op <> otherField
-                        And filter otherFilter -> openBracket <> printFilter filter <> andKeyword <> printFilter otherFilter <> closeBracket
-                        Or filter otherFilter -> openBracket <> printFilter filter <> orKeyword <> printFilter otherFilter <> closeBracket
-
-                  printOperator = case _ of
-                        Equals -> " = "
-                        NotEquals -> " <> "
-else
-instance wher2ToQuery :: ToQuery f starting => ToQuery (Where f fields NotParameterized parameters) starting where
-      toQuery (Where filtered fr) = Plain $ extractPlain (toQuery fr) <> whereKeyword <> printFilter filtered
-            where printFilter = case _ of
-                        Operation field otherField op -> field <> printOperator op <> otherField
-                        And filter otherFilter -> openBracket <> printFilter filter <> andKeyword <> printFilter otherFilter <> closeBracket
-                        Or filter otherFilter -> openBracket <> printFilter filter <> orKeyword <> printFilter otherFilter <> closeBracket
-
-                  printOperator = case _ of
-                        Equals -> " = "
-                        NotEquals -> " <> "
-
-else
 instance wher3FailToQuery :: Fail (Text "Parameters must be provided via Droplet.prepared") => ToQuery (Where f fields Parameterized parameters) Other where
-      toQuery _ = Plain "impossible"
+      toQuery _ _ = Plain "impossible"
+else
+instance wherToQuery :: ToQuery f starting => ToQuery (Where f fields has parameters) starting where
+      toQuery (Where filtered fr) st = Plain $ extractPlain (toQuery fr st) <> whereKeyword <> printFilter filtered
+            where printFilter = case _ of
+                        Operation field otherField op -> field <> printOperator op <> otherField
+                        And filter otherFilter -> openBracket <> printFilter filter <> andKeyword <> printFilter otherFilter <> closeBracket
+                        Or filter otherFilter -> openBracket <> printFilter filter <> orKeyword <> printFilter otherFilter <> closeBracket
+
+                  printOperator = case _ of
+                        Equals -> " = "
+                        NotEquals -> " <> "
 
 
 ----------------------------AS----------------------------
