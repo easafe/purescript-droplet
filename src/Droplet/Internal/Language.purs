@@ -135,14 +135,21 @@ class ToAs q projection | q -> projection where
 -- might help if previous statement was always in last position
 instance fromSelectScalarToAs :: ToAs (From f (Select Int parameters fields) fields) () where
       toAs _ q = As q
-
+else
 instance fromSelectFieldToAs :: (IsSymbol name, Cons name t e fields, Cons name t () single) => ToAs (From f (Select (Field name) parameters fields) fields) single where
       toAs _ q = As q
-
+else
 instance fromSelectStarToAs :: ToAs (From f (Select Star parameters fields) fields) fields where
       toAs _ q = As q
-
+else
 instance fromSelectTupleToAs :: (ToAs (From f s fields) some, ToAs (From f t fields) more, Union some more projection) => ToAs (From f (Select (Tuple s t) parameters fields) fields) projection where
+      toAs _ q = As q
+else
+--Select (Select ...)
+instance subQueryToAs :: ToAs s projection => ToAs (Select s parameters fields) projection where
+      toAs _ q = As q
+else
+instance subQueryFromToAs :: ToAs s projection => ToAs (From f (Select s parameters fields) fields) projection where
       toAs _ q = As q
 
 instance whereSelectScalarToAs :: ToAs f projection => ToAs (Where f fields has parameters) projection where

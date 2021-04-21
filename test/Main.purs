@@ -171,20 +171,37 @@ main = TUM.runTest do
                                     TUA.equal "SELECT 3, name, (SELECT id FROM users WHERE name = @d), (SELECT name FROM users WHERE name = @d)" s
                                     TUA.equal parameters q
 
-      -- TU.suite "as" do
-      --       TU.suite "named sub queries" do
-      --             TU.test "scalars" do
-      --                   let q = query $ select 3 # from (select 34 # from users # as u)
-      --                   plain "SELECT 3 FROM (SELECT 34 FROM users) u" q
-      --             TU.test "fields" do
-      --                   let q = query $ select id # from (select (id /\ name) # from users # as u)
-      --                   plain "SELECT id FROM (SELECT id, name FROM users) u" q
-      --             TU.test "table" do
-      --                   let q = query $ select star # from (select star # from users # as u)
-      --                   plain "SELECT * FROM (SELECT * FROM users) u" q
-      --             TU.test "filtered" do
-      --                   let q = query $ select star # from (select (id /\ name /\ surname) # from users # wher (name .=. (Parameter :: Parameter "n")) {n : "nn"} # as u)
-      --                   plain "SELECT * FROM (SELECT id, name, surname FROM users WHERE name = @n) u" q
+      TU.suite "as" do
+            TU.suite "select" do
+                  TU.test "scalar" do
+                        --missing select instance for as and as instance for toquery
+                        let q = query $ select 4 # from (select 4 # as (Alias :: Alias "u"))
+                        plain "SELECT 34 FROM users WHERE name = surname" q
+                  -- TU.test "field" do
+                  -- TU.test "mixed" do
+                  -- TU.test "sub query" do
+
+            -- TU.suite "from" do
+            -- TU.suite "where" do
+
+
+-- r = select 4 # from (select 4 # from users # as (Alias :: Alias "u"))
+-- r2 = select 4 # from (select (select 4 # from messages) # from users # as (Alias :: Alias "u"))
+-- r3 = select 4 # from (select (id /\ (select 4 # from messages)) # from users # as (Alias :: Alias "u"))
+
+-- s = select name # from (select name # from users # as (Alias :: Alias "u"))
+-- s2 = select (id /\ name) # from (select (name /\ (select id # from messages)) # from users # as (Alias :: Alias "u"))
+-- s3 = select (id /\ name /\ joined) # from (select (name /\ (select id # from messages) /\ joined) # from users # as (Alias :: Alias "u"))
+
+-- t = select (id /\ name) # from (select (id /\ name) # from users # as (Alias :: Alias "u"))
+
+-- u = select 4 # from (select 4 # from users # wher (id .=. id) # as (Alias :: Alias "u"))
+-- u2 = select 4 # from (select (select id # from messages # wher (id .=. id)) # from users # wher (id .=. id) # as (Alias :: Alias "u"))
+
+-- v = select name # from (select (select name # from users # wher (id .=. (Parameter :: Parameter "id"))) # from users # as (Alias :: Alias "u"))
+
+-- w = select (id /\ name) # from (select (id /\ name) # from users # wher (id .=. id) # as (Alias :: Alias "u"))
+
 
 plain :: forall p. String -> Query p -> _
 plain s q = case q of
