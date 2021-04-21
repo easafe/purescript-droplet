@@ -51,6 +51,8 @@ andKeyword = " AND "
 orKeyword :: String
 orKeyword = " OR "
 
+asKeyword = " AS "
+
 starToken :: String
 starToken = "*"
 
@@ -62,6 +64,11 @@ openBracket = "("
 
 closeBracket :: String
 closeBracket = ")"
+
+equalsSymbol :: String
+equalsSymbol = " = "
+
+notEqualsSymbol = " <> "
 
 -- use this instead of toQuery
 query :: forall q parameters. ToQuery q Other => q -> Query parameters
@@ -126,23 +133,18 @@ instance whereToQuery :: ToQuery f starting => ToQuery (Where f fields has param
                         Or filter otherFilter -> openBracket <> printFilter filter <> orKeyword <> printFilter otherFilter <> closeBracket
 
                   printOperator = case _ of
-                        Equals -> " = "
-                        NotEquals -> " <> "
+                        Equals -> equalsSymbol
+                        NotEquals -> notEqualsSymbol
 
 
 ----------------------------AS----------------------------
 
--- instance fromAsToQuery :: (ToQuery f, ToQuery s, ToQuery s2, IsSymbol name) => ToQuery (FromAs (As (From f (Select s fields) fields) (Alias name) projection) (Select s2 projection) projection) starting where
---       toQuery (FromAs (As asf) s) = Query q Nothing
---             where Query sel _ = toQuery s
---                   Query aliased _ = toQuery asf
---                   q = sel <> " FROM (" <> aliased <> ") " <> DS.reflectSymbol (Proxy :: Proxy name)
-
--- instance fromAsWhereToQuery :: (ToWhereQuery f, ToQuery s, ToQuery s2, IsSymbol name) => ToQuery (FromAs (As (Where f fields parameters) (Alias name) projection) (Select s projection) projection) starting where
---       toQuery (FromAs (As asf) s) = Query q parameters
---             where Query sel _ = toQuery s
---                   Query aliased parameters = toQuery asf
---                   q = sel <> " FROM (" <> aliased <> ") " <> DS.reflectSymbol (Proxy :: Proxy name)
-
-
-
+instance fromAsToQuery :: (ToQuery q starting, ToQuery s starting, IsSymbol name) => ToQuery (From (As q name projection) s projection) starting where
+      toQuery (From (As q) s) st = Plain $
+            extractPlain (toQuery s st) <>
+            fromKeyword <>
+            openBracket <>
+            extractPlain (toQuery q st) <>
+            closeBracket <>
+            asKeyword <>
+            DS.reflectSymbol (Proxy :: Proxy name)

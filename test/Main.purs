@@ -28,6 +28,9 @@ name = Field
 surname :: Field "surname"
 surname = Field
 
+sent :: Field "sent"
+sent = Field
+
 type Messages = (id :: Int, name :: String, sent :: Boolean)
 
 messages :: Table "messages" Messages
@@ -54,7 +57,7 @@ main = TUM.runTest do
                   TU.test "fields" do
                         let q = query $ select (id /\ name)
                         plain "SELECT id, name" q
-                  TU.test "mixed" do
+                  TU.test "tuple" do
                         let q = query $ select (star /\ id /\ 5)
                         plain "SELECT *, id, 5" q
 
@@ -65,7 +68,7 @@ main = TUM.runTest do
                   TU.test "fields" do
                         let q = query $ select (id /\ (select (Field :: Field "sent") # from messages))
                         plain "SELECT id, (SELECT sent FROM messages)" q
-                  TU.test "mixed" do
+                  TU.test "tuple" do
                         let q = query $ select (3 /\ (select id # from messages) /\ id /\ name /\ star /\ (select (Field :: Field "sent") # from messages) /\ (select 5 # from messages))
                         plain "SELECT 3, (SELECT id FROM messages), id, name, *, (SELECT sent FROM messages), (SELECT 5 FROM messages)" q
 
@@ -132,7 +135,7 @@ main = TUM.runTest do
                                           TUA.equal "SELECT id FROM users WHERE ((name = @name OR name = surname) OR surname <> @surname)" s
                                           TUA.equal parameters q
 
-                  TU.suite "mixed" do
+                  TU.suite "tuple" do
                         TU.test "not bracketed" do
                               let parameters = {id3 : 3, id33: 33, id333 : 333}
                               case query <<< prepare parameters $ select id # from users # wher (id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33") .&&. id .=. (Parameter :: Parameter "id333")) of
@@ -163,7 +166,7 @@ main = TUM.runTest do
                               Parameterized s q -> do
                                     TUA.equal "SELECT (SELECT id FROM users WHERE name = @d)" s
                                     TUA.equal parameters q
-                  TU.test "mixed" do
+                  TU.test "tuple" do
                         let parameters = { d : "4" }
                         case query <<< prepare parameters $ select (3 /\ name /\ (select id # from users # wher (name .=. (Parameter :: Parameter "d"))) /\ (select name # from users # wher (name .=. (Parameter :: Parameter "d")))) of
                               Plain s -> TU.failure $ "Expected parameters for " <> s
@@ -174,15 +177,43 @@ main = TUM.runTest do
       TU.suite "as" do
             TU.suite "select" do
                   TU.test "scalar" do
-                        --missing select instance for as and as instance for toquery
                         let q = query $ select 4 # from (select 4 # as (Alias :: Alias "u"))
-                        plain "SELECT 34 FROM users WHERE name = surname" q
-                  -- TU.test "field" do
-                  -- TU.test "mixed" do
-                  -- TU.test "sub query" do
-
-            -- TU.suite "from" do
-            -- TU.suite "where" do
+                        plain "SELECT 4 FROM (SELECT 4) AS u" q
+                  TU.test "field" do
+                        let q = query $ select id # from (select id # as (Alias :: Alias "t"))
+                        plain "SELECT id FROM (SELECT id) AS t" q
+                  TU.test "sub query" do
+                        let q = query $ select id # from (select (select id # from messages) # as (Alias :: Alias "t"))
+                        plain "SELECT id FROM (SELECT (SELECT id FROM messages)) AS t" q
+                  TU.test "tuple" do
+                        let q = query $ select star # from (select (3 /\ 5 /\ (select id # from messages)) # as (Alias :: Alias "t"))
+                        plain "SELECT * FROM (SELECT 3, 5, (SELECT id FROM messages)) AS t" q
+            TU.suite "from" do
+                  TU.test "scalar" do
+                        let q = query $ select 4 # from (select 4 # from users # as (Alias :: Alias "u"))
+                        plain "SELECT 4 FROM (SELECT 4 FROM users) AS u" q
+                  TU.test "field" do
+                        let q = query $ select id # from (select id # from messages # as (Alias :: Alias "t"))
+                        plain "SELECT id FROM (SELECT id FROM messages) AS t" q
+                  TU.test "sub query" do
+                        let q = query $ select id # from (select (select id # from messages) # from users # as (Alias :: Alias "t"))
+                        plain "SELECT id FROM (SELECT (SELECT id FROM messages) FROM users) AS t" q
+                  TU.test "tuple" do
+                        let q = query $ select (id /\ name /\ 4 /\ sent) # from (select (id /\ name /\ 4 /\ (select sent # from messages)) # from messages # as (Alias :: Alias "t"))
+                        plain "SELECT id, name, 4, sent FROM (SELECT id, name, 4, (SELECT sent FROM messages) FROM messages) AS t" q
+            TU.suite "where" do
+                  TU.test "scalar" do
+                        let q = query $ select 4 # from (select 4 # from users # wher (id .=. id) # as (Alias :: Alias "u"))
+                        plain "SELECT 4 FROM (SELECT 4 FROM users WHERE id = id) AS u" q
+                  TU.test "field" do
+                        let q = query $ select id # from (select id # from messages # wher (id .=. id) # as (Alias :: Alias "t"))
+                        plain "SELECT id FROM (SELECT id FROM messages WHERE id = id) AS t" q
+                  TU.test "sub query" do
+                        let q = query $ select id # from (select (select id # from messages # wher (id .=. id)) # from users # wher (id .=. id) # as (Alias :: Alias "t"))
+                        plain "SELECT id FROM (SELECT (SELECT id FROM messages WHERE id = id) FROM users WHERE id = id) AS t" q
+                  TU.test "tuple" do
+                        let q = query $ select (id /\ name /\ 4 /\ sent) # from (select (id /\ name /\ 4 /\ (select sent # from messages # wher (id .=. id))) # from messages # wher (id .=. id) # as (Alias :: Alias "t"))
+                        plain "SELECT id, name, 4, sent FROM (SELECT id, name, 4, (SELECT sent FROM messages WHERE id = id) FROM messages WHERE id = id) AS t" q
 
 
 -- r = select 4 # from (select 4 # from users # as (Alias :: Alias "u"))
