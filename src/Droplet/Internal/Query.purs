@@ -115,10 +115,10 @@ instance subSelectfromTableToQuery :: (IsSymbol name, ToQuery s starting) => ToQ
 
 -------------------------------WHERE----------------------------
 
-instance wher3FailToQuery :: Fail (Text "Since this query references parameters, Droplet.prepare must be used") => ToQuery (Where f fields Parameterized parameters) Other where
+instance whereFailToQuery :: Fail (Text "Since this query references parameters, Droplet.prepare must be used") => ToQuery (Where f fields Parameterized parameters) Other where
       toQuery _ _ = Plain "impossible"
 else
-instance wherToQuery :: ToQuery f starting => ToQuery (Where f fields has parameters) starting where
+instance whereToQuery :: ToQuery f starting => ToQuery (Where f fields has parameters) starting where
       toQuery (Where filtered fr) st = Plain $ extractPlain (toQuery fr st) <> whereKeyword <> printFilter filtered
             where printFilter = case _ of
                         Operation field otherField op -> field <> printOperator op <> otherField
