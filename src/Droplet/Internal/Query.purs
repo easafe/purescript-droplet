@@ -89,7 +89,9 @@ instance prepareToQuery :: ToQuery q Prepared => ToQuery (Prepare q parameters) 
 
 ----------------------SELECT----------------------------
 
-
+--there is two problems here
+-- printing field, scalar etc on their own (e.g. query 3 or query id)
+-- select that reference a field without from
 instance subSelectWhereToQuery :: ToQuery (Where w s has to) starting => ToQuery (Select (Where w s has to) parameters fields) starting where
       toQuery (Select wr) s = Plain $ openBracket <> extractPlain (toQuery wr s) <> closeBracket
 else

@@ -14,7 +14,6 @@ import Prim.Row (class Cons, class Union)
 import Prim.TypeError (class Fail, Beside, Quote, Text)
 
 
-
 ----------------------PREPARE----------------------------
 
 --this shouldnt creat an actual prepare statement (since it'd require unique names and $n parameters)
@@ -49,8 +48,6 @@ newtype Select s (parameters :: Row Type) (fields :: Row Type) = Select s
 class ToSelect r s parameters fields | r -> s, s -> r where
       toSelect :: r -> Select s parameters fields
 
---as it is, we can't express select table.* /\ table2.*
--- nor sub queries without from (which I dont know if it is ever useful)
 instance fieldToSelect :: Cons name t e fields => ToSelect (Field name) (Field name) parameters fields where
       toSelect s = Select s
 
@@ -62,22 +59,28 @@ instance intToSelect :: ToSelect Int Int parameters fields where
 --needs more instance for scalars
 -- might be nice to able to project parameters too
 
-instance tupleToSelect :: (ToSelect r s parameters fields, ToSelect t u parameters fields) => ToSelect (Tuple r t) (Tuple (Select s parameters fields) (Select u parameters fields)) parameters fields where
+instance tupleToSelect :: (ToSelect r s parameters some, ToSelect t u parameters more, Union some more fields) => ToSelect (Tuple r t) (Tuple (Select s parameters some) (Select u parameters more)) parameters fields where
       toSelect (Tuple s t) = Select <<< Tuple (toSelect s) $ toSelect t
 
---an extra Select to help ToQuery instances
-instance fromToSelect :: ToSubSelect s to => ToSelect (From f (Select s parameters to) parameters to) (Select (From f (Select s parameters to) parameters to) parameters to) parameters fields where
-      toSelect fr = Select $ Select fr
+--to desambiguate fields
+instance asFieldsToSelect :: ToSubSelect q alias projection extended => ToSelect (As q alias parameters projection) (As q alias parameters projection) parameters extended where
+      toSelect a = Select a
 
-instance whereToSelect :: ToSelect f (Select f parameters to) parameters to => ToSelect (Where f to has parameters) (Select (Where f to has parameters) parameters fields) parameters fields where
-      toSelect wr = Select $ Select wr
+instance fromToSelect :: Fail (Text "Since sub queries can be ambiguous, Droplet.as must be used") => ToSelect (From f s parameters to) (From f s parameters to) parameters fields where
+      toSelect fr = Select fr
+instance whereToSelect :: Fail (Text "Since sub queries can be ambiguous, Droplet.as must be used") => ToSelect (Where f to has parameters) (Where f to has parameters) parameters fields where
+      toSelect wr = Select wr
+
 
 -- we likely want to only accept if there a limit statement
 --for sub queries only a single column can be returned
-class ToSubSelect r fields
+class ToSubSelect (r :: Type) (alias :: Symbol) (projection :: Row Type) (fields :: Row Type)
 
-instance rowToSubSelect :: Cons name t e fields => ToSubSelect (Field name) fields
-instance intToSubSelect :: ToSubSelect Int fields
+--check if these can generate invalid prepare parameter queries
+instance fromFieldToSubSelect :: (Cons name t e fields, Cons alias t projection extended) => ToSubSelect (From f (Select (Field name) parameters fields) parameter fields) alias projection extended
+instance fromIntToSubSelect :: (Cons name Int e fields, Cons alias Int projection extended) => ToSubSelect (From f (Select Int parameter fields) parameters fields) alias projection extended
+instance whereToSubSelect :: ToSubSelect f alias projection extended => ToSubSelect (Where f fields has parameters) alias projection extended
+
 
 --to catch ill typed selects soon
 -- can we get rid of this?
@@ -90,6 +93,7 @@ instance tableIsSelectable :: IsSelectable Star
 instance tupleIsSelectable :: (IsSelectable r, IsSelectable s) => IsSelectable (Tuple r s)
 instance fromIsSelectable :: IsSelectable (From f s parameters fields)
 instance whereIsSelectable :: IsSelectable (Where f fields has parameters)
+instance asIsSelectable :: IsSelectable (As q a parameters fields)
 
 select :: forall r s parameters fields. IsSelectable r => ToSelect r s parameters fields => r -> Select s parameters fields
 select = toSelect
@@ -116,8 +120,7 @@ class IsFromable from
 
 instance fieldIsFromable :: IsFromable (Table name fields)
 instance asIsFromable :: IsFromable (As q a parameters projection) --ಠ_ಠ
-instance fromIsNotFromable :: Fail (Text "Since this sub query is being selected from, Droplet.as must be used") => IsFromable (From f s p fl)
-
+instance fromIsNotFromable :: Fail (Text "Since sub queries can be ambiguous, Droplet.as must be used") => IsFromable (From f s p fl)
 
 from :: forall f s parameters fields. IsFromable f => ToFrom f parameters fields => f -> Select s parameters fields -> From f (Select s parameters fields) parameters fields
 from = toFrom
@@ -125,7 +128,7 @@ from = toFrom
 
 
 -------------------------------WHERE----------------------------
-
+--field must go last position
 data Where f (fields :: Row Type) (has :: Type) (parameters :: Row Type) = Where Filtered f
 
 wher :: forall f s has fields parameters. Filters fields parameters has -> From f (Select s parameters fields) parameters fields -> Where (From f (Select s parameters fields) parameters fields) fields has parameters
