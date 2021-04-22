@@ -11,6 +11,7 @@ import Prelude
 import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Union)
+import Prim.TypeError (class Fail, Beside, Quote, Text)
 
 
 
@@ -59,6 +60,7 @@ instance starToSelect :: ToSelect Star Star parameters fields where
 instance intToSelect :: ToSelect Int Int parameters fields where
       toSelect n = Select n
 --needs more instance for scalars
+-- might be nice to able to project parameters too
 
 instance tupleToSelect :: (ToSelect r s parameters fields, ToSelect t u parameters fields) => ToSelect (Tuple r t) (Tuple (Select s parameters fields) (Select u parameters fields)) parameters fields where
       toSelect (Tuple s t) = Select <<< Tuple (toSelect s) $ toSelect t
@@ -99,7 +101,7 @@ select = toSelect
 data From f s (parameters :: Row Type) (fields :: Row Type) = From f s
 
 class ToFrom f parameters fields | f -> parameters, f -> fields where
-      toFrom :: forall s parameters. f -> Select s parameters fields -> From f (Select s parameters fields) parameters fields
+      toFrom :: forall s. f -> Select s parameters fields -> From f (Select s parameters fields) parameters fields
 
 instance tableToFrom :: ToFrom (Table name fields) parameters fields where
       toFrom table s = From table s
@@ -107,12 +109,15 @@ instance tableToFrom :: ToFrom (Table name fields) parameters fields where
 instance asToFrom :: ToFrom (As q a parameters projection) parameters projection where
       toFrom as s = From as s
 
+
 --to catch ill typed froms soon
 class IsFromable :: forall k. k -> Constraint
 class IsFromable from
 
 instance fieldIsFromable :: IsFromable (Table name fields)
 instance asIsFromable :: IsFromable (As q a parameters projection) --ಠ_ಠ
+instance fromIsNotFromable :: Fail (Text "Since this sub query is being selected from, Droplet.as must be used") => IsFromable (From f s p fl)
+
 
 from :: forall f s parameters fields. IsFromable f => ToFrom f parameters fields => f -> Select s parameters fields -> From f (Select s parameters fields) parameters fields
 from = toFrom
