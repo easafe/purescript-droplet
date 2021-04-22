@@ -23,10 +23,16 @@ data Prepare q (parameters :: Row Type) = Prepare q (Record parameters)
 class ToPrepare q parameters | q -> parameters where
       toPrepare :: Record parameters -> q -> Prepare q parameters
 
-instance selecToPrepare :: ToPrepare (Select f parameters fields) parameters where
+instance selectToPrepare :: ToPrepare (Select f parameters fields) parameters where
+      toPrepare parameters s = Prepare s parameters
+--might be worth it to add as instance
+instance fromAsToPrepare :: (ToPrepare q parameters, ToPrepare s parameters) => ToPrepare (From (As q a parameters projection) s parameters projection) parameters where
+      toPrepare parameters w = Prepare w parameters
+else
+instance fromToPrepare :: ToPrepare s parameters => ToPrepare (From f s parameters fields) parameters where
       toPrepare parameters w = Prepare w parameters
 
-instance whereToPrepare :: ToPrepare s parameters => ToPrepare (Where (From f s fields) fields has parameters) parameters where
+instance whereToPrepare :: ToPrepare f parameters => ToPrepare (Where f fields has parameters) parameters where
       toPrepare parameters w = Prepare w parameters
 
 prepare :: forall q parameters. ToPrepare q parameters => Record parameters -> q -> Prepare q parameters
@@ -58,10 +64,10 @@ instance tupleToSelect :: (ToSelect r s parameters fields, ToSelect t u paramete
       toSelect (Tuple s t) = Select <<< Tuple (toSelect s) $ toSelect t
 
 --an extra Select to help ToQuery instances
-instance fromToSelect :: ToSubSelect s to => ToSelect (From f (Select s parameters to) to) (Select (From f (Select s parameters to) to) parameters to) parameters fields where
+instance fromToSelect :: ToSubSelect s to => ToSelect (From f (Select s parameters to) parameters to) (Select (From f (Select s parameters to) parameters to) parameters to) parameters fields where
       toSelect fr = Select $ Select fr
 
-instance whereToSelect :: (ToSubSelect s to) => ToSelect (Where (From f (Select s parameters to) to) to has parameters) (Select (Where (From f (Select s parameters to) to) to has parameters) parameters to) parameters fields where
+instance whereToSelect :: ToSelect f (Select f parameters to) parameters to => ToSelect (Where f to has parameters) (Select (Where f to has parameters) parameters fields) parameters fields where
       toSelect wr = Select $ Select wr
 
 -- we likely want to only accept if there a limit statement
@@ -80,7 +86,7 @@ instance fieldIsSelectable :: IsSelectable (Field name)
 instance intIsSelectable :: IsSelectable Int
 instance tableIsSelectable :: IsSelectable Star
 instance tupleIsSelectable :: (IsSelectable r, IsSelectable s) => IsSelectable (Tuple r s)
-instance fromIsSelectable :: IsSelectable (From f s fields)
+instance fromIsSelectable :: IsSelectable (From f s parameters fields)
 instance whereIsSelectable :: IsSelectable (Where f fields has parameters)
 
 select :: forall r s parameters fields. IsSelectable r => ToSelect r s parameters fields => r -> Select s parameters fields
@@ -90,15 +96,15 @@ select = toSelect
 
 -------------------------------FROM----------------------------
 
-data From f s (fields :: Row Type) = From f s
+data From f s (parameters :: Row Type) (fields :: Row Type) = From f s
 
-class ToFrom f fields | f -> fields where
-      toFrom :: forall s parameters. f -> Select s parameters fields -> From f (Select s parameters fields) fields
+class ToFrom f parameters fields | f -> parameters, f -> fields where
+      toFrom :: forall s parameters. f -> Select s parameters fields -> From f (Select s parameters fields) parameters fields
 
-instance tableToFrom :: ToFrom (Table name fields) fields where
+instance tableToFrom :: ToFrom (Table name fields) parameters fields where
       toFrom table s = From table s
 
-instance asToFrom :: ToFrom (As q a projection) projection where
+instance asToFrom :: ToFrom (As q a parameters projection) parameters projection where
       toFrom as s = From as s
 
 --to catch ill typed froms soon
@@ -106,54 +112,53 @@ class IsFromable :: forall k. k -> Constraint
 class IsFromable from
 
 instance fieldIsFromable :: IsFromable (Table name fields)
-instance asIsFromable :: IsFromable (As q a projection) --ಠ_ಠ
+instance asIsFromable :: IsFromable (As q a parameters projection) --ಠ_ಠ
 
-from :: forall f s parameters fields. IsFromable f => ToFrom f fields => f -> Select s parameters fields -> From f (Select s parameters fields) fields
+from :: forall f s parameters fields. IsFromable f => ToFrom f parameters fields => f -> Select s parameters fields -> From f (Select s parameters fields) parameters fields
 from = toFrom
 
 
 
 -------------------------------WHERE----------------------------
 
-data Where f (fields :: Row Type) (has :: Type) parameters = Where Filtered f
---will likely change to ToWhere
--- and likely that it should have a s type parameter for selects
-wher :: forall f s has fields parameters. Filters fields parameters has -> From f s fields -> Where (From f s fields) fields has parameters
+data Where f (fields :: Row Type) (has :: Type) (parameters :: Row Type) = Where Filtered f
+
+wher :: forall f s has fields parameters. Filters fields parameters has -> From f (Select s parameters fields) parameters fields -> Where (From f (Select s parameters fields) parameters fields) fields has parameters
 wher (Filters filtered) fr = Where filtered fr
 
 
 
 ----------------------------AS----------------------------
 
-data As q (alias :: Symbol) (projection :: Row Type) = As q
+data As q (alias :: Symbol) (parameters :: Row Type) (projection :: Row Type) = As q
 
 --restrict it to fields that were actually selected
-class ToAs q projection | q -> projection where
-      toAs :: forall name. IsSymbol name => Alias name -> q -> As q name projection
+class ToAs q parameters projection | q -> parameters, q -> projection where
+      toAs :: forall name. IsSymbol name => Alias name -> q -> As q name parameters projection
 
-instance fromSelectScalarToAs :: ToAs (Select Int parameters fields) () where
+instance fromSelectScalarToAs :: ToAs (Select Int parameters fields) parameters () where
       toAs _ q = As q
 else
-instance fromSelectFieldToAs :: (IsSymbol name, Cons name t e fields, Cons name t () single) => ToAs (Select (Field name) parameters fields) single where
+instance fromSelectFieldToAs :: (IsSymbol name, Cons name t e fields, Cons name t () single) => ToAs (Select (Field name) parameters fields) parameters single where
       toAs _ q = As q
 else
-instance fromSelectStarToAs :: ToAs (Select Star parameters fields) fields where
+instance fromSelectStarToAs :: ToAs (Select Star parameters fields) parameters fields where
       toAs _ q = As q
 else
-instance fromSelectTupleToAs :: (ToAs s some, ToAs t more, Union some more projection) => ToAs (Select (Tuple s t) parameters fields) projection where
+instance fromSelectTupleToAs :: (ToAs s parameters some, ToAs t parameters more, Union some more projection) => ToAs (Select (Tuple s t) parameters fields) parameters projection where
       toAs _ q = As q
 else
 --Select (Select ...)
-instance subQueryToAs :: ToAs s projection => ToAs (Select s parameters fields) projection where
+instance subQueryToAs :: ToAs s parameters projection => ToAs (Select s parameters fields) parameters projection where
       toAs _ q = As q
 else
-instance subQueryFromToAs :: ToAs s projection => ToAs (From f s fields) projection where
+instance subQueryFromToAs :: ToAs s parameters projection => ToAs (From f s parameters fields) parameters projection where
       toAs _ q = As q
 
-instance whereSelectScalarToAs :: ToAs f projection => ToAs (Where f fields has parameters) projection where
+instance whereSelectScalarToAs :: ToAs f parameters projection => ToAs (Where f fields has parameters) parameters projection where
       toAs _ q = As q
 
-as :: forall q projection name. IsSymbol name => ToAs q projection => Alias name -> q -> As q name projection
+as :: forall q projection parameters name. IsSymbol name => ToAs q parameters projection => Alias name -> q -> As q name parameters projection
 as a q = toAs a q
 
 

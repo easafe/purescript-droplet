@@ -93,7 +93,7 @@ instance prepareToQuery :: ToQuery q Prepared => ToQuery (Prepare q parameters) 
 instance subSelectWhereToQuery :: ToQuery (Where w s has to) starting => ToQuery (Select (Where w s has to) parameters fields) starting where
       toQuery (Select wr) s = Plain $ openBracket <> extractPlain (toQuery wr s) <> closeBracket
 else
-instance subSelectFromToQuery :: ToQuery (From f s to) starting => ToQuery (Select (From f s to) parameters fields) starting where
+instance subSelectFromToQuery :: ToQuery (From f s parameters to) starting => ToQuery (Select (From f s parameters to) parameters fields) starting where
       toQuery (Select fr) s = Plain $ openBracket <> extractPlain (toQuery fr s) <> closeBracket
 else
 instance selectToQuery :: ToQuery s starting => ToQuery (Select s parameters fields) starting where
@@ -115,7 +115,7 @@ instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQue
 
 -------------------------------FROM----------------------------
 
-instance subSelectfromTableToQuery :: (IsSymbol name, ToQuery s starting) => ToQuery (From (Table name fields) s fields) starting where
+instance subSelectfromTableToQuery :: (IsSymbol name, ToQuery s starting) => ToQuery (From (Table name fields) s parameters fields) starting where
       toQuery (From _ s) st = Plain $ extractPlain (toQuery s st) <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 
@@ -139,7 +139,7 @@ instance whereToQuery :: ToQuery f starting => ToQuery (Where f fields has param
 
 ----------------------------AS----------------------------
 
-instance fromAsToQuery :: (ToQuery q starting, ToQuery s starting, IsSymbol name) => ToQuery (From (As q name projection) s projection) starting where
+instance fromAsToQuery :: (ToQuery q starting, ToQuery s starting, IsSymbol name) => ToQuery (From (As q name parameters projection) s parameters projection) starting where
       toQuery (From (As q) s) st = Plain $
             extractPlain (toQuery s st) <>
             fromKeyword <>
