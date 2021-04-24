@@ -89,16 +89,15 @@ instance prepareToQuery :: ToQuery q Prepared => ToQuery (Prepare q parameters) 
 
 ----------------------SELECT----------------------------
 
---there is two problems here
--- printing field, scalar etc on their own (e.g. query 3 or query id)
--- select that reference a field without from
-instance subSelectWhereToQuery :: ToQuery (Where w s has to) starting => ToQuery (Select (Where w s has to) parameters fields) starting where
+--bug
+-- naked selects or anything from droplet.defition should not be printed on its own
+instance subSelectWhereToQuery :: ToQuery (Where w has parameters) starting => ToQuery (Select (Where w has parameters) parameters) starting where
       toQuery (Select wr) s = Plain $ openBracket <> extractPlain (toQuery wr s) <> closeBracket
 else
-instance subSelectFromToQuery :: ToQuery (From f s parameters to) starting => ToQuery (Select (From f s parameters to) parameters fields) starting where
+instance subSelectFromToQuery :: ToQuery (From f s parameters fields) starting => ToQuery (Select (From f s parameters fields) parameters) starting where
       toQuery (Select fr) s = Plain $ openBracket <> extractPlain (toQuery fr s) <> closeBracket
 else
-instance selectToQuery :: ToQuery s starting => ToQuery (Select s parameters fields) starting where
+instance selectToQuery :: ToQuery s starting => ToQuery (Select s parameters) starting where
       toQuery (Select s) st = Plain $ selectKeyword <> extractPlain (toQuery s st)
 
 instance selectFieldToQuery :: IsSymbol name => ToQuery (Field name) starting where
@@ -110,7 +109,7 @@ instance tableToQuery :: ToQuery Star starting where
 instance intScalarToQuery :: ToQuery Int starting where
       toQuery n _ = Plain $ show n
 
-instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQuery (Tuple (Select s parameters to) (Select t parameters fields)) starting where
+instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQuery (Tuple (Select s parameters) (Select t parameters)) starting where
       toQuery (Tuple (Select s) (Select t)) st = Plain $ extractPlain (toQuery s st)  <> comma <> extractPlain (toQuery t st)
 
 
@@ -124,10 +123,10 @@ instance subSelectfromTableToQuery :: (IsSymbol name, ToQuery s starting) => ToQ
 
 -------------------------------WHERE----------------------------
 
-instance whereFailToQuery :: Fail (Text "Since this query references parameters, Droplet.prepare must be used") => ToQuery (Where f fields Parameterized parameters) Other where
+instance whereFailToQuery :: Fail (Text "Since this query references parameters, Droplet.prepare must be used") => ToQuery (Where f Parameterized parameters) Other where
       toQuery _ _ = Plain "impossible"
 else
-instance whereToQuery :: ToQuery f starting => ToQuery (Where f fields has parameters) starting where
+instance whereToQuery :: ToQuery f starting => ToQuery (Where f has parameters) starting where
       toQuery (Where filtered fr) st = Plain $ extractPlain (toQuery fr st) <> whereKeyword <> printFilter filtered
             where printFilter = case _ of
                         Operation field otherField op -> field <> printOperator op <> otherField
