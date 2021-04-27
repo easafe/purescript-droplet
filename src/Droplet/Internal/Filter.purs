@@ -8,6 +8,9 @@ import Data.Symbol as DS
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy(..))
 
+atToken :: String
+atToken = "@"
+
 data Operator =
       Equals |
       NotEquals
@@ -53,7 +56,7 @@ instance fieldToCompared :: (IsSymbol name, Cons name t e fields) => ToCompared 
       toCompared _ = DS.reflectSymbol (Proxy :: Proxy name)
 
 instance parameterToCompared :: (IsSymbol name, Cons name t e parameters) => ToCompared (Parameter name) t fields parameters where
-      toCompared _ = "@" <> DS.reflectSymbol (Proxy :: Proxy name)
+      toCompared _ = atToken <> DS.reflectSymbol (Proxy :: Proxy name)
 
 -- oh well...
 data Parameterized
