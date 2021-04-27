@@ -200,8 +200,8 @@ main = TUM.runTest do
                         let q = query $ select (Field :: Field "mid") # from (select (select id # from messages # as (Alias :: Alias "mid")) # from users # as (Alias :: Alias "t"))
                         plain "SELECT mid FROM (SELECT (SELECT id FROM messages) AS mid FROM users) AS t" q
                   TU.test "tuple" do
-                        let q = query $ select (id /\ name /\ 4 /\ (Field :: Field "msent")) # from (select (id /\ name /\ 4 /\ (select sent # from messages # as (Alias :: Alias "msent"))) # from messages # as (Alias :: Alias "t"))
-                        plain "SELECT id, name, 4, msent FROM (SELECT id, name, 4, (SELECT sent FROM messages) AS msent FROM messages) AS t" q
+                        let q = query $ select (id /\ name /\ 4 /\ (Field :: Field "sent")) # from (select (id /\ name /\ 4 /\ (select sent # from messages # as (Alias :: Alias "sent"))) # from messages # as (Alias :: Alias "t"))
+                        plain "SELECT id, name, 4, sent FROM (SELECT id, name, 4, (SELECT sent FROM messages) AS sent FROM messages) AS t" q
 
             TU.suite "where" do
                   TU.test "scalar" do
@@ -214,8 +214,8 @@ main = TUM.runTest do
                         let q = query $ select (Field :: Field "mid") # from (select (select id # from messages # wher (id .=. id) # as (Alias :: Alias "mid")) # from users # wher (id .=. id) # as (Alias :: Alias "t"))
                         plain "SELECT mid FROM (SELECT (SELECT id FROM messages WHERE id = id) AS mid FROM users WHERE id = id) AS t" q
                   TU.test "tuple" do
-                        let q = query $ select (id /\ name /\ 4 /\ (Field :: Field "msent")) # from (select (id /\ name /\ 4 /\ (select sent # from messages # wher (id .=. id) # as (Alias :: Alias "msent"))) # from messages # wher (id .=. id) # as (Alias :: Alias "t"))
-                        plain "SELECT id, name, 4, msent FROM (SELECT id, name, 4, (SELECT sent FROM messages WHERE id = id) AS msent FROM messages WHERE id = id) AS t" q
+                        let q = query $ select (id /\ name /\ 4 /\ (Field :: Field "sent")) # from (select (id /\ name /\ 4 /\ (select sent # from messages # wher (id .=. id) # as (Alias :: Alias "sent"))) # from messages # wher (id .=. id) # as (Alias :: Alias "t"))
+                        plain "SELECT id, name, 4, sent FROM (SELECT id, name, 4, (SELECT sent FROM messages WHERE id = id) AS sent FROM messages WHERE id = id) AS t" q
 
             TU.suite "prepare" do
                   TU.test "scalar" do
@@ -241,7 +241,7 @@ main = TUM.runTest do
                                     TUA.equal parameters q
                   TU.test "tuple" do
                         let parameters = {id :3 }
-                        case query <<< prepare parameters $ select (id /\ name /\ 4 /\ (Field :: Field "msent")) # from (select (id /\ name /\ 4 /\ (select sent # from messages # wher ((Parameter :: Parameter "id") .=. (Parameter :: Parameter "id")) # as (Alias :: Alias "msent"))) # from messages # wher ((Parameter :: Parameter "id") .=. id) # as (Alias :: Alias "t")) of
+                        case query <<< prepare parameters $ select (id /\ name /\ 4 /\ (Field :: Field "sent")) # from (select (id /\ name /\ 4 /\ (select sent # from messages # wher ((Parameter :: Parameter "id") .=. (Parameter :: Parameter "id")) # as (Alias :: Alias "sent"))) # from messages # wher ((Parameter :: Parameter "id") .=. id) # as (Alias :: Alias "t")) of
                               Plain s -> TU.failure $ "Expected parameters for " <> s
                               Parameterized s q -> do
                                     TUA.equal "SELECT id, name, 4, sent FROM (SELECT id, name, 4, (SELECT sent FROM messages WHERE @id = @id) FROM messages WHERE @id = id) AS t" s
