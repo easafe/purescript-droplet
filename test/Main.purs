@@ -38,118 +38,84 @@ messages = Table
 
 main :: Effect Unit
 main = TUM.runTest do
-      TU.suite "select" do
-            TU.suite "single column" do
-                  TU.test "scalar" do
-                        let q = query $ select 3
-                        plain "SELECT 3" q
-                  TU.test "field" do
-                        let q = query $ select id
-                        plain "SELECT id" q
-                  TU.test "star" do
-                        let q = query $ select star
-                        plain "SELECT *" q
-
-            TU.suite "columns" do
-                  TU.test "scalars" do
-                        let q = query $ select (3 /\ 4 /\ 5)
-                        plain "SELECT 3, 4, 5" q
-                  TU.test "fields" do
-                        let q = query $ select (id /\ name)
-                        plain "SELECT id, name" q
-                  TU.test "tuple" do
-                        let q = query $ select (star /\ id /\ 5)
-                        plain "SELECT *, id, 5" q
-
-            -- TU.suite "sub q" do
-            --       -- TU.test "scalars" do
-            --       --       let q = query $ select (3 /\ (select 34 # from users # wher (name .=. surname) # as (Alias :: Alias "t")))
-            --       --       plain "SELECT 3, (SELECT 34 FROM users WHERE name = surname) AS t" q
-            --       TU.test "fields" do
-            --             let q = query $ select (id /\ (select (Field :: Field "sent") # from messages))
-            --             plain "SELECT id, (SELECT sent FROM messages)" q
-            --       TU.test "tuple" do
-            --             let q = query $ select (3 /\ (select id # from messages) /\ id /\ name /\ star /\ (select (Field :: Field "sent") # from messages) /\ (select 5 # from messages))
-            --             plain "SELECT 3, (SELECT id FROM messages), id, name, *, (SELECT sent FROM messages), (SELECT 5 FROM messages)" q
-
       TU.suite "from" do
             TU.test "table" do
                   let q = query $ select 34 # from messages
                   plain "SELECT 34 FROM messages" q
 
-      TU.suite "prepare and where" do
-            TU.test "equals" do
-                  let parameters = {name : "josh"}
-                  case query <<< prepare parameters $ select id # from users # wher (name .=. (Parameter :: Parameter "name")) of
-                        Plain s -> TU.failure $ "Expected parameters for " <> s
-                        Parameterized s q -> do
-                              TUA.equal "SELECT id FROM users WHERE name = @name" s
-                              TUA.equal parameters q
-            TU.test "not equals" do
-                  let parameters = {id: 3}
-                  case query <<< prepare parameters $ select id # from users # wher (id .<>. (Parameter :: Parameter "id")) of
-                        Plain s -> TU.failure $ "Expected parameters for " <> s
-                        Parameterized s q -> do
-                              TUA.equal "SELECT id FROM users WHERE id <> @id" s
-                              TUA.equal parameters q
+      -- TU.suite "prepare and where" do
+      --       TU.test "equals" do
+      --             let parameters = {name : "josh"}
+      --             case query <<< prepare parameters $ select id # from users # wher (name .=. (Parameter :: Parameter "name")) of
+      --                   Plain s -> TU.failure $ "Expected parameters for " <> s
+      --                   Parameterized s q -> do
+      --                         TUA.equal "SELECT id FROM users WHERE name = @name" s
+      --                         TUA.equal parameters q
+      --       TU.test "not equals" do
+      --             let parameters = {id: 3}
+      --             case query <<< prepare parameters $ select id # from users # wher (id .<>. (Parameter :: Parameter "id")) of
+      --                   Plain s -> TU.failure $ "Expected parameters for " <> s
+      --                   Parameterized s q -> do
+      --                         TUA.equal "SELECT id FROM users WHERE id <> @id" s
+      --                         TUA.equal parameters q
 
-            TU.suite "field" do
-                  TU.test "equals" do
-                        let q = query $ select 34 # from users # wher (name .=. surname)
-                        plain "SELECT 34 FROM users WHERE name = surname" q
-                  TU.test "not equals" do
-                        let q = query $ select 34 # from users # wher (name .<>. surname)
-                        plain "SELECT 34 FROM users WHERE name <> surname" q
+      --       TU.suite "field" do
+      --             TU.test "equals" do
+      --                   let q = query $ select 34 # from users # wher (name .=. surname)
+      --                   plain "SELECT 34 FROM users WHERE name = surname" q
+      --             TU.test "not equals" do
+      --                   let q = query $ select 34 # from users # wher (name .<>. surname)
+      --                   plain "SELECT 34 FROM users WHERE name <> surname" q
 
-            TU.suite "logical operands" do
-                  TU.suite "and" do
-                        TU.test "single" do
-                              let parameters = {name : "josh"}
-                              case query <<< prepare parameters $ select id # from users # wher (name .=. (Parameter :: Parameter "name") .&&. name .=. surname) of
-                                    Plain s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized s q -> do
-                                          TUA.equal "SELECT id FROM users WHERE (name = @name AND name = surname)" s
-                                          TUA.equal parameters q
-                        TU.test "many" do
-                              let parameters = {name : "josh", surname: "j."}
-                              case query <<< prepare parameters $ select id # from users # wher (name .=. (Parameter :: Parameter "name") .&&. name .=. surname .&&. surname .<>. (Parameter :: Parameter "surname")) of
-                                    Plain s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized s q -> do
-                                          TUA.equal "SELECT id FROM users WHERE ((name = @name AND name = surname) AND surname <> @surname)" s
-                                          TUA.equal parameters q
+      --       TU.suite "logical operands" do
+      --             TU.suite "and" do
+      --                   TU.test "single" do
+      --                         let parameters = {name : "josh"}
+      --                         case query <<< prepare parameters $ select id # from users # wher (name .=. (Parameter :: Parameter "name") .&&. name .=. surname) of
+      --                               Plain s -> TU.failure $ "Expected parameters for " <> s
+      --                               Parameterized s q -> do
+      --                                     TUA.equal "SELECT id FROM users WHERE (name = @name AND name = surname)" s
+      --                                     TUA.equal parameters q
+      --                   TU.test "many" do
+      --                         let parameters = {name : "josh", surname: "j."}
+      --                         case query <<< prepare parameters $ select id # from users # wher (name .=. (Parameter :: Parameter "name") .&&. name .=. surname .&&. surname .<>. (Parameter :: Parameter "surname")) of
+      --                               Plain s -> TU.failure $ "Expected parameters for " <> s
+      --                               Parameterized s q -> do
+      --                                     TUA.equal "SELECT id FROM users WHERE ((name = @name AND name = surname) AND surname <> @surname)" s
+      --                                     TUA.equal parameters q
 
-                  TU.suite "or" do
-                        TU.test "single" do
-                              let parameters = {name : "josh"}
-                              case query <<< prepare parameters $ select id # from users # wher (name .=. (Parameter :: Parameter "name") .||. name .=. surname) of
-                                    Plain s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized s q -> do
-                                          TUA.equal "SELECT id FROM users WHERE (name = @name OR name = surname)" s
-                                          TUA.equal parameters q
+      --             TU.suite "or" do
+      --                   TU.test "single" do
+      --                         let parameters = {name : "josh"}
+      --                         case query <<< prepare parameters $ select id # from users # wher (name .=. (Parameter :: Parameter "name") .||. name .=. surname) of
+      --                               Plain s -> TU.failure $ "Expected parameters for " <> s
+      --                               Parameterized s q -> do
+      --                                     TUA.equal "SELECT id FROM users WHERE (name = @name OR name = surname)" s
+      --                                     TUA.equal parameters q
 
-                        TU.test "many" do
-                              let parameters = {name : "josh", surname: "j."}
-                              case query <<< prepare parameters $ select id # from users # wher (name .=. (Parameter :: Parameter "name") .||. name .=. surname .||. surname .<>. (Parameter :: Parameter "surname")) of
-                                    Plain s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized s q -> do
-                                          TUA.equal "SELECT id FROM users WHERE ((name = @name OR name = surname) OR surname <> @surname)" s
-                                          TUA.equal parameters q
+      --                   TU.test "many" do
+      --                         let parameters = {name : "josh", surname: "j."}
+      --                         case query <<< prepare parameters $ select id # from users # wher (name .=. (Parameter :: Parameter "name") .||. name .=. surname .||. surname .<>. (Parameter :: Parameter "surname")) of
+      --                               Plain s -> TU.failure $ "Expected parameters for " <> s
+      --                               Parameterized s q -> do
+      --                                     TUA.equal "SELECT id FROM users WHERE ((name = @name OR name = surname) OR surname <> @surname)" s
+      --                                     TUA.equal parameters q
 
-                  TU.suite "tuple" do
-                        TU.test "not bracketed" do
-                              let parameters = {id3 : 3, id33: 33, id333 : 333}
-                              case query <<< prepare parameters $ select id # from users # wher (id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33") .&&. id .=. (Parameter :: Parameter "id333")) of
-                                    Plain s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized s q -> do
-                                          TUA.equal "SELECT id FROM users WHERE (id = @id3 OR (id = @id33 AND id = @id333))" s
-                                          TUA.equal parameters q
-                        TU.test "bracketed" do
-                              let parameters = {id3 : 3, id33: 33, id333 : 333}
-                              case query <<< prepare parameters $ select id # from users # wher ((id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33")) .&&. id .=. (Parameter :: Parameter "id333")) of
-                                    Plain s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized s q -> do
-                                          TUA.equal "SELECT id FROM users WHERE ((id = @id3 OR id = @id33) AND id = @id333)" s
-                                          TUA.equal parameters q
+      --             TU.suite "tuple" do
+      --                   TU.test "not bracketed" do
+      --                         let parameters = {id3 : 3, id33: 33, id333 : 333}
+      --                         case query <<< prepare parameters $ select id # from users # wher (id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33") .&&. id .=. (Parameter :: Parameter "id333")) of
+      --                               Plain s -> TU.failure $ "Expected parameters for " <> s
+      --                               Parameterized s q -> do
+      --                                     TUA.equal "SELECT id FROM users WHERE (id = @id3 OR (id = @id33 AND id = @id333))" s
+      --                                     TUA.equal parameters q
+      --                   TU.test "bracketed" do
+      --                         let parameters = {id3 : 3, id33: 33, id333 : 333}
+      --                         case query <<< prepare parameters $ select id # from users # wher ((id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33")) .&&. id .=. (Parameter :: Parameter "id333")) of
+      --                               Plain s -> TU.failure $ "Expected parameters for " <> s
+      --                               Parameterized s q -> do
+      --                                     TUA.equal "SELECT id FROM users WHERE ((id = @id3 OR id = @id33) AND id = @id333)" s
+      --                                     TUA.equal parameters q
 
             -- TU.suite "prepared sub queries" do
                   -- TU.test "scalar" do
@@ -246,6 +212,16 @@ main = TUM.runTest do
       --                         Parameterized s q -> do
       --                               TUA.equal "SELECT id, name, 4, sent FROM (SELECT id, name, 4, (SELECT sent FROM messages WHERE @id = @id) FROM messages WHERE @id = id) AS t" s
       --                               TUA.equal parameters q
+      TU.suite "naked select" do
+            TU.test "scalar" do
+                  let q = query $ select 3
+                  plain "SELECT 3" q
+            TU.test "sub query" do
+                  let q = query $ select (select 34 # from users # wher (name .=. surname) # as (Alias :: Alias "t"))
+                  plain "SELECT (SELECT 34 FROM users WHERE name = surname) AS t" q
+            TU.test "tuple" do
+                  let q = query $ select (3 /\ (select 34 # from users # wher (name .=. surname) # as (Alias :: Alias "t")) /\ 4 /\ (select name # from users # as (Alias :: Alias "u")))
+                  plain "SELECT 3, (SELECT 34 FROM users WHERE name = surname) AS t, 4, (SELECT name FROM users) AS u" q
 
 plain :: forall p. String -> Query p -> _
 plain s q = case q of

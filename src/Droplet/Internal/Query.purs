@@ -11,6 +11,8 @@ import Prelude
 import Data.Array ((..), (:))
 import Data.Array as DA
 import Data.Foldable as DF
+import Data.Maybe (Maybe(..))
+import Data.Maybe as DM
 import Data.String (Pattern(..), Replacement(..))
 import Data.String as DST
 import Data.Symbol (class IsSymbol)
@@ -73,13 +75,13 @@ foreign import data Other :: Statement
 
 --cant be a functor because of parameters kind
 data Query parameters =
-      Parameterized String String String (Record parameters) | -- keyword parameter list body, dont include name as it has to be unique per session
+      Parameterized String (Maybe String) String (Record parameters) | -- keyword parameter list body, dont include name as it has to be unique per session
       Plain String
 
 --for debugging
 instance queryShow :: Show (Query parameters) where
       show = case _ of
-            Parameterized q r s _ -> q <> "plan" <> r <> s
+            Parameterized q r s _ -> q <> "plan" <> DM.fromMaybe "" r <> s
             Plain q -> q
 
 -- use this instead of toQuery
@@ -99,7 +101,7 @@ ToQuery should print valid sql strings but reject queries that can't be executed
 2. parameters are changed from @name to $n format
       ToQuery rejects any query that includes parameters but no PREPARE statement
 
-2. PREPARE statements are (fully) not printed here
+2. PREPARE statements are not fully printed here
       PREPARE names must be unique per session
 
 -}
@@ -107,9 +109,8 @@ ToQuery should print valid sql strings but reject queries that can't be executed
 ----------------------PREPARE----------------------------
 
 instance prepareToQuery :: (ToQuery q Prepared, RowToList parameters list, ToNames list) => ToQuery (Prepare q parameters) starting where
-      toQuery (Prepare q parameters) _ = Parameterized prepareKeyword parameterList body $ UC.unsafeCoerce parameters --bit of hack
-            where parameterList = DST.joinWith ", " indexes
-                  body = DF.foldl replace (extractPlain $ toQuery q (Proxy :: Proxy Prepared)) $ DA.zip names indexes
+      toQuery (Prepare q parameters) _ = Parameterized prepareKeyword Nothing body $ UC.unsafeCoerce parameters --bit of hack
+            where body = DF.foldl replace (extractPlain $ toQuery q (Proxy :: Proxy Prepared)) $ DA.zip names indexes
 
                   names = toNames (Proxy :: Proxy list)
                   indexes = map (\i -> parameterToken <> show i) (1 .. DA.length names)
@@ -128,45 +129,57 @@ instance consToNames :: (IsSymbol name, ToNames rest) => ToNames (RL.Cons name t
 
 ----------------------SELECT----------------------------
 
---bug
--- naked selects or anything from droplet.defition should not be printed on its own
-instance subSelectWhereToQuery :: ToQuery (Where w has parameters) starting => ToQuery (Select (Where w has parameters) parameters) starting where
-      toQuery (Select wr) s = Plain $ openBracket <> extractPlain (toQuery wr s) <> closeBracket
-else
-instance subSelectFromToQuery :: ToQuery (From f s parameters fields) starting => ToQuery (Select (From f s parameters fields) parameters) starting where
-      toQuery (Select fr) s = Plain $ openBracket <> extractPlain (toQuery fr s) <> closeBracket
-else
-instance selectToQuery :: ToQuery s starting => ToQuery (Select s parameters) starting where
-      toQuery (Select s) st = Plain $ selectKeyword <> extractPlain (toQuery s st)
+newtype NakedSelect s = NakedSelect s
 
-instance selectFieldToQuery :: IsSymbol name => ToQuery (Field name) starting where
-      toQuery _ _ = Plain $ DS.reflectSymbol (Proxy :: Proxy name)
+--naked selects
+instance asSelectToQuery :: (IsSymbol name, ToQuery q starting) => ToQuery (NakedSelect (As q name parameters projection)) starting where
+      toQuery (NakedSelect a) s = Plain $ toAsQuery a s
 
-instance tableToQuery :: ToQuery Star starting where
-      toQuery _ _ = Plain starToken
+instance intToQuery :: ToQuery (NakedSelect Int) starting where
+      toQuery (NakedSelect n) _ = Plain $ show n
 
-instance intScalarToQuery :: ToQuery Int starting where
-      toQuery n _ = Plain $ show n
+instance tupleToQuery :: (ToQuery (NakedSelect s) starting, ToQuery (NakedSelect t) starting) => ToQuery (NakedSelect (Tuple (Select s parameters) (Select t parameters))) starting where
+      toQuery (NakedSelect (Tuple (Select s) (Select t))) st = Plain $ extractPlain (toQuery (NakedSelect s) st) <> comma <> extractPlain (toQuery (NakedSelect t) st)
 
-instance selectTupleToQuery :: (ToQuery s starting, ToQuery t starting) => ToQuery (Tuple (Select s parameters) (Select t parameters)) starting where
-      toQuery (Tuple (Select s) (Select t)) st = Plain $ extractPlain (toQuery s st)  <> comma <> extractPlain (toQuery t st)
+instance selectToQuery :: ToQuery (NakedSelect s) starting => ToQuery (Select s parameters) starting where
+      toQuery (Select s) st = Plain $ selectKeyword <> extractPlain (toQuery (NakedSelect s) st)
+
+--fully clothed selects
+class ToSelectQuery q (starting :: Statement) where
+      toSelectQuery :: forall parameters. q -> Proxy starting -> Query parameters
+
+instance asToSelectQuery :: (IsSymbol name, ToQuery q starting) => ToSelectQuery (As q name parameters projection) starting where
+      toSelectQuery a s = Plain $ toAsQuery a s
+
+instance selectToSelectQuery :: ToSelectQuery s starting => ToSelectQuery (Select s parameters) starting where
+      toSelectQuery (Select s) st = Plain $ selectKeyword <> extractPlain (toSelectQuery s st)
+
+instance fieldToSelectQuery :: IsSymbol name => ToSelectQuery (Field name) starting where
+      toSelectQuery _ _ = Plain $ DS.reflectSymbol (Proxy :: Proxy name)
+
+instance tableToSelectQuery :: ToSelectQuery Star starting where
+      toSelectQuery _ _ = Plain starToken
+
+instance intToSelectQuery :: ToSelectQuery Int starting where
+      toSelectQuery n _ = Plain $ show n
+
+instance tupleToSelectQuery :: (ToSelectQuery s starting, ToSelectQuery t starting) => ToSelectQuery (Tuple (Select s parameters) (Select t parameters)) starting where
+      toSelectQuery (Tuple (Select s) (Select t)) st = Plain $ extractPlain (toSelectQuery s st)  <> comma <> extractPlain (toSelectQuery t st)
 
 
 
 -------------------------------FROM----------------------------
 
-instance subSelectfromTableToQuery :: (IsSymbol name, ToQuery s starting) => ToQuery (From (Table name fields) s parameters fields) starting where
-      toQuery (From _ s) st = Plain $ extractPlain (toQuery s st) <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
+
+instance fromTableToQuery :: (IsSymbol name, ToSelectQuery s starting) => ToQuery (From (Table name fields) s parameters fields) starting where
+      toQuery (From _ s) st = Plain $ extractPlain (toSelectQuery s st) <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 instance fromAsToQuery :: (ToQuery q starting, ToQuery s starting, IsSymbol name) => ToQuery (From (As q name parameters projection) s parameters projection) starting where
-      toQuery (From (As q) s) st = Plain $
+      toQuery (From a s) st = Plain $
             extractPlain (toQuery s st) <>
             fromKeyword <>
-            openBracket <>
-            extractPlain (toQuery q st) <>
-            closeBracket <>
-            asKeyword <>
-            DS.reflectSymbol (Proxy :: Proxy name)
+            toAsQuery a st
+
 
 -------------------------------WHERE----------------------------
 
@@ -184,6 +197,15 @@ instance whereToQuery :: ToQuery f starting => ToQuery (Where f has parameters) 
                         Equals -> equalsSymbol
                         NotEquals -> notEqualsSymbol
 
+
+
+toAsQuery :: forall name q starting parameters projection. IsSymbol name => ToQuery q starting => As q name parameters projection -> Proxy starting -> String
+toAsQuery (As q) st =
+      openBracket <>
+      extractPlain (toQuery q st) <>
+      closeBracket <>
+      asKeyword <>
+      DS.reflectSymbol (Proxy :: Proxy name)
 
 extractPlain :: forall parameters. Query parameters -> String
 extractPlain = case _ of
