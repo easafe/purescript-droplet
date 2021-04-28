@@ -15,6 +15,9 @@ import Data.Maybe (Maybe(..))
 import Data.Maybe as DM
 import Data.String (Pattern(..), Replacement(..))
 import Data.String as DST
+import Data.String.Regex as DSR
+import Data.String.Regex.Flags (global)
+import Data.String.Regex.Unsafe as DSRU
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
@@ -111,13 +114,15 @@ ToQuery should print valid sql strings but reject queries that can't be executed
 
 ----------------------PREPARE----------------------------
 
+--quite a hack, stand to gain from cleaner implementation
 instance prepareToQuery :: (ToQuery q Prepared, RowToList parameters list, ToNames list) => ToQuery (Prepare q parameters) starting where
-      toQuery (Prepare q parameters) _ = Parameterized prepareKeyword Nothing body $ UC.unsafeCoerce parameters --bit of hack
+      toQuery (Prepare q parameters) _ = Parameterized prepareKeyword parameterList body $ UC.unsafeCoerce parameters
             where body = DF.foldl replace (extractPlain $ toQuery q (Proxy :: Proxy Prepared)) $ DA.zip names indexes
+                  parameterList = Just <<< DST.joinWith comma $ map (atToken <> _) names -- to help debugging
 
                   names = toNames (Proxy :: Proxy list)
                   indexes = map (\i -> parameterToken <> show i) (1 .. DA.length names)
-                  replace sql (Tuple name p) = DST.replaceAll (Pattern $ atToken <> name) (Replacement p) sql
+                  replace sql (Tuple name p) = DSR.replace (DSRU.unsafeRegex (atToken <> "\\b" <> name <> "\\b") global) p sql
 
 class ToNames (list :: RowList Type) where
       toNames :: Proxy list -> Array String
@@ -133,14 +138,17 @@ instance consToNames :: (IsSymbol name, ToNames rest) => ToNames (RL.Cons name t
 ----------------------SELECT----------------------------
 
 --naked selects
-instance asSelectToQuery :: (IsSymbol name, ToQuery q starting) => ToQuery (NakedSelect (As q name parameters projection)) starting where
-      toQuery (NakedSelect a) s = Plain $ toAsQuery a s
-
 instance intToQuery :: ToQuery (NakedSelect Int) starting where
       toQuery (NakedSelect n) _ = Plain $ show n
-
+else
+instance asSelectToQuery :: (IsSymbol name, ToQuery q starting) => ToQuery (NakedSelect (As q name parameters projection)) starting where
+      toQuery (NakedSelect a) s = Plain $ toAsQuery a s
+else
 instance tupleToQuery :: (ToQuery (NakedSelect s) starting, ToQuery (NakedSelect t) starting) => ToQuery (NakedSelect (Tuple (Select s parameters) (Select t parameters))) starting where
       toQuery (NakedSelect (Tuple (Select s) (Select t))) st = Plain $ extractPlain (toQuery (NakedSelect s) st) <> comma <> extractPlain (toQuery (NakedSelect t) st)
+else
+instance failNakedToQuery :: Fail (Text "Naked select columns must be either scalar values or named subqueries") => ToQuery (NakedSelect s) starting where
+      toQuery _ _ = Plain "impossible"
 
 instance selectToQuery :: (
       ToQuery (NakedSelect s) starting,
@@ -180,16 +188,16 @@ instance tupleToSelectQuery :: (ToSelectQuery s starting, ToSelectQuery t starti
 instance fromTableToQuery :: (IsSymbol name, ToSelectQuery s starting) => ToQuery (From (Table name fields) s parameters fields) starting where
       toQuery (From _ s) st = Plain $ extractPlain (toSelectQuery s st) <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-instance fromAsToQuery :: (ToQuery q starting, ToQuery s starting, IsSymbol name) => ToQuery (From (As q name parameters projection) s parameters projection) starting where
+instance fromAsToQuery :: (ToQuery q starting, ToSelectQuery s starting, IsSymbol name) => ToQuery (From (As q name parameters projection) s parameters projection) starting where
       toQuery (From a s) st = Plain $
-            extractPlain (toQuery s st) <>
+            extractPlain (toSelectQuery s st) <>
             fromKeyword <>
             toAsQuery a st
 
 
 -------------------------------WHERE----------------------------
 
-instance whereFailToQuery :: Fail (Text "Since this query references parameters, Droplet.prepare must be used") => ToQuery (Where f Parameterized parameters) Other where
+instance whereFailToQuery :: Fail (Text "Parameters must be set. See Droplet.prepare") => ToQuery (Where f Parameterized parameters) Other where
       toQuery _ _ = Plain "impossible"
 else
 instance whereToQuery :: ToQuery f starting => ToQuery (Where f has parameters) starting where

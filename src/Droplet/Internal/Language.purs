@@ -97,11 +97,23 @@ data Prepare q (parameters :: Row Type) = Prepare q (Record parameters)
 class ToPrepare q parameters | q -> parameters where
       toPrepare :: Record parameters -> q -> Prepare q parameters
 
-instance fromAsToPrepare :: (ToPrepare q parameters) => ToPrepare (From (As q a parameters projection) (Select s parameters) parameters projection) parameters where
-      toPrepare parameters w = Prepare w parameters
+instance selectIntToPrepare :: ToPrepare (Select Int parameters) parameters where
+      toPrepare parameters s = Prepare s parameters
+
+instance selectFieldToPrepare :: ToPrepare (Select (Field name) parameters) parameters where
+      toPrepare parameters s = Prepare s parameters
+
+instance selectAsToPrepare :: ToPrepare q parameters => ToPrepare (Select (As q a parameters projection) parameters) parameters where
+      toPrepare parameters s = Prepare s parameters
+
+instance selectTupleToPrepare :: (ToPrepare s parameters, ToPrepare t parameters) => ToPrepare (Select (Tuple s t) parameters) parameters where
+      toPrepare parameters s = Prepare s parameters
+
+instance fromAsToPrepare :: (ToPrepare q parameters, ToPrepare s parameters) => ToPrepare (From (As q a parameters projection) s parameters projection) parameters where
+      toPrepare parameters f = Prepare f parameters
 else
-instance fromToPrepare :: ToPrepare (From f (Select s parameters) parameters fields) parameters where
-      toPrepare parameters w = Prepare w parameters
+instance fromToPrepare :: ToPrepare s parameters => ToPrepare (From f s parameters fields) parameters where
+      toPrepare parameters f = Prepare f parameters
 
 instance whereToPrepare :: ToPrepare f parameters => ToPrepare (Where f has parameters) parameters where
       toPrepare parameters w = Prepare w parameters
@@ -137,10 +149,10 @@ else
 instance tupleToSelect :: (ToSelect r s parameters, ToSelect t u parameters) => ToSelect (Tuple r t) (Tuple (Select s parameters) (Select u parameters)) parameters where
       toSelect (Tuple s t) = Select <<< Tuple (toSelect s) $ toSelect t
 else
-instance fromToSelect :: Fail (Text "Since sub queries can be ambiguous, Droplet.as must be used") => ToSelect (From f s parameters to) (From f s parameters to) parameters where
+instance fromToSelect :: Fail (Text "Subquery column must be named. See Droplet.as") => ToSelect (From f s parameters to) (From f s parameters to) parameters where
       toSelect fr = Select fr
 else
-instance whereToSelect :: Fail (Text "Since sub queries can be ambiguous, Droplet.as must be used") => ToSelect (Where f has parameters) (Where f has parameters) parameters where
+instance whereToSelect :: Fail (Text "Subquery column must be named. See Droplet.as") => ToSelect (Where f has parameters) (Where f has parameters) parameters where
       toSelect wr = Select wr
 else
 --not ideal, should be able to be regular type error
@@ -154,7 +166,7 @@ class ToSubSelect (r :: Type)
 --for sub queries only a single column can be returned
 instance fromFieldToSubSelect :: ToSubSelect (From f (Select (Field name) parameters) parameter fields)
 instance fromIntToSubSelect :: ToSubSelect (From f (Select Int parameter) parameters fields)
-instance fromTupleToSubSelect :: Fail (Text "Sub query must return a single column") => ToSubSelect (From f (Select (Tuple a b) parameter) parameters fields)
+instance fromTupleToSubSelect :: Fail (Text "Subquery must return a single column") => ToSubSelect (From f (Select (Tuple a b) parameter) parameters fields)
 instance whereToSubSelect :: ToSubSelect f => ToSubSelect (Where f has parameters)
 
 select :: forall r s parameters. ToSelect r s parameters => r -> Select s parameters
