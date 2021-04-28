@@ -206,7 +206,6 @@ instance asToProjection :: (
 ) => ToProjection (As q alias parameters projection) fields single
 instance tupleToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple (Select s parameters) (Select t parameters)) fields extra
 
-
 class ToSingleColumn (fields :: RowList Type) (t :: Type) | fields -> t
 
 instance singleToSingleColumn :: ToSingleColumn (RL.Cons name t RL.Nil) t

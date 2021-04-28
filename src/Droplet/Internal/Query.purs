@@ -19,6 +19,7 @@ import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
 import Effect.Exception.Unsafe as EEU
+import Prim.Row (class Nub)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
@@ -73,6 +74,8 @@ data Statement
 foreign import data Prepared :: Statement
 foreign import data Other :: Statement
 
+newtype NakedSelect s = NakedSelect s
+
 --cant be a functor because of parameters kind
 data Query parameters =
       Parameterized String (Maybe String) String (Record parameters) | -- keyword parameter list body, dont include name as it has to be unique per session
@@ -96,7 +99,7 @@ class ToQuery q (starting :: Statement) where
 
 ToQuery should print valid sql strings but reject queries that can't be executed, with the following caveats
 
-1. naked selects (i.e. not projecting from a source) can be potential invalid (e.g. SELECT id) so only a limited sub set of SELECT is accepted as top level
+1. naked selects (i.e. not projecting from a source) can be potentially invalid (e.g. SELECT id) so only a limited sub set of SELECT is accepted as top level
 
 2. parameters are changed from @name to $n format
       ToQuery rejects any query that includes parameters but no PREPARE statement
@@ -129,8 +132,6 @@ instance consToNames :: (IsSymbol name, ToNames rest) => ToNames (RL.Cons name t
 
 ----------------------SELECT----------------------------
 
-newtype NakedSelect s = NakedSelect s
-
 --naked selects
 instance asSelectToQuery :: (IsSymbol name, ToQuery q starting) => ToQuery (NakedSelect (As q name parameters projection)) starting where
       toQuery (NakedSelect a) s = Plain $ toAsQuery a s
@@ -141,7 +142,12 @@ instance intToQuery :: ToQuery (NakedSelect Int) starting where
 instance tupleToQuery :: (ToQuery (NakedSelect s) starting, ToQuery (NakedSelect t) starting) => ToQuery (NakedSelect (Tuple (Select s parameters) (Select t parameters))) starting where
       toQuery (NakedSelect (Tuple (Select s) (Select t))) st = Plain $ extractPlain (toQuery (NakedSelect s) st) <> comma <> extractPlain (toQuery (NakedSelect t) st)
 
-instance selectToQuery :: ToQuery (NakedSelect s) starting => ToQuery (Select s parameters) starting where
+instance selectToQuery :: (
+      ToQuery (NakedSelect s) starting,
+      ToProjection s () fields,
+      Nub fields unique,
+      UniqueColumnNames fields unique
+) => ToQuery (Select s parameters) starting where
       toQuery (Select s) st = Plain $ selectKeyword <> extractPlain (toQuery (NakedSelect s) st)
 
 --fully clothed selects
