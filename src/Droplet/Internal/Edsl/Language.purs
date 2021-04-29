@@ -2,10 +2,10 @@
 -- |
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 
-module Droplet.Internal.Language where
+module Droplet.Internal.Edsl.Language where
 
-import Droplet.Internal.Definition
-import Droplet.Internal.Filter
+import Droplet.Internal.Edsl.Definition
+import Droplet.Internal.Edsl.Filter
 import Prelude
 
 import Data.Tuple (Tuple(..))
@@ -234,7 +234,7 @@ from = toFrom
 
 -------------------------------WHERE----------------------------
 
-data Where f (has :: Type) (parameters :: Row Type) = Where Filtered f
+data Where f (has :: IsParameterized) (parameters :: Row Type) = Where Filtered f
 
 wher :: forall f s has fields parameters. Filters fields parameters has -> From f (Select s parameters) parameters fields -> Where (From f (Select s parameters) parameters fields) has parameters
 wher (Filters filtered) fr = Where filtered fr

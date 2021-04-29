@@ -4,11 +4,14 @@ You can edit this file as you like.
 -}
 { name = "my-project"
 , dependencies =
-  [ "arrays"
+  [ "aff"
+  , "arrays"
   , "console"
   , "datetime"
   , "debug"
   , "effect"
+  , "foreign"
+  , "nullable"
   , "psci-support"
   , "record"
   , "strings"

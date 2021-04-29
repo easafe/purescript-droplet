@@ -1,4 +1,4 @@
-module Droplet.Internal.Definition where
+module Droplet.Internal.Edsl.Definition where
 
 data Field (name :: Symbol) = Field
 

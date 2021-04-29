@@ -1,0 +1,6 @@
+{
+    "name": "purescript-droplet",
+    "dependencies": {
+        "pg": "^8.6.0"
+    }
+}

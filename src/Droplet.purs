@@ -1,9 +1,9 @@
 module Droplet (module Exported) where
 
-import Droplet.Internal.Language as Exported
-import Droplet.Internal.Query as Exported
-import Droplet.Internal.Definition as Exported
-import Droplet.Internal.Filter as Exported
+import Droplet.Internal.Edsl.Language as Exported
+import Droplet.Internal.Mapper.Query hiding (query) as Exported
+import Droplet.Internal.Edsl.Definition as Exported
+import Droplet.Internal.Edsl.Filter as Exported
 
 {-
 select fieldsList ✓ | * ✓ | sub select ✓ | function | scalars ✓ | column names

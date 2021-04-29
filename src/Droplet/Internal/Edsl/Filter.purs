@@ -1,15 +1,16 @@
-module Droplet.Internal.Filter where
+module Droplet.Internal.Edsl.Filter where
 
-import Droplet.Internal.Definition
+import Droplet.Internal.Edsl.Definition
 import Prelude
 
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy(..))
+data IsParameterized
 
-atToken :: String
-atToken = "@"
+foreign import data Parameterized :: IsParameterized
+foreign import data NotParameterized  :: IsParameterized
 
 data Operator =
       Equals |
@@ -20,7 +21,27 @@ data Filtered =
       And Filtered Filtered |
       Or Filtered Filtered
 
-newtype Filters (fields :: Row Type) (parameters :: Row Type) (has :: Type) = Filters Filtered
+newtype Filters (fields :: Row Type) (parameters :: Row Type) (has :: IsParameterized) = Filters Filtered
+
+--it d be nicer if field parsing was entirely in ToQuery....
+class ToCompared c (t :: Type) (fields :: Row Type) (parameters :: Row Type) | c -> fields, c -> t, c -> parameters where
+      toCompared :: c -> String
+
+instance fieldToCompared :: (IsSymbol name, Cons name t e fields) => ToCompared (Field name) t fields parameters where
+      toCompared _ = DS.reflectSymbol (Proxy :: Proxy name)
+
+instance parameterToCompared :: (IsSymbol name, Cons name t e parameters) => ToCompared (Parameter name) t fields parameters where
+      toCompared _ = atToken <> DS.reflectSymbol (Proxy :: Proxy name)
+
+-- oh well...
+class HasParameter :: forall k1 k2. k1 -> k2 -> IsParameterized -> Constraint
+class HasParameter c d (has :: IsParameterized) | c -> has, d -> has
+
+instance dontHaveParameter :: (IsSymbol name, IsSymbol otherName) => HasParameter (Field name) (Field otherName) NotParameterized
+else
+instance stillDontHaveParameter :: HasParameter NotParameterized NotParameterized NotParameterized
+else
+instance hasParameter :: HasParameter fp pf Parameterized
 
 equals :: forall parameters fields t field has compared.
       HasParameter field compared has =>
@@ -48,25 +69,5 @@ infix 4 equals as .=.
 infixl 3 and as .&&.
 infixl 2 or as .||.
 
---it d be nicer if field parsing was entirely in ToQuery....
-class ToCompared c t fields parameters | c -> fields, c -> t, c -> parameters where
-      toCompared :: c -> String
-
-instance fieldToCompared :: (IsSymbol name, Cons name t e fields) => ToCompared (Field name) t fields parameters where
-      toCompared _ = DS.reflectSymbol (Proxy :: Proxy name)
-
-instance parameterToCompared :: (IsSymbol name, Cons name t e parameters) => ToCompared (Parameter name) t fields parameters where
-      toCompared _ = atToken <> DS.reflectSymbol (Proxy :: Proxy name)
-
--- oh well...
-data Parameterized
-
-data NotParameterized
-
-class HasParameter c d has | c -> has, d -> has
-
-instance dontHaveParameter :: (IsSymbol name, IsSymbol otherName) => HasParameter (Field name) (Field otherName) NotParameterized
-else
-instance stillDontHaveParameter :: HasParameter NotParameterized NotParameterized NotParameterized
-else
-instance hasParameter :: HasParameter fp pf Parameterized
+atToken :: String
+atToken = "@"

@@ -2,7 +2,7 @@ module Test.Main where
 
 import Droplet
 import Prelude
-
+import Droplet.Internal.Mapper.Query (query)
 import Data.Date (Date)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
