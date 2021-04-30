@@ -8,6 +8,7 @@ import Droplet.Internal.Edsl.Definition
 import Droplet.Internal.Edsl.Filter
 import Prelude
 
+import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
@@ -69,12 +70,12 @@ TABLE [ ONLY ] table_name [ * ]
 full select syntax supported by droplet
 
 SELECT
-      * | column | integer | AS | [, ...]
+      * | column | AS | [, ...]
       [ FROM ]
       [ WHERE ]
 
 AS
-      FROM output_name | WHERE output_name
+      integer | FROM output_name | WHERE output_name
 
 FROM
       table_name | AS
@@ -92,33 +93,40 @@ OPERATOR
 
 --this shouldnt create an actual prepare statement (since it'd require unique names and $n parameters)
 -- but rather type check all parameter usage in a single place
-data Prepare q (parameters :: Row Type) = Prepare q (Record parameters)
+-- | Unnamed statements will only employ parameter substitution
+-- |
+-- | Named statements will result into PREPARE
+data Prepare q (parameters :: Row Type) = Prepare q (Record parameters) Plan
+
+data Plan =
+      NotNamed |
+      Named String
 
 class ToPrepare q parameters | q -> parameters where
-      toPrepare :: Record parameters -> q -> Prepare q parameters
-
-instance selectIntToPrepare :: ToPrepare (Select Int parameters) parameters where
-      toPrepare parameters s = Prepare s parameters
+      toPrepare :: Plan -> Record parameters -> q -> Prepare q parameters
 
 instance selectFieldToPrepare :: ToPrepare (Select (Field name) parameters) parameters where
-      toPrepare parameters s = Prepare s parameters
+      toPrepare plan parameters s = Prepare s parameters plan
 
+instance selectAsIntToPrepare :: ToPrepare (Select (As Int a parameters projection) parameters) parameters where
+      toPrepare plan parameters s = Prepare s parameters plan
+else
 instance selectAsToPrepare :: ToPrepare q parameters => ToPrepare (Select (As q a parameters projection) parameters) parameters where
-      toPrepare parameters s = Prepare s parameters
+      toPrepare plan parameters s = Prepare s parameters plan
 
 instance selectTupleToPrepare :: (ToPrepare s parameters, ToPrepare t parameters) => ToPrepare (Select (Tuple s t) parameters) parameters where
-      toPrepare parameters s = Prepare s parameters
+      toPrepare plan parameters s = Prepare s parameters plan
 
 instance fromAsToPrepare :: (ToPrepare q parameters, ToPrepare s parameters) => ToPrepare (From (As q a parameters projection) s parameters projection) parameters where
-      toPrepare parameters f = Prepare f parameters
+      toPrepare plan parameters f = Prepare f parameters plan
 else
 instance fromToPrepare :: ToPrepare s parameters => ToPrepare (From f s parameters fields) parameters where
-      toPrepare parameters f = Prepare f parameters
+      toPrepare plan parameters f = Prepare f parameters plan
 
 instance whereToPrepare :: ToPrepare f parameters => ToPrepare (Where f has parameters) parameters where
-      toPrepare parameters w = Prepare w parameters
+      toPrepare plan parameters w = Prepare w parameters plan
 
-prepare :: forall q parameters. ToPrepare q parameters => Record parameters -> q -> Prepare q parameters
+prepare :: forall q parameters. ToPrepare q parameters => Plan -> Record parameters -> q -> Prepare q parameters
 prepare = toPrepare
 
 
@@ -139,7 +147,7 @@ else
 instance starToSelect :: ToSelect Star Star parameters where
       toSelect s = Select s
 else
-instance intToSelect :: ToSelect Int Int parameters where
+instance intToSelect :: ToSelect (As Int name parameters projection) (As Int name parameters projection) parameters where
       toSelect n = Select n
 else
 --to desambiguate fields
@@ -165,7 +173,7 @@ class ToSubSelect (r :: Type)
 --check if these can generate invalid prepare parameter queries
 --for sub queries only a single column can be returned
 instance fromFieldToSubSelect :: ToSubSelect (From f (Select (Field name) parameters) parameter fields)
-instance fromIntToSubSelect :: ToSubSelect (From f (Select Int parameter) parameters fields)
+instance fromIntToSubSelect :: ToSubSelect (From f (Select (As Int name parameters projection) parameters) parameters fields)
 instance fromTupleToSubSelect :: Fail (Text "Subquery must return a single column") => ToSubSelect (From f (Select (Tuple a b) parameter) parameters fields)
 instance whereToSubSelect :: ToSubSelect f => ToSubSelect (Where f has parameters)
 
@@ -182,14 +190,14 @@ class ToFrom f s parameters fields | f -> s, f -> parameters, f -> fields where
       toFrom :: f -> Select s parameters -> From f (Select s parameters) parameters fields
 
 instance tableToFrom :: (
-      ToProjection s fields selected,
+      ToProjection (Select s parameters) fields selected,
       Nub selected unique,
       UniqueColumnNames selected unique
 ) => ToFrom (Table name fields) s parameters fields where
       toFrom table s = From table s
 else
 instance asToFrom :: (
-      ToProjection s projection selected,
+      ToProjection (Select s parameters) projection selected,
       Nub selected unique,
       UniqueColumnNames selected unique
 ) => ToFrom (As q a parameters projection) s parameters projection where
@@ -198,34 +206,6 @@ else
 --not ideal, should be able to be regular type error
 instance elseToFrom :: Fail (Above (Text "Droplet.ToFrom cannot recognize fields of") (Quote x)) => ToFrom x x p f where
       toFrom = From
-
--- | Row Type of columns projected by the query
-class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s -> fields, s -> projection
-
-instance intToProjection :: ToProjection Int fields ()
-instance fieldToProjection :: (Cons name t e fields, Cons name t () projection) => ToProjection (Field name) fields projection
---union not needed
-instance starToProjection :: Union fields () projection => ToProjection Star fields projection
---sub query as column
-instance asIntFromToProjection :: ToProjection (From f (Select Int parameters) parameters fields) () ("column" :: Int)
-instance asFieldFromToProjection :: (Cons name t e fields, Cons name t () single) => ToProjection (From f (Select (Field name) parameters) parameters fields) () single
-instance asWhereToProjection :: ToProjection f () extra => ToProjection (Where f has parameters) () extra
-instance asToProjection :: (
-      ToProjection q () extra,
-      RowToList extra list,
-      ToSingleColumn list t,
-      Cons alias t () single
-) => ToProjection (As q alias parameters projection) fields single
-instance tupleToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple (Select s parameters) (Select t parameters)) fields extra
-
-class ToSingleColumn (fields :: RowList Type) (t :: Type) | fields -> t
-
-instance singleToSingleColumn :: ToSingleColumn (RL.Cons name t RL.Nil) t
-
--- | Query projections should not repeat column names
-class UniqueColumnNames (some :: Row Type) (more :: Row Type)
-
-instance sameUniqueColumnNames :: UniqueColumnNames fields fields
 
 from :: forall f s parameters fields. ToFrom f s parameters fields => f -> Select s parameters -> From f (Select s parameters) parameters fields
 from = toFrom
@@ -246,18 +226,59 @@ wher (Filters filtered) fr = Where filtered fr
 data As q (alias :: Symbol) (parameters :: Row Type) (projection :: Row Type) = As q
 
 --restrict it to fields that were actually selected
-class ToAs q parameters projection | q -> parameters, q -> projection where
-      toAs :: forall name. Alias name -> q -> As q name parameters projection
+class ToAs q name parameters projection | q -> name, q -> parameters, q -> projection where
+      toAs :: Alias name -> q -> As q name parameters projection
 
 --like this, naked selects cannot aliased
---we likely want to be able to alias individual columns
-instance subQueryFromToAs :: ToProjection s fields projection => ToAs (From f (Select s parameters) parameters fields) parameters projection where
+instance intToAs :: (IsSymbol name, Cons name Int () projection) => ToAs Int name parameters projection where
+      toAs _ n =  As n
+
+instance subQueryFromToAs :: ToProjection s fields projection => ToAs (From f (Select s parameters) parameters fields) name parameters projection where
       toAs _ q = As q
 
-instance whereSelectScalarToAs :: ToAs f parameters projection => ToAs (Where f has parameters) parameters projection where
+instance whereSelectScalarToAs :: ToAs f n parameters projection => ToAs (Where f has parameters) name parameters projection where
       toAs _ q = As q
 
-as :: forall q projection parameters name. ToAs q parameters projection => Alias name -> q -> As q name parameters projection
+as :: forall q projection parameters name. ToAs q name parameters projection => Alias name -> q -> As q name parameters projection
 as a q = toAs a q
 
 
+------------------------Projection machinery---------------------------
+
+-- | Row Type of columns projected by the query
+class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s -> fields, s -> projection
+
+--sub query as column
+--might need to fail tuples here too
+instance selectFromToProjection :: ToProjection s fields single => ToProjection (From f (Select s parameters) parameters fields) () single
+else
+instance asWhereToProjection :: ToProjection f () extra => ToProjection (Where f has parameters) () extra
+else
+instance intAsToProjection :: ToProjection (As Int alias parameters projection) fields projection
+else
+instance asToProjection :: (
+      ToProjection q () extra,
+      RowToList extra list,
+      ToSingleColumn list t,
+      Cons alias t () single
+) => ToProjection (As q alias parameters projection) fields single
+else
+instance fieldToProjection :: (Cons name t e fields, Cons name t () projection) => ToProjection (Field name) fields projection
+else
+--union not needed
+instance starToProjection :: Union fields () projection => ToProjection Star fields projection
+else
+instance tupleToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple (Select s parameters) (Select t parameters)) fields extra
+else
+instance selectToProjection :: ToProjection s fields projection => ToProjection (Select s parameters) fields projection
+else
+instance f :: Fail (Text "Cannot recognize projection") => ToProjection x f p
+
+class ToSingleColumn (fields :: RowList Type) (t :: Type) | fields -> t
+
+instance singleToSingleColumn :: ToSingleColumn (RL.Cons name t RL.Nil) t
+
+-- | Query projections should not repeat column names
+class UniqueColumnNames (some :: Row Type) (more :: Row Type)
+
+instance sameUniqueColumnNames :: UniqueColumnNames fields fields

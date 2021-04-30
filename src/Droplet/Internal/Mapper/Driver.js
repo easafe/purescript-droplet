@@ -10,19 +10,19 @@ var pg = require('pg');
 // pg does strange thing converting DATE
 // value to js Date, so we have
 // to prevent this craziness
-pg.types.setTypeParser(1082 /* DATE_OID */, function(dateString) { return dateString; });
+pg.types.setTypeParser(1082 /* DATE_OID */, function (dateString) { return dateString; });
 
 exports.connect_ = function (config) {
     return function (pool) {
         return function (onError, onSuccess) {
-            var p = pool.connect().then(function(client) {
+            var p = pool.connect().then(function (client) {
                 onSuccess(config.right({
                     client: client,
-                    done: function() {
+                    done: function () {
                         return client.release();
                     }
                 }));
-            }).catch(function(err) {
+            }).catch(function (err) {
                 var pgError = config.nullableLeft(err);
                 if (pgError) {
                     onSuccess(pgError);
@@ -39,31 +39,29 @@ exports.connect_ = function (config) {
     };
 };
 
-exports.rawQuery_ = function(config) {
+exports.rawQuery_ = function (config) {
     // Either `Pool` or `Client` instance
-    return function(dbHandle) {
-        return function(sql) {
-            return function(values) {
-                return function(onError, onSuccess) {
-                    var q = dbHandle.query({
-                        text: sql,
-                        values: values,
-                        rowMode: 'array',
-                    }).then(function(result) {
-                        onSuccess(config.right(result));
-                    }).catch(function(err) {
-                        var pgError = config.nullableLeft(err);
-                        if (pgError) {
-                            onSuccess(pgError);
-                        } else {
-                            onError(err);
-                        }
-                    });
+    return function (dbHandle) {
+        return function (rq) {
+            return function (onError, onSuccess) {
+                var q = dbHandle.query({
+                    name: rq.name,
+                    text: rq.text,
+                    values: rq.values
+                }).then(function (result) {
+                    onSuccess(config.right(result));
+                }).catch(function (err) {
+                    var pgError = config.nullableLeft(err);
+                    if (pgError) {
+                        onSuccess(pgError);
+                    } else {
+                        onError(err);
+                    }
+                });
 
-                    return function (cancelError, cancelerError, cancelerSuccess) {
-                        q.cancel();
-                        cancelerSuccess();
-                    };
+                return function (cancelError, cancelerError, cancelerSuccess) {
+                    q.cancel();
+                    cancelerSuccess();
                 };
             };
         };

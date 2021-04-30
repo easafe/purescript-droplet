@@ -11,8 +11,6 @@ import Prelude
 import Data.Array ((..), (:))
 import Data.Array as DA
 import Data.Foldable as DF
-import Data.Maybe (Maybe(..))
-import Data.Maybe as DM
 import Data.String as DST
 import Data.String.Regex as DSR
 import Data.String.Regex.Flags (global)
@@ -32,13 +30,13 @@ newtype NakedSelect s = NakedSelect s
 
 --cant be a functor because of parameters kind
 data Query (projection :: Row Type) parameters =
-      Parameterized String (Maybe String) String (Record parameters) | -- keyword, parameter list, body; dont include name as it has to be unique per session
+      Parameterized Plan String String (Record parameters) | -- plan name, parameter names for debugging, body and parameters
       Plain String
 
 --for debugging
 instance queryShow :: Show (Query projection parameters) where
       show = case _ of
-            Parameterized q r s _ -> q <> "plan" <> DM.fromMaybe "" r <> s
+            Parameterized _ r s _ -> r <> s
             Plain q -> q
 
 -- use this instead of toQuery
@@ -58,8 +56,8 @@ ToQuery should print valid sql strings but reject queries that can't be executed
 2. parameters are changed from @name to $n format
       ToQuery rejects any query that includes parameters but no PREPARE statement
 
-2. PREPARE statements are not fully printed here
-      PREPARE names must be unique per session
+2. PREPARE statements are not printed here
+      pg will do it for us
 
 -}
 
@@ -67,9 +65,9 @@ ToQuery should print valid sql strings but reject queries that can't be executed
 
 --quite a hack, stand to gain from cleaner implementation
 instance prepareToQuery :: (ToQuery q projection Parameterized, RowToList parameters list, ToNames list) => ToQuery (Prepare q parameters) projection is where
-      toQuery (Prepare q parameters) _ = Parameterized prepareKeyword parameterList body $ UC.unsafeCoerce parameters
+      toQuery (Prepare q parameters plan) _ = Parameterized plan parameterList body $ UC.unsafeCoerce parameters
             where body = DF.foldl replace (extractPlain $ toQuery q (Proxy :: Proxy Parameterized)) $ DA.zip names indexes
-                  parameterList = Just <<< DST.joinWith comma $ map (atToken <> _) names -- to help debugging
+                  parameterList = DST.joinWith comma $ map (atToken <> _) names -- to help debugging
 
                   names = toNames (Proxy :: Proxy list)
                   indexes = map (\i -> parameterToken <> show i) (1 .. DA.length names)
@@ -89,35 +87,42 @@ instance consToNames :: (IsSymbol name, ToNames rest) => ToNames (RL.Cons name t
 ----------------------SELECT----------------------------
 
 --naked selects
-instance intToQuery :: ToQuery (NakedSelect Int) projection is where
-      toQuery (NakedSelect n) _ = Plain $ show n
+instance intToQuery :: IsSymbol name => ToQuery (NakedSelect (As Int name p pp)) projection is where
+      toQuery (NakedSelect (As n)) _ = Plain $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 else
 instance asSelectToQuery :: (IsSymbol name, ToQuery q p is) => ToQuery (NakedSelect (As q name parameters projection)) p is where
       toQuery (NakedSelect a) s = Plain $ toAsQuery a s
 else
-instance tupleToQuery :: (ToQuery (NakedSelect s) projection is, ToQuery (NakedSelect t) projection is) => ToQuery (NakedSelect (Tuple (Select s parameters) (Select t parameters))) projection is where
-      toQuery (NakedSelect (Tuple (Select s) (Select t))) st = Plain $ extractPlain (toQuery (NakedSelect s) st) <> comma <> extractPlain (toQuery (NakedSelect t) st)
+instance tupleToQuery :: (ToQuery (NakedSelect s) p is, ToQuery (NakedSelect t) pp is) => ToQuery (NakedSelect (Tuple (Select s parameters) (Select t parameters))) projection is where
+      toQuery (NakedSelect (Tuple (Select s) (Select t))) is = Plain $ extractPlain (toQuery (NakedSelect s) is) <> comma <> extractPlain (toQuery (NakedSelect t) is)
 else
 instance failNakedToQuery :: Fail (Text "Naked select columns must be either scalar values or named subqueries") => ToQuery (NakedSelect s) projection is where
       toQuery _ _ = Plain "impossible"
 
 instance selectToQuery :: (
+      ToQuery (NakedSelect s) u is,
       ToProjection s () fields,
       Nub fields unique,
-      UniqueColumnNames fields unique,
-      ToQuery (NakedSelect s) unique is
+      UniqueColumnNames fields unique
 ) => ToQuery (Select s parameters) unique is where
-      toQuery (Select s) st = Plain $ selectKeyword <> extractPlain (toQuery (NakedSelect s) st)
+      toQuery (Select s) is = Plain $ selectKeyword <> extractPlain (toQuery (NakedSelect s) is)
 
 --fully clothed selects
 class ToSelectQuery q (is :: IsParameterized) where
       toSelectQuery :: q -> Proxy is -> String
 
+--we likely want more instances of named columns and abstrac it with a function
+instance asIntToSelectQuery :: IsSymbol name => ToSelectQuery (As Int name parameters projection) is where
+      toSelectQuery (As n) _ =
+            show n <>
+            asKeyword <>
+            DS.reflectSymbol (Proxy :: Proxy name)
+else
 instance asToSelectQuery :: (IsSymbol name, ToQuery q projection is) => ToSelectQuery (As q name parameters projection) is where
-      toSelectQuery a s = toAsQuery a s
+      toSelectQuery a is = toAsQuery a is
 
 instance selectToSelectQuery :: ToSelectQuery s is => ToSelectQuery (Select s parameters) is where
-      toSelectQuery (Select s) st = selectKeyword <> toSelectQuery s st
+      toSelectQuery (Select s) is = selectKeyword <> toSelectQuery s is
 
 instance fieldToSelectQuery :: IsSymbol name => ToSelectQuery (Field name) is where
       toSelectQuery _ _ =  DS.reflectSymbol (Proxy :: Proxy name)
@@ -125,33 +130,30 @@ instance fieldToSelectQuery :: IsSymbol name => ToSelectQuery (Field name) is wh
 instance tableToSelectQuery :: ToSelectQuery Star is where
       toSelectQuery _ _ = starToken
 
-instance intToSelectQuery :: ToSelectQuery Int is where
-      toSelectQuery n _ = show n
-
 instance tupleToSelectQuery :: (ToSelectQuery s is, ToSelectQuery t is) => ToSelectQuery (Tuple (Select s parameters) (Select t parameters)) is where
-      toSelectQuery (Tuple (Select s) (Select t)) st = toSelectQuery s st <> comma <> toSelectQuery t st
+      toSelectQuery (Tuple (Select s) (Select t)) is = toSelectQuery s is <> comma <> toSelectQuery t is
 
 
 
 -------------------------------FROM----------------------------
 
 instance fromTableToQuery :: (
+      ToSelectQuery s is,
       IsSymbol name,
-      ToProjection s fields projection,
-      ToSelectQuery s is
+      ToProjection s fields projection
 ) => ToQuery (From (Table name fields) s parameters fields) projection is where
-      toQuery (From _ s) st = Plain $ toSelectQuery s st <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
+      toQuery (From _ s) is = Plain $ toSelectQuery s is <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 instance fromAsToQuery :: (
-      IsSymbol name,
-      ToProjection s projection p,
+      ToSelectQuery s is,
       ToQuery q p is,
-      ToSelectQuery s is
+      IsSymbol name,
+      ToProjection s projection p
 ) => ToQuery (From (As q name parameters projection) s parameters projection) p is where
-      toQuery (From a s) st = Plain $
-            toSelectQuery s st <>
+      toQuery (From a s) is = Plain $
+            toSelectQuery s is <>
             fromKeyword <>
-            toAsQuery a st
+            toAsQuery a is
 
 
 -------------------------------WHERE----------------------------
@@ -160,7 +162,7 @@ instance whereFailToQuery :: Fail (Text "Parameters must be set. See Droplet.pre
       toQuery _ _ = Plain "impossible"
 else
 instance whereToQuery :: ToQuery f projection is => ToQuery (Where f has parameters) projection is where
-      toQuery (Where filtered fr) st = Plain $ extractPlain (toQuery fr st) <> whereKeyword <> printFilter filtered
+      toQuery (Where filtered fr) is = Plain $ extractPlain (toQuery fr is) <> whereKeyword <> printFilter filtered
             where printFilter = case _ of
                         Operation field otherField op -> field <> printOperator op <> otherField
                         And filter otherFilter -> openBracket <> printFilter filter <> andKeyword <> printFilter otherFilter <> closeBracket
@@ -171,9 +173,9 @@ instance whereToQuery :: ToQuery f projection is => ToQuery (Where f has paramet
                         NotEquals -> notEqualsSymbol
 
 toAsQuery :: forall name p q is parameters projection. IsSymbol name => ToQuery q p is => As q name parameters projection -> Proxy is -> String
-toAsQuery (As q) st =
+toAsQuery (As q) is =
       openBracket <>
-      extractPlain (toQuery q st) <>
+      extractPlain (toQuery q is) <>
       closeBracket <>
       asKeyword <>
       DS.reflectSymbol (Proxy :: Proxy name)
@@ -198,9 +200,6 @@ andKeyword = " AND "
 
 orKeyword :: String
 orKeyword = " OR "
-
-prepareKeyword :: String
-prepareKeyword = "PREPARE "
 
 asKeyword :: String
 asKeyword = " AS "

@@ -9,7 +9,8 @@ import Data.Either (Either(..), either, hush)
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (class Newtype)
-import Data.Nullable (Nullable, toMaybe, toNullable)
+import Data.Nullable (Nullable, null, toMaybe, toNullable)
+import Data.Nullable as DN
 import Data.Profunctor (lcmap)
 import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..))
@@ -18,6 +19,7 @@ import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Droplet.Internal.Edsl.Filter (NotParameterized)
+import Droplet.Internal.Edsl.Language (Plan(..))
 import Droplet.Internal.Mapper.Pool (Pool)
 import Droplet.Internal.Mapper.Query (Query(..))
 import Droplet.Internal.Mapper.Query as DIMQ
@@ -35,16 +37,12 @@ import Prim.RowList as RL
 import Record (delete) as Record
 import Record as R
 import Type.Proxy (Proxy(..))
+import Type.Row.Homogeneous (class Homogeneous)
 import Unsafe.Coerce (unsafeCoerce)
 
 type ConnectResult = {
       client :: Client,
       done :: Effect Unit
-}
-
-type QueryResult = {
-      rows :: Array (Array Foreign),
-      rowCount :: Int
 }
 
 data PGError =
@@ -117,10 +115,21 @@ foreign import connect_ :: forall a. {
       right :: a -> Either PGError ConnectResult
 } -> Pool -> EffectFnAff (Either PGError ConnectResult)
 
-foreign import rawQuery_ :: {
-      nullableLeft :: Error -> Nullable (Either PGError QueryResult),
-      right :: QueryResult -> Either PGError QueryResult
-} -> UntaggedConnection -> String -> Array Foreign -> EffectFnAff (Either PGError QueryResult)
+type QueryResult r = {
+      rows :: Homogeneous r Foreign => Array (Record r),
+      rowCount :: Int
+}
+
+type RawQuery = {
+      name :: Nullable String,
+      text :: String,
+      values :: Array Foreign
+}
+
+foreign import rawQuery_ :: forall r. {
+      nullableLeft :: Error -> Nullable (Either PGError (QueryResult r)),
+      right :: QueryResult r -> Either PGError (QueryResult r)
+} -> UntaggedConnection -> RawQuery -> EffectFnAff (Either PGError (QueryResult r))
 
 foreign import sqlState_ :: Error -> Nullable String
 foreign import errorDetail_ :: Error -> PGErrorDetail
@@ -136,26 +145,38 @@ instance consToValues :: (IsSymbol name, Cons name t e record, ToValues record r
 
 --Query needs to include the final output in its type
 -- select columns need a way to map fields to whatever type (only for outermost select tho!)
+-- we prolly need something that formats parameters
 -- query :: forall q projection parameters result. Query q projection starting => ToResult projection result Connection -> q -> Aff (Either PGError result)
 -- query connection q = do
 --       raw <- rawQuery connection $ DIMQ.query q
 --       pure $ raw >>= _.rows >>> traverse (?tr >>> lmap ConversionError)
 
-rawQuery :: forall projection parameters list. RowToList parameters list => ToValues parameters list => Connection -> Query projection parameters -> Aff (Either PGError QueryResult)
-rawQuery connection q = EAC.fromEffectFnAff $ rawQuery_ rightLeft (toUntaggedHandler connection) sql parameters
-      where Tuple sql parameters = case q of
-                  Plain s -> Tuple s []
-                  Parameterized keyword _ s p -> Tuple (keyword <> ?name <> ?parameterList <> s) $ toValues (Proxy :: Proxy list) p
+-- r has to match fields of projection
+-- rawQuery :: forall projection r parameters list. RowToList parameters list => ToValues parameters list => Connection -> Query projection parameters -> Aff (Either PGError (QueryResult r))
+-- rawQuery connection q = EAC.fromEffectFnAff $ rawQuery_ rightLeft (toUntaggedHandler connection) rq
+--       where rq = case q of
+--                   Plain s -> {
+--                         name: null,
+--                         text: s,
+--                         values: []
+--                   }
+--                   Parameterized plan _ s p -> {
+--                         name: case plan of
+--                               NotNamed -> null
+--                               Named n -> DN.notNull n,
+--                         text: s,
+--                         values: toValues (Proxy :: Proxy list) p
+--                   }
 
-            toUntaggedHandler :: Connection -> UntaggedConnection
-            toUntaggedHandler (Connection c) = case c of
-                  Left pool -> unsafeCoerce pool
-                  Right client -> unsafeCoerce client
+--             toUntaggedHandler :: Connection -> UntaggedConnection
+--             toUntaggedHandler (Connection c) = case c of
+--                   Left pool -> unsafeCoerce pool
+--                   Right client -> unsafeCoerce client
 
-            rightLeft = {
-                  nullableLeft: toNullable <<< map Left <<< convertError,
-                  right: Right
-            }
+--             rightLeft = {
+--                   nullableLeft: toNullable <<< map Left <<< convertError,
+--                   right: Right
+--             }
 
 -- | Run an action with a connection. The connection is released to the pool
 -- | when the action returns.
@@ -167,7 +188,7 @@ withClient p k = bracket (connect p) cleanup run
 
             run = case _ of
                   Left err -> k $ Left err
-                  Right { client } -> Right client
+                  Right { client } -> k $ Right client
 
 connect :: Pool -> Aff (Either PGError ConnectResult)
 connect = EAC.fromEffectFnAff <<< connect_ {
