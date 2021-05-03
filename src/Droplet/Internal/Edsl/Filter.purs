@@ -7,6 +7,7 @@ import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy(..))
+
 data IsParameterized
 
 foreign import data Parameterized :: IsParameterized
