@@ -44,8 +44,9 @@ query :: forall q projection parameters. ToQuery q projection NotParameterized =
 query q = toQuery q (Proxy :: Proxy NotParameterized)
 
 --any way to not have to pass the proxy around?
-class ToQuery q projection (is :: IsParameterized) | q -> projection where
-      toQuery :: forall parameters. q -> Proxy is -> Query projection parameters
+-- we prolly can work something here with parameters row list to get rid of IsParameterized and not need to annotate types of queries without parameters
+class ToQuery q projection (is :: IsParameterized) parameters | q -> projection, q -> parameters where
+      toQuery :: q -> Proxy is -> Query projection parameters
 
 {-
 

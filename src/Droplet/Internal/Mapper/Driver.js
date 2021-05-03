@@ -49,7 +49,7 @@ exports.rawQuery_ = function (config) {
                     text: rq.text,
                     values: rq.values
                 }).then(function (result) {
-                    onSuccess(config.right(result));
+                    onSuccess(config.right(result.rows));
                 }).catch(function (err) {
                     var pgError = config.nullableLeft(err);
                     if (pgError) {
@@ -59,7 +59,7 @@ exports.rawQuery_ = function (config) {
                     }
                 });
 
-                return function (cancelError, cancelerError, cancelerSuccess) {
+                return function (_, __, cancelerSuccess) {
                     q.cancel();
                     cancelerSuccess();
                 };
