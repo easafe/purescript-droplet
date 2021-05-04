@@ -3,11 +3,14 @@ module Droplet.Internal.Mapper.Driver where
 import Prelude
 
 import Control.Monad.Error.Class (catchError, throwError)
+import Control.Monad.Except as CME
 import Data.Array (head, (:))
 import Data.Bifunctor (lmap)
+import Data.Bifunctor as DB
 import Data.Either (Either(..), either, hush)
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe as DM
 import Data.Newtype (class Newtype)
 import Data.Nullable (Nullable, null, toMaybe, toNullable)
 import Data.Nullable as DN
@@ -16,7 +19,9 @@ import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..))
 import Data.String as String
 import Data.Symbol (class IsSymbol)
+import Data.Symbol as DS
 import Data.Traversable (traverse)
+import Data.Traversable as DT
 import Data.Tuple (Tuple(..))
 import Droplet.Internal.Edsl.Filter (NotParameterized)
 import Droplet.Internal.Edsl.Language (Plan(..))
@@ -31,11 +36,15 @@ import Effect.Class (liftEffect)
 import Effect.Exception (Error)
 import Foreign (Foreign)
 import Foreign as F
-import Prim.Row (class Cons)
+import Foreign.Object (Object)
+import Foreign.Object as FO
+import Partial.Unsafe as PU
+import Prim.Row (class Cons, class Lacks)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Record (delete) as Record
 import Record as R
+import Record.Unsafe as RU
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
 import Unsafe.Coerce (unsafeCoerce)
@@ -45,7 +54,7 @@ type ConnectResult = {
       done :: Effect Unit
 }
 
-data PGError =
+data PgError =
       ClientError Error String |
       ConversionError String |
       InternalError PGErrorDetail |
@@ -58,25 +67,25 @@ data PGError =
       TransactionRollbackError PGErrorDetail
 
 -- | Those instances are required for testing.
-instance eqPGError :: Eq PGError where
+instance eqPGError :: Eq PgError where
       eq = case _, _ of
-            (ClientError _ s1), (ClientError _ s2) -> s1 == s2
-            (ConversionError s1), (ConversionError s2) -> s1 == s2
-            (InternalError err1), (InternalError err2) -> eqErr err1 err2
-            (OperationalError err1), (OperationalError err2) -> eqErr err1 err2
-            (ProgrammingError err1), (ProgrammingError err2) -> eqErr err1 err2
-            (IntegrityError err1), (IntegrityError err2) -> eqErr err1 err2
-            (DataError err1), (DataError err2) -> eqErr err1 err2
-            (NotSupportedError err1), (NotSupportedError err2) -> eqErr err1 err2
-            (QueryCanceledError err1), (QueryCanceledError err2) -> eqErr err1 err2
-            (TransactionRollbackError err1), (TransactionRollbackError err2) -> eqErr err1 err2
+            ClientError _ s1, ClientError _ s2 -> s1 == s2
+            ConversionError s1, ConversionError s2 -> s1 == s2
+            InternalError err1, InternalError err2 -> eqErr err1 err2
+            OperationalError err1, OperationalError err2 -> eqErr err1 err2
+            ProgrammingError err1, ProgrammingError err2 -> eqErr err1 err2
+            IntegrityError err1, IntegrityError err2 -> eqErr err1 err2
+            DataError err1, DataError err2 -> eqErr err1 err2
+            NotSupportedError err1, NotSupportedError err2 -> eqErr err1 err2
+            QueryCanceledError err1, QueryCanceledError err2 -> eqErr err1 err2
+            TransactionRollbackError err1, TransactionRollbackError err2 -> eqErr err1 err2
             _, _ -> false
             where eqErr err1 err2 =
                         let _error = Proxy :: Proxy "error" in eq (Record.delete _error err1) (Record.delete _error err2)
 
-derive instance genericPGError :: Generic PGError _
+derive instance genericPGError :: Generic PgError _
 
-instance showPGError :: Show PGError where
+instance showPGError :: Show PgError where
       show = genericShow
 
 type PGErrorDetail = {
@@ -111,11 +120,9 @@ foreign import data UntaggedConnection :: Type
 foreign import data Client :: Type
 
 foreign import connect_ :: forall a. {
-      nullableLeft :: Error -> Nullable (Either PGError ConnectResult),
-      right :: a -> Either PGError ConnectResult
-} -> Pool -> EffectFnAff (Either PGError ConnectResult)
-
-type RawResut r = Homogeneous r Foreign => Array (Record r)
+      nullableLeft :: Error -> Nullable (Either PgError ConnectResult),
+      right :: a -> Either PgError ConnectResult
+} -> Pool -> EffectFnAff (Either PgError ConnectResult)
 
 type RawQuery = {
       name :: Nullable String,
@@ -123,34 +130,80 @@ type RawQuery = {
       values :: Array Foreign
 }
 
-foreign import rawQuery_ :: forall r. {
-      nullableLeft :: Error -> Nullable (Either PGError (RawResut r)),
-      right :: RawResut r -> Either PGError (RawResut r)
-} -> UntaggedConnection -> RawQuery -> EffectFnAff (Either PGError (RawResut r))
+foreign import rawQuery_ :: {
+      nullableLeft :: Error -> Nullable (Either PgError (Array (Object Foreign))),
+      right :: Array (Object Foreign) -> Either PgError (Array (Object Foreign))
+} -> UntaggedConnection -> RawQuery -> EffectFnAff (Either PgError (Array (Object Foreign)))
 
 foreign import sqlState_ :: Error -> Nullable String
 foreign import errorDetail_ :: Error -> PGErrorDetail
 
-class ToValues record (list :: RowList Type) where
+
+class ToValue v where
+      toValue :: v -> Foreign
+
+
+
+class FromValue t where
+      fromValue :: Foreign -> Either String t
+
+instance intFromValue :: FromValue Int where
+      fromValue = DB.lmap show <<< CME.runExcept <<< F.readInt
+
+
+
+class ToParameters record (list :: RowList Type) where
       toValues :: Proxy list -> Record record -> Array Foreign
 
-instance nilToValues :: ToValues record RL.Nil where
+instance nilToParameters :: ToParameters record RL.Nil where
       toValues _ _ = []
 
-instance consToValues :: (IsSymbol name, Cons name t e record, ToValues record rest) => ToValues record (RL.Cons name t rest) where
-      toValues _ record = F.unsafeToForeign (R.get (Proxy :: Proxy name) record) : toValues (Proxy :: Proxy rest) record
+instance consToParameters :: (
+      IsSymbol name,
+      ToValue t,
+      Cons name t e record,
+      ToParameters record rest
+) => ToParameters record (RL.Cons name t rest) where
+      toValues _ record = toValue (R.get (Proxy :: Proxy name) record) : toValues (Proxy :: Proxy rest) record
 
---Query needs to include the final output in its type
+
+
+class FromResult (projection :: RowList Type) result | projection -> result where
+      toResult :: Proxy projection -> Object Foreign -> Either String result
+
+instance nilFromResult :: FromResult RL.Nil (Record ()) where
+      toResult _ _ = Right {}
+
+instance consFromResult :: (
+      FromValue t,
+      FromResult rest (Record restProjection),
+      IsSymbol name,
+      Lacks name restProjection,
+      Cons name t restProjection projection
+) => FromResult (RL.Cons name t rest) (Record projection) where
+      toResult _ raw = case fromValue value of
+            Left error -> Left error
+            Right converted -> map (R.insert (Proxy :: Proxy name) converted) $ toResult (Proxy :: Proxy rest) raw
+            where value = PU.unsafePartial (DM.fromJust $ FO.lookup (DS.reflectSymbol (Proxy :: Proxy name)) raw)
+
+
+
 -- select columns need a way to map fields to whatever type (only for outermost select tho!)
--- we prolly need something that formats parameters
--- query :: forall q projection parameters result. ToQuery q projection starting => ToResult projection result => Connection -> q -> Aff (Either PGError result)
--- query connection q = do
---       raw <- rawQuery connection $ DIMQ.query q
---       pure $ raw >>= _.rows >>> traverse (?tr >>> lmap ConversionError)
--- r has to match fields of projection
-query :: forall projection r parameters list. RowToList parameters list => ToValues parameters list => Connection -> Query projection parameters -> Aff (Either PGError (RawResut r))
-query connection q = EAC.fromEffectFnAff $ rawQuery_ rightLeft (toUntaggedHandler connection) rq
-      where rq = case q of
+query :: forall projection pro parameters par.
+      RowToList parameters par =>
+      ToParameters parameters par =>
+      RowToList projection pro =>
+      FromResult pro (Record projection) =>
+      Connection ->
+      Query projection parameters ->
+      Aff (Either PgError (Array (Record projection)))
+query connection q = do
+      raw <- rawResults
+      case raw of
+            Left error -> pure $ Left error
+            Right r -> pure $ DT.traverse (DB.lmap ConversionError <<< toResult (Proxy :: Proxy pro)) r
+      where rawResults :: Aff (Either PgError (Array (Object Foreign)))
+            rawResults = EAC.fromEffectFnAff <<< rawQuery_ rightLeft (toUntaggedHandler connection) $ case q of
                   Plain s -> {
                         name: null,
                         text: s,
@@ -161,7 +214,7 @@ query connection q = EAC.fromEffectFnAff $ rawQuery_ rightLeft (toUntaggedHandle
                               NotNamed -> null
                               Named n -> DN.notNull n,
                         text: s,
-                        values: toValues (Proxy :: Proxy list) p
+                        values: toValues (Proxy :: Proxy par) p
                   }
 
 -- unsafeQuery :: forall parameters. String -> Record parameters ->
@@ -171,6 +224,10 @@ toUntaggedHandler (Connection c) = case c of
       Left pool -> unsafeCoerce pool
       Right client -> unsafeCoerce client
 
+rightLeft :: forall r s t. {
+      nullableLeft :: Error -> Nullable (Either PgError r),
+      right :: t -> Either s t
+}
 rightLeft = {
       nullableLeft: toNullable <<< map Left <<< convertError,
       right: Right
@@ -178,7 +235,7 @@ rightLeft = {
 
 -- | Run an action with a connection. The connection is released to the pool
 -- | when the action returns.
-withClient :: forall a. Pool -> (Either PGError Client -> Aff a) -> Aff a
+withClient :: forall a. Pool -> (Either PgError Client -> Aff a) -> Aff a
 withClient p k = bracket (connect p) cleanup run
       where cleanup = case _ of
                   Left _ -> pure unit
@@ -188,16 +245,16 @@ withClient p k = bracket (connect p) cleanup run
                   Left err -> k $ Left err
                   Right { client } -> k $ Right client
 
-connect :: Pool -> Aff (Either PGError ConnectResult)
+connect :: Pool -> Aff (Either PgError ConnectResult)
 connect = EAC.fromEffectFnAff <<< connect_ rightLeft
 
 -- | Trivial helper / shortcut which also wraps
 -- | the connection to provide `Connection`.
-withConnection :: forall a. Pool -> (Either PGError Connection -> Aff a) -> Aff a
+withConnection :: forall a. Pool -> (Either PgError Connection -> Aff a) -> Aff a
 withConnection p k = withClient p (lcmap (map fromClient) k)
 
 -- | TODO: Provide docs
--- withTransaction :: forall a. Pool -> (Connection -> Aff a) -> Aff (Either PGError a)
+-- withTransaction :: forall a. Pool -> (Connection -> Aff a) -> Aff (Either PgError a)
 -- withTransaction pool action =
 --       withClient pool case _ of
 --             Right client ->
@@ -208,10 +265,10 @@ withConnection p k = withClient p (lcmap (map fromClient) k)
 -- -- | TODO: Outdated docs
 -- -- | Run an action within a transaction. The transaction is committed if the
 -- -- | action returns cleanly, and rolled back if the action throws (either a
--- -- | `PGError` or a JavaScript exception in the Aff context). If you want to
+-- -- | `PgError` or a JavaScript exception in the Aff context). If you want to
 -- -- | change the transaction mode, issue a separate `SET TRANSACTION` statement
 -- -- | within the transaction.
--- withClientTransaction :: forall a. Client -> Aff a -> Aff (Either PGError a)
+-- withClientTransaction :: forall a. Client -> Aff a -> Aff (Either PgError a)
 -- withClientTransaction client action =
 --       begin >>= case _ of
 --                   Nothing -> do
@@ -240,7 +297,7 @@ fromClient client = Connection (Right client)
 --       Connection ->
 --       Query i o ->
 --       i ->
---       Aff (Maybe PGError)
+--       Aff (Maybe PgError)
 -- execute conn (Query sql) values = hush <<< either Right Left <$> rawQuery conn sql (toSQLRow values)
 
 -- | Execute a PostgreSQL query and return the first field of the first row in
@@ -252,14 +309,14 @@ fromClient client = Connection (Right client)
 --       Connection ->
 --       Query i (Row1 o) ->
 --       i ->
---       Aff (Either PGError (Maybe o))
+--       Aff (Either PgError (Maybe o))
 -- scalar conn sql values = query conn sql values <#> map (head >>> map (case _ of Row1 a -> a))
 
-convertError :: Error -> Maybe PGError
+convertError :: Error -> Maybe PgError
 convertError err = case toMaybe $ sqlState_ err of
       Nothing -> Nothing
       Just sqlState -> Just $ convert sqlState $ errorDetail_ err
-      where convert :: String -> PGErrorDetail -> PGError
+      where convert :: String -> PGErrorDetail -> PgError
             convert s =
                   if prefix "0A" s then
                         NotSupportedError
