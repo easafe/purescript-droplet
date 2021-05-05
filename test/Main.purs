@@ -7,7 +7,7 @@ import Prelude
 
 import Data.Date (Date)
 import Data.Date as DD
-import Data.DateTime (DateTime)
+import Data.DateTime (DateTime(..), Time(..))
 import Data.Either (Either(..))
 import Data.Enum (class BoundedEnum)
 import Data.Enum as DE
@@ -48,6 +48,9 @@ sent = Field
 
 date :: Field "date"
 date = Field
+
+joined :: Field "joined"
+joined = Field
 
 birthday :: Field "birthday"
 birthday = Field
@@ -225,9 +228,11 @@ main = TUM.runTest do
                   TU.test "sub Query.query" do
                         let q = select date # from (select (select date # from messages # as (Alias :: Alias "date")) # from users # as t)
                         notParameterized "SELECT date FROM (SELECT (SELECT date FROM messages) AS date FROM users) AS t" $ Query.query q
+                        -- result q [{date: makeDateTime 2000 3 4}, {date: makeDateTime 2000 3 4}]
                   TU.test "tuple" do
                         let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # as (Alias :: Alias "sent"))) # from messages # as t)
                         notParameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages) AS sent FROM messages) AS t" $ Query.query q
+
 
             TU.suite "where" do
                   TU.test "scalar" do
@@ -245,19 +250,19 @@ main = TUM.runTest do
 
             TU.suite "prepare" do
                   TU.test "scalar" do
-                        let parameters = {datep: makeDate 2000 3 4}
+                        let parameters = {date: makeDate 2000 3 4}
                         case Query.query <<< prepare NotNamed parameters $ select (4 # as n) # from (select (4 # as n) # from users # wher (joined .=. datep) # as (Alias :: Alias "u")) of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
                               Parameterized _ names s p -> do
-                                    TUA.equal "@id" names
+                                    TUA.equal "@date" names
                                     TUA.equal "SELECT 4 AS n FROM (SELECT 4 AS n FROM users WHERE joined = $1) AS u" s
                                     TUA.equal parameters p
                   TU.test "field" do
-                        let parameters = {datep: makeDate 2000 3 4 }
+                        let parameters = {date : makeDateTime 2000 3 4 }
                         case Query.query <<< prepare NotNamed parameters $ select id # from (select id # from messages # wher (date .=. datep) # as t) of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
                               Parameterized _ names s p -> do
-                                    TUA.equal "@id" names
+                                    TUA.equal "@date" names
                                     TUA.equal "SELECT id FROM (SELECT id FROM messages WHERE date = $1) AS t" s
                                     TUA.equal parameters p
                   TU.test "sub query" do
@@ -288,9 +293,12 @@ main = TUM.runTest do
                   let q = select ((3 # as b) /\ (select (34 # as n) # from users # wher (name .=. surname) # as t) /\ (4 # as (Alias :: Alias "a")) /\ (select name # from users # as (Alias :: Alias "u")))
                   notParameterized "SELECT 3 AS b, (SELECT 34 AS n FROM users WHERE name = surname) AS t, 4 AS a, (SELECT name FROM users) AS u" $ Query.query q
 
-makeDate y m d = DD.canonicalDate (u y) (u m) (u d)
-      where u :: forall a. BoundedEnum a => Int -> a
-            u v = PU.unsafePartial (DM.fromJust $ DE.toEnum v)
+makeDate y m d = DD.canonicalDate (unsafeToEnum y) (unsafeToEnum m) (unsafeToEnum d)
+
+makeDateTime y m d = DateTime (makeDate y m d) $ Time (unsafeToEnum 0) (unsafeToEnum 0) (unsafeToEnum 0) (unsafeToEnum 0)
+
+unsafeToEnum :: forall a. BoundedEnum a => Int -> a
+unsafeToEnum v = PU.unsafePartial (DM.fromJust $ DE.toEnum v)
 
 notParameterized :: forall projection p. String -> Query projection p -> _
 notParameterized s q = case q of

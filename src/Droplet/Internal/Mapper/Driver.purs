@@ -7,6 +7,7 @@ import Data.Array ((:))
 import Data.Bifunctor as DB
 import Data.Date (Date)
 import Data.Date as DD
+import Data.DateTime (DateTime(..))
 import Data.Either (Either(..))
 import Data.Either as DE
 import Data.Enum as DEN
@@ -158,13 +159,33 @@ instance stringFromValue :: FromValue String where
 instance dateFromValue :: FromValue Date where
     fromValue v = do
             s <- DB.lmap show <<< CME.runExcept $ F.readString v
-            let
-                  msg = "Date parsing failed for value: " <> s
-            case DST.split (Pattern "-") s of
-                  [y, m, d] -> do
-                        let result = DD.canonicalDate <$> (DEN.toEnum =<< DI.fromString y) <*> (DEN.toEnum =<< DI.fromString m) <*> (DEN.toEnum =<< DI.fromString d)
-                        DE.note msg result
-                  _ -> Left msg
+            parseDate s $ "ISO 8601 date parsing failed for value: " <> s
+
+instance dateTimeFromValue :: FromValue DateTime where
+    fromValue v = do
+            s <- DB.lmap show <<< CME.runExcept $ F.readString v
+            let errorMessage = "ISO 8601 date time parsing failed for value: " <> s
+            case DST.split (Pattern " ") s of
+                  [datePart, timePart] -> do
+                        date <- parseDate datePart errorMessage
+                        time <- parseTime timePart errorMessage
+                        Right $ DateTime date time
+                  _ -> Left errorMessage
+
+parseDate input errorMessage =
+      case DST.split (Pattern "-") input of
+            [y, m, d] -> do
+                  let result = DD.canonicalDate <$> (DEN.toEnum =<< DI.fromString y) <*> (DEN.toEnum =<< DI.fromString m) <*> (DEN.toEnum =<< DI.fromString d)
+                  DE.note errorMessage result
+            _ -> Left errorMessage
+
+--finish
+parseTime input errorMessage =
+      case DST.split (Pattern ":") input of
+            [h, m, s] -> do
+                  let result = DD.canonicalDate <$> (DEN.toEnum =<< DI.fromString y) <*> (DEN.toEnum =<< DI.fromString m) <*> (DEN.toEnum =<< DI.fromString d)
+                  DE.note msg result
+            _ -> Left errorMessage
 
 
 

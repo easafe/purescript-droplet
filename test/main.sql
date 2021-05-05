@@ -10,7 +10,8 @@ create table messages (
       id integer generated always as identity primary key,
       sender integer not null,
       recipient integer not null,
-      date timestamp default (now() at time zone 'utc'),
+      date timestamp without time zone default (now() at time zone 'utc'),
+      second_date timestamp with time zone default (now() at time zone 'utc'),
       sent bool not null,
 
       constraint sender_user foreign key (sender) references users(id),
@@ -32,6 +33,6 @@ end;
 insert into users (name, surname, birthday) values ('josh', 'j.', '1990-01-01');
 insert into users (name, surname, birthday) values ('mary', 'sue', '1900-11-11');
 
-insert into messages (sender, recipient, sent) values (1, 2, true);
-insert into messages (sender, recipient, sent) values (2, 1, true);
+insert into messages (sender, recipient, sent, date, second_date) values (1, 2, true, '2000-03-04', '2000-03-04');
+insert into messages (sender, recipient, sent, date, second_date) values (2, 1, true, '2000-03-04', '2000-03-04');
 
