@@ -12,5 +12,3 @@ output
 Scratch.*
 
 Invalid.*
-
-purescript-postgresql-client-pool-query/

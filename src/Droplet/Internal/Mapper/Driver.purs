@@ -5,8 +5,13 @@ import Prelude
 import Control.Monad.Except as CME
 import Data.Array ((:))
 import Data.Bifunctor as DB
+import Data.Date (Date)
+import Data.Date as DD
 import Data.Either (Either(..))
+import Data.Either as DE
+import Data.Enum as DEN
 import Data.Generic.Rep (class Generic)
+import Data.Int as DI
 import Data.Maybe (Maybe(..), maybe)
 import Data.Maybe as DM
 import Data.Newtype (class Newtype)
@@ -15,11 +20,12 @@ import Data.Nullable as DN
 import Data.Profunctor (lcmap)
 import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..))
+import Data.String as DST
 import Data.String as String
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Traversable as DT
-import Droplet (NotParameterized, Query)
+import Droplet (NotParameterized)
 import Droplet.Internal.Edsl.Language (Plan(..))
 import Droplet.Internal.Mapper.Pool (Pool)
 import Droplet.Internal.Mapper.Query (class ToQuery, Query(..))
@@ -123,6 +129,21 @@ instance showPGError :: Show PgError where
 class ToValue v where
       toValue :: v -> Foreign
 
+instance stringToValue :: ToValue String where
+      toValue = F.unsafeToForeign
+
+instance intToValue :: ToValue Int where
+      toValue = F.unsafeToForeign
+
+instance dateToValue :: ToValue Date where
+    toValue date =
+            let
+                  y = DEN.fromEnum $ DD.year date
+                  m = DEN.fromEnum $ DD.month date
+                  d = DEN.fromEnum $ DD.day date
+            in
+                  F.unsafeToForeign $ show y <> "-" <> show m <> "-" <> show d
+
 
 
 class FromValue t where
@@ -130,6 +151,20 @@ class FromValue t where
 
 instance intFromValue :: FromValue Int where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readInt
+
+instance stringFromValue :: FromValue String where
+      fromValue = DB.lmap show <<< CME.runExcept <<< F.readString
+
+instance dateFromValue :: FromValue Date where
+    fromValue v = do
+            s <- DB.lmap show <<< CME.runExcept $ F.readString v
+            let
+                  msg = "Date parsing failed for value: " <> s
+            case DST.split (Pattern "-") s of
+                  [y, m, d] -> do
+                        let result = DD.canonicalDate <$> (DEN.toEnum =<< DI.fromString y) <*> (DEN.toEnum =<< DI.fromString m) <*> (DEN.toEnum =<< DI.fromString d)
+                        DE.note msg result
+                  _ -> Left msg
 
 
 

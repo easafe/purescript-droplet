@@ -2,8 +2,8 @@ create table users (
       id integer generated always as identity primary key,
       name text not null,
       surname text not null,
-      birthday timestamp default (now() at time zone 'utc'),
-      joined timestamp default (now() at time zone 'utc')
+      birthday date default (now() at time zone 'utc'),
+      joined date default (now() at time zone 'utc')
 );
 
 create table messages (

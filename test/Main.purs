@@ -6,8 +6,13 @@ import Droplet.Internal.Edsl.Language
 import Prelude
 
 import Data.Date (Date)
+import Data.Date as DD
+import Data.DateTime (DateTime)
 import Data.Either (Either(..))
+import Data.Enum (class BoundedEnum)
+import Data.Enum as DE
 import Data.Maybe (Maybe(..))
+import Data.Maybe as DM
 import Data.Tuple.Nested ((/\))
 import Droplet.Internal.Mapper.Driver as Driver
 import Droplet.Internal.Mapper.Pool as DIMP
@@ -15,12 +20,13 @@ import Droplet.Internal.Mapper.Query (Query(..))
 import Droplet.Internal.Mapper.Query as Query
 import Effect (Effect)
 import Effect.Class (liftEffect)
+import Partial.Unsafe as PU
 import Test.Unit as TU
 import Test.Unit.Assert as TUA
 import Test.Unit.Main as TUM
 
 type Users = (id :: Int, name :: String, surname :: String, birthday :: Date, joined :: Date)
-type Messages = (id :: Int, name :: String, sent :: Boolean)
+type Messages = (id :: Int, sender :: Int, recipient :: Int, date :: DateTime, sent :: Boolean)
 
 users :: Table "users" Users
 users = Table
@@ -40,14 +46,32 @@ surname = Field
 sent :: Field "sent"
 sent = Field
 
-u :: Alias "u"
-u = Alias
+date :: Field "date"
+date = Field
+
+birthday :: Field "birthday"
+birthday = Field
 
 b :: Alias "b"
 b = Alias
 
+n :: Alias "n"
+n = Alias
+
+t :: Alias "t"
+t = Alias
+
+u :: Alias "u"
+u = Alias
+
 namep :: Parameter "name"
 namep = Parameter
+
+idp :: Parameter "id"
+idp = Parameter
+
+datep :: Parameter "date"
+datep = Parameter
 
 main :: Effect Unit
 main = TUM.runTest do
@@ -60,184 +84,213 @@ main = TUM.runTest do
       TU.suite "prepare and where" do
             TU.test "equals" do
                   let parameters = {name : "josh"}
-                  case Query.query <<< prepare NotNamed parameters $ select id # from users # wher (name .=. namep) of
+                  let q = prepare NotNamed parameters $ select id # from users # wher (name .=. namep)
+                  case Query.query q of
                         NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                        Parameterized _ names s q -> do
+                        Parameterized _ names s p -> do
                               TUA.equal "@name" names
                               TUA.equal "SELECT id FROM users WHERE name = $1" s
-                              TUA.equal parameters q
+                              TUA.equal parameters p
+                              result q [{id : 1}]
             TU.test "not equals" do
                   let parameters = {id: 3}
-                  case Query.query <<< prepare NotNamed parameters $ select id # from users # wher (id .<>. (Parameter :: Parameter "id")) of
+                  let q = prepare (Named "test-plan") parameters $ select id # from users # wher (id .<>. idp)
+                  case Query.query q of
                         NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                        Parameterized _ names s q -> do
+                        Parameterized _ names s p -> do
                               TUA.equal "@id" names
                               TUA.equal "SELECT id FROM users WHERE id <> $1" s
-                              TUA.equal parameters q
+                              TUA.equal parameters p
+                              result q [{id : 1}, {id: 2}]
 
             TU.suite "field" do
                   TU.test "equals" do
-                        let q = select (34 # as (Alias :: Alias "n")) # from users # wher (name .=. surname)
+                        let q = select (34 # as n) # from users # wher (name .=. surname)
                         notParameterized "SELECT 34 AS n FROM users WHERE name = surname" $ Query.query q
+                        result q []
                   TU.test "not equals" do
-                        let q = select (34 # as (Alias :: Alias "n")) # from users # wher (name .<>. surname)
+                        let q = select (34 # as n) # from users # wher (name .<>. surname)
                         notParameterized "SELECT 34 AS n FROM users WHERE name <> surname" $ Query.query q
+                        result q [{n : 34}, {n: 34}]
 
             TU.suite "logical operands" do
                   TU.suite "and" do
                         TU.test "single" do
                               let parameters = {name : "josh"}
-                              case Query.query <<< prepare NotNamed parameters $ select id # from users # wher (name .=. namep .&&. name .=. surname) of
+                              let q = prepare NotNamed parameters $ select id # from users # wher (name .=. namep .&&. name .<>. surname)
+                              case Query.query q of
                                     NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized _ names s q -> do
+                                    Parameterized _ names s p -> do
                                           TUA.equal "@name" names
-                                          TUA.equal "SELECT id FROM users WHERE (name = $1 AND name = surname)" s
-                                          TUA.equal parameters q
+                                          TUA.equal "SELECT id FROM users WHERE (name = $1 AND name <> surname)" s
+                                          TUA.equal parameters p
+                                          result q [{id : 1}]
                         TU.test "many" do
                               let parameters = {name : "josh", surname: "j."}
-                              case Query.query <<< prepare NotNamed parameters $ select id # from users # wher (name .=. namep .&&. name .=. surname .&&. surname .<>. (Parameter :: Parameter "surname")) of
+                              let q = prepare NotNamed parameters $ select id # from users # wher (name .=. namep .&&. namep .=. name .&&. surname .=. (Parameter :: Parameter "surname"))
+                              case Query.query q of
                                     NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized _ names s q -> do
+                                    Parameterized _ names s p -> do
                                           TUA.equal "@name, @surname" names
-                                          TUA.equal "SELECT id FROM users WHERE ((name = $1 AND name = surname) AND surname <> $2)" s
-                                          TUA.equal parameters q
+                                          TUA.equal "SELECT id FROM users WHERE ((name = $1 AND $1 = name) AND surname = $2)" s
+                                          TUA.equal parameters p
+                                          result q [{id : 1}]
 
                   TU.suite "or" do
                         TU.test "single" do
-                              let parameters = {name : "josh"}
-                              case Query.query <<< prepare NotNamed parameters $ select id # from users # wher (name .=. namep .||. name .=. surname) of
+                              let parameters = {name : "mary"}
+                              let q = prepare NotNamed parameters $ select id # from users # wher (name .=. namep .||. name .=. surname)
+                              case Query.query q of
                                     NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized _ names s q -> do
+                                    Parameterized _ names s p -> do
                                           TUA.equal "@name" names
                                           TUA.equal "SELECT id FROM users WHERE (name = $1 OR name = surname)" s
-                                          TUA.equal parameters q
-
+                                          TUA.equal parameters p
+                                          result q [{id : 2}]
                         TU.test "many" do
                               let parameters = {name : "josh", surname: "j."}
-                              case Query.query <<< prepare NotNamed parameters $ select id # from users # wher (name .=. namep .||. name .=. (Parameter :: Parameter "surname") .||. surname .<>. namep) of
+                              let q = prepare NotNamed parameters $ select id # from users # wher (name .=. namep .||. name .=. (Parameter :: Parameter "surname") .||. surname .<>. namep)
+                              case Query.query q of
                                     NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized _ names s q -> do
+                                    Parameterized _ names s p -> do
                                           TUA.equal "@name, @surname" names
                                           TUA.equal "SELECT id FROM users WHERE ((name = $1 OR name = $2) OR surname <> $1)" s
-                                          TUA.equal parameters q
+                                          TUA.equal parameters p
+                                          result q [{id : 1}, {id : 2}]
 
                   TU.suite "tuple" do
                         TU.test "not bracketed" do
                               let parameters = {id3 : 3, id33: 33, id333 : 333}
-                              case Query.query <<< prepare NotNamed parameters $ select id # from users # wher (id .=. (Parameter :: Parameter "id333") .||. id .=. (Parameter :: Parameter "id33") .&&. id .=. (Parameter :: Parameter "id3")) of
+                              let q = prepare NotNamed parameters $ select id # from users # wher (id .=. (Parameter :: Parameter "id333") .||. id .=. (Parameter :: Parameter "id33") .&&. id .=. (Parameter :: Parameter "id3"))
+                              case Query.query q of
                                     NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized _ names s q -> do
+                                    Parameterized _ names s p -> do
                                           TUA.equal "@id3, @id33, @id333" names
                                           TUA.equal "SELECT id FROM users WHERE (id = $3 OR (id = $2 AND id = $1))" s
-                                          TUA.equal parameters q
+                                          TUA.equal parameters p
+                                          result q []
                         TU.test "bracketed" do
-                              let parameters = {id3 : 3, id33: 33, id333 : 333}
-                              case Query.query <<< prepare NotNamed parameters $ select id # from users # wher ((id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33")) .&&. id .=. (Parameter :: Parameter "id333")) of
+                              let parameters = {id3: 2 , id33: 22, id333 : 2}
+                              let q = prepare NotNamed parameters $ select id # from users # wher ((id .=. (Parameter :: Parameter "id3") .||. id .=. (Parameter :: Parameter "id33")) .&&. id .=. (Parameter :: Parameter "id333"))
+                              case Query.query q of
                                     NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                                    Parameterized _ names s q -> do
+                                    Parameterized _ names s p -> do
                                           TUA.equal "@id3, @id33, @id333" names
                                           TUA.equal "SELECT id FROM users WHERE ((id = $1 OR id = $2) AND id = $3)" s
-                                          TUA.equal parameters q
+                                          TUA.equal parameters p
+                                          result q [{id: 2 }]
 
             TU.suite "prepared sub queries" do
                   TU.test "scalar" do
-                        let parameters = { d : "4" }
-                        case Query.query <<< prepare NotNamed parameters $ select (select (4 # as (Alias :: Alias "n")) # from users # wher (name .=. (Parameter :: Parameter "d")) # as b) of
+                        let parameters = { d : "mary" }
+                        let q = prepare NotNamed parameters $ select (select (4 # as n) # from users # wher (name .=. (Parameter :: Parameter "d")) # as b)
+                        case Query.query q of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                              Parameterized _ names s q -> do
+                              Parameterized _ names s p -> do
                                     TUA.equal "@d" names
                                     TUA.equal "SELECT (SELECT 4 AS n FROM users WHERE name = $1) AS b" s
-                                    TUA.equal parameters q
+                                    TUA.equal parameters p
+                                    result q [{b: 4 }]
                   TU.test "field" do
-                        let parameters = { d : "4" }
-                        case Query.query (prepare NotNamed parameters (select (select id # from users # wher (name .=. (Parameter :: Parameter "d")) # as b))) of
+                        let parameters = { d : "josh" }
+                        let q = prepare NotNamed parameters (select (select id # from users # wher (name .=. (Parameter :: Parameter "d")) # as b))
+                        case Query.query q of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                              Parameterized _ names s q -> do
+                              Parameterized _ names s p -> do
                                     TUA.equal "@d" names
                                     TUA.equal "SELECT (SELECT id FROM users WHERE name = $1) AS b" s
-                                    TUA.equal parameters q
+                                    TUA.equal parameters p
+                                    result q [{b: 1 }]
                   TU.test "tuple" do
-                        let parameters = { d : "4" }
-                        case Query.query (prepare NotNamed parameters (select ((3 # as (Alias :: Alias "e")) /\ (select id # from users # wher (name .=. (Parameter :: Parameter "d")) # as b) /\ (select name # from users # wher (name .=. (Parameter :: Parameter "d")) # as (Alias :: Alias "c"))))) of
+                        let parameters = { d : "mary" }
+                        let q = prepare NotNamed parameters (select ((3 # as (Alias :: Alias "e")) /\ (select id # from users # wher (name .=. (Parameter :: Parameter "d")) # as b) /\ (select name # from users # wher (name .=. (Parameter :: Parameter "d")) # as (Alias :: Alias "c"))))
+                        case Query.query q of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                              Parameterized _ names s q -> do
+                              Parameterized _ names s p -> do
                                     TUA.equal "@d" names
                                     TUA.equal "SELECT 3 AS e, (SELECT id FROM users WHERE name = $1) AS b, (SELECT name FROM users WHERE name = $1) AS c" s
-                                    TUA.equal parameters q
+                                    TUA.equal parameters p
+                                    result q [{e: 3, b: 2, c: "mary" }]
 
       TU.suite "as" do
             TU.suite "from" do
                   TU.test "scalar" do
-                        let q = select (4 # as (Alias :: Alias "n")) # from (select (4 # as (Alias :: Alias "n")) # from messages # as (Alias :: Alias "u"))
+                        let q = select (4 # as n) # from (select (4 # as n) # from messages # as (Alias :: Alias "u"))
                         notParameterized "SELECT 4 AS n FROM (SELECT 4 AS n FROM messages) AS u" $ Query.query q
+                        result q [{n: 4}, {n: 4}]
                   TU.test "field" do
-                        let q = select id # from (select id # from users # as (Alias :: Alias "t"))
-                        notParameterized "SELECT id FROM (SELECT id FROM users) AS t" $ Query.query q
+                        let q = select birthday # from (select birthday # from users # as t)
+                        notParameterized "SELECT birthday FROM (SELECT birthday FROM users) AS t" $ Query.query q
+                        result q [{birthday: makeDate 1990 1 1}, {birthday: makeDate 1900 11 11}]
                   TU.test "sub Query.query" do
-                        let q = select id # from (select (select id # from messages # as (Alias :: Alias "id")) # from users # as (Alias :: Alias "t"))
-                        notParameterized "SELECT id FROM (SELECT (SELECT id FROM messages) AS id FROM users) AS t" $ Query.query q
+                        let q = select date # from (select (select date # from messages # as (Alias :: Alias "date")) # from users # as t)
+                        notParameterized "SELECT date FROM (SELECT (SELECT date FROM messages) AS date FROM users) AS t" $ Query.query q
                   TU.test "tuple" do
-                        let q = select (id /\ name /\ (4 # as (Alias :: Alias "n")) /\ (Field :: Field "sent")) # from (select (id /\ name /\ (4 # as (Alias :: Alias "n")) /\ (select sent # from messages # as (Alias :: Alias "sent"))) # from messages # as (Alias :: Alias "t"))
-                        notParameterized "SELECT id, name, 4 AS n, sent FROM (SELECT id, name, 4 AS n, (SELECT sent FROM messages) AS sent FROM messages) AS t" $ Query.query q
+                        let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # as (Alias :: Alias "sent"))) # from messages # as t)
+                        notParameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages) AS sent FROM messages) AS t" $ Query.query q
 
             TU.suite "where" do
                   TU.test "scalar" do
-                        let q = select (4 # as (Alias :: Alias "n")) # from (select (4 # as (Alias :: Alias "n")) # from users # wher (id .=. id) # as (Alias :: Alias "u"))
+                        let q = select (4 # as n) # from (select (4 # as n) # from users # wher (id .=. id) # as (Alias :: Alias "u"))
                         notParameterized "SELECT 4 AS n FROM (SELECT 4 AS n FROM users WHERE id = id) AS u" $ Query.query q
                   TU.test "field" do
-                        let q = select id # from (select id # from messages # wher (id .=. id) # as (Alias :: Alias "t"))
+                        let q = select id # from (select id # from messages # wher (id .=. id) # as t)
                         notParameterized "SELECT id FROM (SELECT id FROM messages WHERE id = id) AS t" $ Query.query q
                   TU.test "sub Query.query" do
-                        let q = select (Field :: Field "id") # from (select (select id # from messages # wher (id .=. id) # as (Alias :: Alias "id")) # from users # wher (id .=. id) # as (Alias :: Alias "t"))
+                        let q = select (Field :: Field "id") # from (select (select id # from messages # wher (id .=. id) # as (Alias :: Alias "id")) # from users # wher (id .=. id) # as t)
                         notParameterized "SELECT id FROM (SELECT (SELECT id FROM messages WHERE id = id) AS id FROM users WHERE id = id) AS t" $ Query.query q
                   TU.test "tuple" do
-                        let q = select (id /\ name /\ (4 # as (Alias :: Alias "n")) /\ (Field :: Field "sent")) # from (select (id /\ name /\ (4 # as (Alias :: Alias "n")) /\ (select sent # from messages # wher (id .=. id) # as (Alias :: Alias "sent"))) # from messages # wher (id .=. id) # as (Alias :: Alias "t"))
-                        notParameterized "SELECT id, name, 4 AS n, sent FROM (SELECT id, name, 4 AS n, (SELECT sent FROM messages WHERE id = id) AS sent FROM messages WHERE id = id) AS t" $ Query.query q
+                        let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # wher (id .=. id) # as (Alias :: Alias "sent"))) # from messages # wher (id .=. id) # as t)
+                        notParameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages WHERE id = id) AS sent FROM messages WHERE id = id) AS t" $ Query.query q
 
             TU.suite "prepare" do
                   TU.test "scalar" do
-                        let parameters = {id :3 }
-                        case Query.query <<< prepare NotNamed parameters $ select (4 # as (Alias :: Alias "n")) # from (select (4 # as (Alias :: Alias "n")) # from users # wher (id .=. (Parameter :: Parameter "id")) # as (Alias :: Alias "u")) of
+                        let parameters = {datep: makeDate 2000 3 4}
+                        case Query.query <<< prepare NotNamed parameters $ select (4 # as n) # from (select (4 # as n) # from users # wher (joined .=. datep) # as (Alias :: Alias "u")) of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                              Parameterized _ names s q -> do
+                              Parameterized _ names s p -> do
                                     TUA.equal "@id" names
-                                    TUA.equal "SELECT 4 AS n FROM (SELECT 4 AS n FROM users WHERE id = $1) AS u" s
-                                    TUA.equal parameters q
+                                    TUA.equal "SELECT 4 AS n FROM (SELECT 4 AS n FROM users WHERE joined = $1) AS u" s
+                                    TUA.equal parameters p
                   TU.test "field" do
-                        let parameters = {id :3 }
-                        case Query.query <<< prepare NotNamed parameters $ select id # from (select id # from messages # wher (id .=. (Parameter :: Parameter "id")) # as (Alias :: Alias "t")) of
+                        let parameters = {datep: makeDate 2000 3 4 }
+                        case Query.query <<< prepare NotNamed parameters $ select id # from (select id # from messages # wher (date .=. datep) # as t) of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                              Parameterized _ names s q -> do
+                              Parameterized _ names s p -> do
                                     TUA.equal "@id" names
-                                    TUA.equal "SELECT id FROM (SELECT id FROM messages WHERE id = $1) AS t" s
-                                    TUA.equal parameters q
-                  TU.test "sub Query.query" do
+                                    TUA.equal "SELECT id FROM (SELECT id FROM messages WHERE date = $1) AS t" s
+                                    TUA.equal parameters p
+                  TU.test "sub query" do
                         let parameters = {id :3 }
-                        case Query.query <<< prepare NotNamed parameters $ select (Field :: Field "id") # from (select (select id # from messages # wher ((Parameter :: Parameter "id") .=. id) # as (Alias :: Alias "id")) # from users # wher (id .=. (Parameter :: Parameter "id")) # as (Alias :: Alias "t")) of
+                        case Query.query <<< prepare NotNamed parameters $ select (Field :: Field "id") # from (select (select id # from messages # wher (idp .=. id) # as (Alias :: Alias "id")) # from users # wher (id .=. idp) # as t) of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                              Parameterized _ names s q -> do
+                              Parameterized _ names s p -> do
                                     TUA.equal "@id" names
                                     TUA.equal "SELECT id FROM (SELECT (SELECT id FROM messages WHERE $1 = id) AS id FROM users WHERE id = $1) AS t" s
-                                    TUA.equal parameters q
+                                    TUA.equal parameters p
                   TU.test "tuple" do
                         let parameters = {id :3 }
-                        case Query.query <<< prepare NotNamed parameters $ select (id /\ name /\ (4 # as (Alias :: Alias "n")) /\ (Field :: Field "sent")) # from (select (id /\ name /\ (4 # as (Alias :: Alias "n")) /\ (select sent # from messages # wher ((Parameter :: Parameter "id") .=. (Parameter :: Parameter "id")) # as (Alias :: Alias "sent"))) # from messages # wher ((Parameter :: Parameter "id") .=. id) # as (Alias :: Alias "t")) of
+                        case Query.query <<< prepare NotNamed parameters $ select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # wher (idp .=. idp) # as (Alias :: Alias "sent"))) # from messages # wher (idp .=. id) # as t) of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
-                              Parameterized _ names s q -> do
+                              Parameterized _ names s p -> do
                                     TUA.equal "@id" names
-                                    TUA.equal "SELECT id, name, 4 AS n, sent FROM (SELECT id, name, 4 AS n, (SELECT sent FROM messages WHERE $1 = $1) AS sent FROM messages WHERE $1 = id) AS t" s
-                                    TUA.equal parameters q
+                                    TUA.equal "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages WHERE $1 = $1) AS sent FROM messages WHERE $1 = id) AS t" s
+                                    TUA.equal parameters p
 
       TU.suite "naked select" do
             TU.test "scalar" do
-                  let q = select (3 # as (Alias :: Alias "n"))
+                  let q = select (3 # as n)
                   notParameterized "SELECT 3 AS n" $ Query.query q
             TU.test "sub Query.query" do
-                  let q = select (select (34 # as (Alias :: Alias "n")) # from users # wher (name .=. surname) # as (Alias :: Alias "t"))
+                  let q = select (select (34 # as n) # from users # wher (name .=. surname) # as t)
                   notParameterized "SELECT (SELECT 34 AS n FROM users WHERE name = surname) AS t" $ Query.query q
             TU.test "tuple" do
-                  let q = select ((3 # as b) /\ (select (34 # as (Alias :: Alias "n")) # from users # wher (name .=. surname) # as (Alias :: Alias "t")) /\ (4 # as (Alias :: Alias "a")) /\ (select name # from users # as (Alias :: Alias "u")))
+                  let q = select ((3 # as b) /\ (select (34 # as n) # from users # wher (name .=. surname) # as t) /\ (4 # as (Alias :: Alias "a")) /\ (select name # from users # as (Alias :: Alias "u")))
                   notParameterized "SELECT 3 AS b, (SELECT 34 AS n FROM users WHERE name = surname) AS t, 4 AS a, (SELECT name FROM users) AS u" $ Query.query q
+
+makeDate y m d = DD.canonicalDate (u y) (u m) (u d)
+      where u :: forall a. BoundedEnum a => Int -> a
+            u v = PU.unsafePartial (DM.fromJust $ DE.toEnum v)
 
 notParameterized :: forall projection p. String -> Query projection p -> _
 notParameterized s q = case q of
