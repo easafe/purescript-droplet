@@ -7,7 +7,7 @@ import Data.Array ((:))
 import Data.Bifunctor as DB
 import Data.Date (Date)
 import Data.Date as DD
-import Data.DateTime (DateTime(..))
+import Data.DateTime (DateTime(..), Time(..))
 import Data.Either (Either(..))
 import Data.Either as DE
 import Data.Enum as DEN
@@ -137,13 +137,17 @@ instance intToValue :: ToValue Int where
       toValue = F.unsafeToForeign
 
 instance dateToValue :: ToValue Date where
-    toValue date =
-            let
-                  y = DEN.fromEnum $ DD.year date
-                  m = DEN.fromEnum $ DD.month date
-                  d = DEN.fromEnum $ DD.day date
-            in
-                  F.unsafeToForeign $ show y <> "-" <> show m <> "-" <> show d
+      toValue = F.unsafeToForeign <<< formatDate
+
+instance dateTimeToValue :: ToValue DateTime where
+      toValue (DateTime date (Time h m s ms)) = F.unsafeToForeign $ formatDate date <> "T" <> time <> "+0000"
+            where time = show (DEN.fromEnum h) <> ":" <> show (DEN.fromEnum m) <> ":" <> show (DEN.fromEnum s) <> "." <> show (DEN.fromEnum ms)
+
+formatDate :: Date -> String
+formatDate date = show y <> "-" <> show m <> "-" <> show d
+      where y = DEN.fromEnum $ DD.year date
+            m = DEN.fromEnum $ DD.month date
+            d = DEN.fromEnum $ DD.day date
 
 
 
@@ -156,13 +160,16 @@ instance intFromValue :: FromValue Int where
 instance stringFromValue :: FromValue String where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readString
 
+instance booleanFromValue :: FromValue Boolean where
+      fromValue = DB.lmap show <<< CME.runExcept <<< F.readBoolean
+
 instance dateFromValue :: FromValue Date where
-    fromValue v = do
+      fromValue v = do
             s <- DB.lmap show <<< CME.runExcept $ F.readString v
             parseDate s $ "ISO 8601 date parsing failed for value: " <> s
 
 instance dateTimeFromValue :: FromValue DateTime where
-    fromValue v = do
+      fromValue v = do
             s <- DB.lmap show <<< CME.runExcept $ F.readString v
             let errorMessage = "ISO 8601 date time parsing failed for value: " <> s
             case DST.split (Pattern " ") s of
@@ -172,6 +179,7 @@ instance dateTimeFromValue :: FromValue DateTime where
                         Right $ DateTime date time
                   _ -> Left errorMessage
 
+parseDate :: String -> String -> Either String Date
 parseDate input errorMessage =
       case DST.split (Pattern "-") input of
             [y, m, d] -> do
@@ -179,12 +187,12 @@ parseDate input errorMessage =
                   DE.note errorMessage result
             _ -> Left errorMessage
 
---finish
+parseTime :: String -> String -> Either String Time
 parseTime input errorMessage =
       case DST.split (Pattern ":") input of
             [h, m, s] -> do
-                  let result = DD.canonicalDate <$> (DEN.toEnum =<< DI.fromString y) <*> (DEN.toEnum =<< DI.fromString m) <*> (DEN.toEnum =<< DI.fromString d)
-                  DE.note msg result
+                  let result = Time <$> (DEN.toEnum =<< DI.fromString h) <*> (DEN.toEnum =<< DI.fromString m) <*> (DEN.toEnum =<< DI.fromString (DST.take 2 s)) <*> (DEN.toEnum 0)
+                  DE.note errorMessage result
             _ -> Left errorMessage
 
 
