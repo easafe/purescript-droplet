@@ -70,7 +70,7 @@ TABLE [ ONLY ] table_name [ * ]
 full select syntax supported by droplet
 
 SELECT
-      * | column | AS | [, ...]
+      * | column | AS | SELECT | [, ...]
       [ FROM ]
       [ WHERE ]
 
@@ -147,35 +147,31 @@ else
 instance starToSelect :: ToSelect Star Star parameters where
       toSelect s = Select s
 else
-instance intToSelect :: ToSelect (As Int name parameters projection) (As Int name parameters projection) parameters where
-      toSelect n = Select n
+instance asIntToSelect :: ToSelect (As Int alias parameters projection) (As Int alias parameters projection) parameters where
+      toSelect a = Select a
 else
---to desambiguate fields
-instance asFieldsToSelect :: ToSubSelect q => ToSelect (As q alias parameters projection) (As q alias parameters projection) parameters where
+instance asFieldToSelect :: ToSelect (As (Field name) alias parameters projection) (As (Field name) alias parameters projection) parameters where
+      toSelect a = Select a
+else
+instance asToSelect :: ToSubExpression q => ToSelect (As q alias parameters projection) (As q alias parameters projection) parameters where
       toSelect a = Select a
 else
 instance tupleToSelect :: (ToSelect r s parameters, ToSelect t u parameters) => ToSelect (Tuple r t) (Tuple (Select s parameters) (Select u parameters)) parameters where
       toSelect (Tuple s t) = Select <<< Tuple (toSelect s) $ toSelect t
 else
-instance fromToSelect :: Fail (Text "Subquery column must be named. See Droplet.as") => ToSelect (From f s parameters to) (From f s parameters to) parameters where
-      toSelect fr = Select fr
-else
-instance whereToSelect :: Fail (Text "Subquery column must be named. See Droplet.as") => ToSelect (Where f has parameters) (Where f has parameters) parameters where
-      toSelect wr = Select wr
-else
---not ideal, should be able to be regular type error
-instance elseToSelect :: Fail (Above (Text "Droplet.ToSelect cannot make a column out of") (Quote x)) => ToSelect x x p where
-      toSelect = Select
+instance fromFieldsToSelect :: ToSubExpression q => ToSelect q q parameters where
+      toSelect q = Select q
 
 -- we likely want to only accept if there is a limit statement
-class ToSubSelect (r :: Type)
+class ToSubExpression (r :: Type)
 
 --check if these can generate invalid prepare parameter queries
 --for sub queries only a single column can be returned
-instance fromFieldToSubSelect :: ToSubSelect (From f (Select (Field name) parameters) parameter fields)
-instance fromIntToSubSelect :: ToSubSelect (From f (Select (As Int name parameters projection) parameters) parameters fields)
-instance fromTupleToSubSelect :: Fail (Text "Subquery must return a single column") => ToSubSelect (From f (Select (Tuple a b) parameter) parameters fields)
-instance whereToSubSelect :: ToSubSelect f => ToSubSelect (Where f has parameters)
+instance fromFieldToSubExpression :: ToSubExpression (From f (Select (Field name) parameters) parameter fields)
+instance fromIntToSubExpression :: ToSubExpression (From f (Select (As Int name parameters projection) parameters) parameters fields)
+instance fromAsFieldToSubExpression :: ToSubExpression (From f (Select (As (Field name) alias parameters projection) parameters) parameters fields)
+instance whereToSubExpression :: ToSubExpression f => ToSubExpression (Where f has parameters)
+instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (From f (Select (Tuple a b) parameter) parameters fields)
 
 select :: forall r s parameters. ToSelect r s parameters => r -> Select s parameters
 select = toSelect
@@ -186,6 +182,7 @@ select = toSelect
 
 data From f s (parameters :: Row Type) (fields :: Row Type) = From f s
 
+--we could add the projection to Select here
 class ToFrom f s parameters fields | f -> s, f -> parameters, f -> fields where
       toFrom :: f -> Select s parameters -> From f (Select s parameters) parameters fields
 
@@ -229,8 +226,10 @@ data As q (alias :: Symbol) (parameters :: Row Type) (projection :: Row Type) = 
 class ToAs q name parameters projection | q -> name, q -> parameters, q -> projection where
       toAs :: Alias name -> q -> As q name parameters projection
 
---like this, naked selects cannot aliased
 instance intToAs :: (IsSymbol name, Cons name Int () projection) => ToAs Int name parameters projection where
+      toAs _ n =  As n
+
+instance fieldToAs :: ToAs (Field name) alias parameters () where
       toAs _ n =  As n
 
 instance subQueryFromToAs :: ToProjection s fields projection => ToAs (From f (Select s parameters) parameters fields) name parameters projection where
@@ -248,16 +247,18 @@ as a q = toAs a q
 -- | Row Type of columns projected by the query
 class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s -> fields, s -> projection
 
---sub query as column
---might need to fail tuples here too
-instance selectFromToProjection :: ToProjection s fields single => ToProjection (From f (Select s parameters) parameters fields) () single
-else
-instance asWhereToProjection :: ToProjection f () extra => ToProjection (Where f has parameters) () extra
-else
 instance intAsToProjection :: ToProjection (As Int alias parameters projection) fields projection
 else
+instance fieldAsToProjection :: (Cons name t e fields, Cons alias t e projection) => ToProjection (As (Field name) alias parameters p) fields projection
+else
+--sub query as column
+--might need to fail tuples here too
+instance selectFromToProjection :: ToProjection s fields single => ToProjection (From f (Select s parameters) parameters fields) other single
+else
+instance asWhereToProjection :: ToProjection f fields extra => ToProjection (Where f has parameters) fields extra
+else
 instance asToProjection :: (
-      ToProjection q () extra,
+      ToProjection q fields extra,
       RowToList extra list,
       ToSingleColumn list t,
       Cons alias t () single
