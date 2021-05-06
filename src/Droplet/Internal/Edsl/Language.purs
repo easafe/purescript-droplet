@@ -165,7 +165,6 @@ else instance tupleToSelect :: (ToSelect r s parameters, ToSelect t u parameters
 else instance fromFieldsToSelect :: ToSubExpression q parameters => ToSelect q q parameters where
       toSelect q = Select q
 
--- we likely want to only accept if there is a limit statement
 class ToSubExpression (r :: Type) (parameters :: Row Type) | r -> parameters
 
 --for sub queries only a single column can be returned

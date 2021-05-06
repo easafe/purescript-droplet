@@ -158,8 +158,8 @@ instance fromAsToQuery :: (
       ToSelectQuery s is (),
       ToQuery q p is (),
       IsSymbol name,
-      ToProjection s projection p
-) => ToQuery (From (As q name parameters projection) s parameters projection) p is () where
+      ToProjection s p projection
+) => ToQuery (From (As q name parameters p) s parameters fields) projection is () where
       toQuery (From a s) is = NotParameterized $
             toSelectQuery s is <>
             fromKeyword <>

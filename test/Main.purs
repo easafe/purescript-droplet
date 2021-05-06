@@ -225,6 +225,10 @@ main = TUM.runTest do
                         let q = select birthday # from (select birthday # from users # as t)
                         notParameterized "SELECT birthday FROM (SELECT birthday FROM users) AS t" $ Query.query q
                         result q [{birthday: makeDate 1990 1 1}, {birthday: makeDate 1900 11 11}]
+                  TU.test "renamed field" do
+                        let q = select (Field :: Field "t") # from (select (birthday # as t) # from users # as t)
+                        notParameterized "SELECT t FROM (SELECT birthday t FROM users) AS t" $ Query.query q
+                        result q [{t: makeDate 1990 1 1}, {t: makeDate 1900 11 11}]
                   TU.testSkip "sub query" do
                         let q = select date # from (select (select date # from messages) # from users # as t)
                         --needs limit
