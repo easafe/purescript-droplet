@@ -112,27 +112,36 @@ instance selectToQuery :: (
 class ToSelectQuery q (is :: IsParameterized) (parameters :: Row Type) | q -> parameters where
       toSelectQuery :: q -> Proxy is -> String
 
---we likely want more instances of named columns and abstrac it with a function
-instance asIntToSelectQuery :: IsSymbol name => ToSelectQuery (As Int name parameters projection) is () where
-      toSelectQuery (As n) _ =
-            show n <>
-            asKeyword <>
-            DS.reflectSymbol (Proxy :: Proxy name)
-else
-instance asToSelectQuery :: (IsSymbol name, ToQuery q projection is ()) => ToSelectQuery (As q name parameters projection) is () where
-      toSelectQuery a is = toAsQuery a is
 
 instance selectToSelectQuery :: ToSelectQuery s is () => ToSelectQuery (Select s parameters) is () where
       toSelectQuery (Select s) is = selectKeyword <> toSelectQuery s is
 
-instance fieldToSelectQuery :: IsSymbol name => ToSelectQuery (Field name) is () where
+else instance fieldToSelectQuery :: IsSymbol name => ToSelectQuery (Field name) is () where
       toSelectQuery _ _ =  DS.reflectSymbol (Proxy :: Proxy name)
 
-instance tableToSelectQuery :: ToSelectQuery Star is () where
+else instance tableToSelectQuery :: ToSelectQuery Star is () where
       toSelectQuery _ _ = starToken
 
-instance tupleToSelectQuery :: (ToSelectQuery s is (), ToSelectQuery t is ()) => ToSelectQuery (Tuple (Select s parameters) (Select t parameters)) is () where
+else instance tupleToSelectQuery :: (ToSelectQuery s is (), ToSelectQuery t is ()) => ToSelectQuery (Tuple (Select s parameters) (Select t parameters)) is () where
       toSelectQuery (Tuple (Select s) (Select t)) is = toSelectQuery s is <> comma <> toSelectQuery t is
+
+else instance asIntToSelectQuery :: IsSymbol name => ToSelectQuery (As Int name parameters projection) is () where
+      toSelectQuery (As n) _ =
+            show n <>
+            asKeyword <>
+            DS.reflectSymbol (Proxy :: Proxy name)
+
+else instance asFieldToSelectQuery :: (IsSymbol name, IsSymbol alias) => ToSelectQuery (As (Field name) alias parameters projection) is () where
+      toSelectQuery _ _ =
+            DS.reflectSymbol (Proxy :: Proxy name) <>
+            asKeyword <>
+            DS.reflectSymbol (Proxy :: Proxy alias)
+
+else instance asToSelectQuery :: (IsSymbol name, ToQuery q projection is ()) => ToSelectQuery (As q name parameters projection) is () where
+      toSelectQuery a is = toAsQuery a is
+
+else instance elseToSelectQuery :: ToQuery q projection is () => ToSelectQuery q is () where
+      toSelectQuery q is = openBracket <> extract (toQuery q is) <> closeBracket
 
 
 

@@ -183,7 +183,7 @@ main = TUM.runTest do
                                           TUA.equal parameters p
                                           result q [{id: 2 }]
 
-            TU.suite "prepared sub queries" do
+            TU.suite "prepared subqueries" do
                   TU.test "scalar" do
                         let parameters = { d : "mary" }
                         let q = prepare NotNamed parameters $ select (select (4 # as n) # from users # wher (name .=. (Parameter :: Parameter "d")) # as b)
@@ -205,15 +205,15 @@ main = TUM.runTest do
                                     TUA.equal parameters p
                                     result q [{b: 1 }]
                   TU.test "tuple" do
-                        let parameters = { d : "mary" }
-                        let q = prepare NotNamed parameters (select ((3 # as (Alias :: Alias "e")) /\ (select id # from users # wher (name .=. (Parameter :: Parameter "d")) # as b) /\ (select name # from users # wher (name .=. (Parameter :: Parameter "d")) # as (Alias :: Alias "c"))))
+                        let parameters = { d : "mary", e : 2 }
+                        let q = prepare NotNamed parameters (select ((3 # as (Alias :: Alias "e")) /\ (select id # from users # wher (name .=. (Parameter :: Parameter "d")) # as b) /\ (select id # from messages # wher (id .=. (Parameter :: Parameter "e")) # as n)))
                         case Query.query q of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
                               Parameterized _ names s p -> do
-                                    TUA.equal "@d" names
-                                    TUA.equal "SELECT 3 AS e, (SELECT id FROM users WHERE name = $1) AS b, (SELECT name FROM users WHERE name = $1) AS c" s
+                                    TUA.equal "@d, @e" names
+                                    TUA.equal "SELECT 3 AS e, (SELECT id FROM users WHERE name = $1) AS b, (SELECT id FROM messages WHERE id = $2) AS n" s
                                     TUA.equal parameters p
-                                    result q [{e: 3, b: 2, c: "mary" }]
+                                    result q [{e: 3, b: 2, n: 2 }]
 
       TU.suite "as" do
             TU.suite "from" do
@@ -225,13 +225,13 @@ main = TUM.runTest do
                         let q = select birthday # from (select birthday # from users # as t)
                         notParameterized "SELECT birthday FROM (SELECT birthday FROM users) AS t" $ Query.query q
                         result q [{birthday: makeDate 1990 1 1}, {birthday: makeDate 1900 11 11}]
-                  TU.test "sub query" do
-                        let q = select date # from (select (select date # from messages # as (Alias :: Alias "date")) # from users # as t)
+                  TU.testSkip "sub query" do
+                        let q = select date # from (select (select date # from messages) # from users # as t)
                         --needs limit
-                        notParameterized "SELECT date FROM (SELECT (SELECT date FROM messages) AS date FROM users) AS t" $ Query.query q
+                        notParameterized "SELECT date FROM (SELECT (SELECT date FROM messages) FROM users) AS t" $ Query.query q
                         result q [{date: makeDateTime 2000 3 4}, {date: makeDateTime 2000 3 4}]
-                  TU.test "tuple" do
-                        let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # as (Alias :: Alias "sent"))) # from messages # as t)
+                  TU.testSkip "tuple" do
+                        let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages)) # from messages # as t)
                         notParameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages) AS sent FROM messages) AS t" $ Query.query q
                         --needs limit
                         result q [{id: 1, date: makeDateTime 2000 3 4, n: 4, sent: true}, {id: 1, date: makeDateTime 2000 3 4, n: 4, sent: true}]
@@ -245,18 +245,19 @@ main = TUM.runTest do
                         let q = select id # from (select id # from messages # wher (id .=. id) # as t)
                         notParameterized "SELECT id FROM (SELECT id FROM messages WHERE id = id) AS t" $ Query.query q
                         result q [{id: 1}, {id: 2}]
-                  TU.test "sub query" do
-                        let q = select (Field :: Field "id") # from (select (select id # from messages # wher (id .=. id) # as (Alias :: Alias "id")) # from users # wher (id .=. id) # as t)
-                        notParameterized "SELECT id FROM (SELECT (SELECT id FROM messages WHERE id = id) AS id FROM users WHERE id = id) AS t" $ Query.query q
+                  TU.testSkip "sub query" do
+                        let q = select (Field :: Field "id") # from (select (select id # from messages # wher (id .=. id)) # from users # wher (id .=. id) # as t)
+                        notParameterized "SELECT id FROM (SELECT (SELECT id FROM messages WHERE id = id) FROM users WHERE id = id) AS t" $ Query.query q
                         --needs limit
                         result q [{id: 1}, {id: 2}]
                   TU.test "tuple" do
-                        let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # wher (id .=. id) # as (Alias :: Alias "sent"))) # from messages # wher (id .=. id) # as t)
-                        notParameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages WHERE id = id) AS sent FROM messages WHERE id = id) AS t" $ Query.query q
+                        let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # wher (id .=. id))) # from messages # wher (id .=. id) # as t)
+                        notParameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages WHERE id = id) FROM messages WHERE id = id) AS t" $ Query.query q
                         --needs limit
                       --  result q [{id: 1}, {id: 2}]
+
             TU.suite "prepare" do
-                  TU.test "scalar" do
+                  TU.testSkip "scalar" do
                         let parameters = {date: makeDate 2000 3 4}
                         let q = prepare NotNamed parameters $ select (4 # as n) # from (select (4 # as n) # from users # wher (joined .=. datep) # as (Alias :: Alias "u"))
                         case Query.query q  of
@@ -276,25 +277,25 @@ main = TUM.runTest do
                                     TUA.equal "SELECT id FROM (SELECT id FROM messages WHERE date = $1) AS t" s
                                     TUA.equal parameters p
                                     result q [{id: 1}, {id: 2}]
-                  TU.test "sub query" do
+                  TU.testSkip "sub query" do
                         let parameters = {id :1 }
-                        let q = prepare NotNamed parameters $ select (Field :: Field "id") # from (select (select id # from messages # wher (idp .=. id) # as (Alias :: Alias "id")) # from users # wher (id .=. idp) # as t)
+                        let q = prepare NotNamed parameters $ select id # from (select (select id # from messages # wher (idp .=. id)) # from users # wher (id .=. idp) # as t)
                         case Query.query q of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
                               Parameterized _ names s p -> do
                                     TUA.equal "@id" names
-                                    TUA.equal "SELECT id FROM (SELECT (SELECT id FROM messages WHERE $1 = id) AS id FROM users WHERE id = $1) AS t" s
+                                    TUA.equal "SELECT id FROM (SELECT (SELECT id FROM messages WHERE $1 = id) FROM users WHERE id = $1) AS t" s
                                     TUA.equal parameters p
                                     result q [{id: 1}, {id: 2}]
                   TU.test "tuple" do
                         let parameters = {id :3 }
                         --needs limit
-                        let q = prepare NotNamed parameters $ select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # wher (idp .=. idp) # as (Alias :: Alias "sent"))) # from messages # wher (idp .=. id) # as t)
+                        let q = prepare NotNamed parameters $ select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # wher (idp .=. idp))) # from messages # wher (idp .=. id) # as t)
                         case Query.query q of
                               NotParameterized s -> TU.failure $ "Expected parameters for " <> s
                               Parameterized _ names s p -> do
                                     TUA.equal "@id" names
-                                    TUA.equal "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages WHERE $1 = $1) AS sent FROM messages WHERE $1 = id) AS t" s
+                                    TUA.equal "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages WHERE $1 = $1) FROM messages WHERE $1 = id) AS t" s
                                     TUA.equal parameters p
                                   --  result q [{id: 1}, {id: 2}]
 
@@ -303,18 +304,20 @@ main = TUM.runTest do
                   let q = select (3 # as n)
                   notParameterized "SELECT 3 AS n" $ Query.query q
                   result q [{n : 3}]
-            TU.test "sub query" do
+            TU.testSkip "sub query" do
                   let q = select (select (34 # as n) # from users # wher (name .=. surname) # as t)
                   notParameterized "SELECT (SELECT 34 AS n FROM users WHERE name = surname) AS t" $ Query.query q
                   result q []
             TU.test "tuple" do
-                  --sub queries need to have type Maybe
+                  --subqueries need to have type Maybe
                   let q = select ((3 # as b) /\ (select (34 # as n) # from users # wher (name .=. surname) # as t) /\ (4 # as (Alias :: Alias "a")) /\ (select name # from users # as (Alias :: Alias "u")))
                   notParameterized "SELECT 3 AS b, (SELECT 34 AS n FROM users WHERE name = surname) AS t, 4 AS a, (SELECT name FROM users) AS u" $ Query.query q
                  -- result q [{b: 3, n: 34, a : 4, name: "mary"}, {b: 3, n: 34, a : 4, name: "mary"}]
 
+makeDate :: Int -> Int -> Int -> Date
 makeDate y m d = DD.canonicalDate (unsafeToEnum y) (unsafeToEnum m) (unsafeToEnum d)
 
+makeDateTime :: Int -> Int -> Int -> DateTime
 makeDateTime y m d = DateTime (makeDate y m d) $ Time (unsafeToEnum 0) (unsafeToEnum 0) (unsafeToEnum 0) (unsafeToEnum 0)
 
 unsafeToEnum :: forall a. BoundedEnum a => Int -> a
