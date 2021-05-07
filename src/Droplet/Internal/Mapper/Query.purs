@@ -151,7 +151,7 @@ instance fromTableToQuery :: (
       ToSelectQuery s is (),
       IsSymbol name,
       ToProjection s fields projection
-) => ToQuery (From (Table name fields) s parameters fields) projection is () where
+) => ToQuery (From (Table name fields) (Select s parameters rest) parameters fields) projection is () where
       toQuery (From _ s) is = NotParameterized $ toSelectQuery s is <> fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 instance fromAsToQuery :: (
@@ -159,7 +159,7 @@ instance fromAsToQuery :: (
       ToQuery q p is (),
       IsSymbol name,
       ToProjection s p projection
-) => ToQuery (From (As q name parameters p) s parameters fields) projection is () where
+) => ToQuery (From (As q name parameters p) (Select s parameters rest) parameters fields) projection is () where
       toQuery (From a s) is = NotParameterized $
             toSelectQuery s is <>
             fromKeyword <>
