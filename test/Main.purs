@@ -254,11 +254,11 @@ main = TUM.runTest do
                         notParameterized "SELECT id FROM (SELECT (SELECT id FROM messages WHERE id = id) FROM users WHERE id = id) AS t" $ Query.query q
                         --needs limit
                         result q [{id: 1}, {id: 2}]
-                  TU.test "tuple" do
+                  TU.testSkip "tuple" do
                         let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # wher (id .=. id))) # from messages # wher (id .=. id) # as t)
                         notParameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages WHERE id = id) FROM messages WHERE id = id) AS t" $ Query.query q
                         --needs limit
-                      --  result q [{id: 1}, {id: 2}]
+                        --result q [{id: 1}, {id: 2}]
 
             TU.suite "prepare" do
                   TU.testSkip "scalar" do
@@ -291,7 +291,7 @@ main = TUM.runTest do
                                     TUA.equal "SELECT id FROM (SELECT (SELECT id FROM messages WHERE $1 = id) FROM users WHERE id = $1) AS t" s
                                     TUA.equal parameters p
                                     result q [{id: 1}, {id: 2}]
-                  TU.test "tuple" do
+                  TU.testSkip "tuple" do
                         let parameters = {id :3 }
                         --needs limit
                         let q = prepare NotNamed parameters $ select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # wher (idp .=. idp))) # from messages # wher (idp .=. id) # as t)

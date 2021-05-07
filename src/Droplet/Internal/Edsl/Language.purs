@@ -244,6 +244,17 @@ as :: forall q projection parameters name. ToAs q name parameters projection => 
 as a q = toAs a q
 
 
+
+------------------------ORDER BY---------------------------
+
+
+
+
+------------------------LIMIT---------------------------
+
+
+
+
 ------------------------Projection machinery---------------------------
 
 -- | Row Type of columns projected by the query
@@ -285,3 +296,51 @@ instance singleToSingleColumn :: ToSingleColumn (RL.Cons name t RL.Nil) t
 class UniqueColumnNames (some :: Row Type) (more :: Row Type)
 
 instance sameUniqueColumnNames :: UniqueColumnNames fields fields
+
+
+{-
+
+full insert syntax supported by postgresql https://www.postgresql.org/docs/current/sql-insert.html
+
+[ WITH [ RECURSIVE ] with_query [, ...] ]
+INSERT INTO table_name [ AS alias ] [ ( column_name [, ...] ) ]
+    [ OVERRIDING { SYSTEM | USER } VALUE ]
+    { DEFAULT VALUES | VALUES ( { expression | DEFAULT } [, ...] ) [, ...] | query }
+    [ ON CONFLICT [ conflict_target ] conflict_action ]
+    [ RETURNING * | output_expression [ [ AS ] output_name ] [, ...] ]
+
+where conflict_target can be one of:
+
+    ( { index_column_name | ( index_expression ) } [ COLLATE collation ] [ opclass ] [, ...] ) [ WHERE index_predicate ]
+    ON CONSTRAINT constraint_name
+
+and conflict_action is one of:
+
+    DO NOTHING
+    DO UPDATE SET { column_name = { expression | DEFAULT } |
+                    ( column_name [, ...] ) = [ ROW ] ( { expression | DEFAULT } [, ...] ) |
+                    ( column_name [, ...] ) = ( sub-SELECT )
+                  } [, ...]
+              [ WHERE condition ]
+
+-}
+
+{-
+
+full insert syntax supported by droplet
+
+INSERT INTO table
+
+-}
+
+---------------------------INSERT------------------------------------------
+
+data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames = InsertInto (Table name fields) fieldNames
+
+class ToTableFields (fields :: Row Type) (fieldNames :: Type) | fieldNames -> fields
+
+instance fieldToTableFields :: Cons name t e fields => ToTableFields fields (Field name)
+instance tupleToTableFields :: (Cons name t e fields, ToTableFields fields rest) => ToTableFields fields (Tuple (Field name) rest)
+
+insertInto :: forall name fields fieldNames. ToTableFields fields fieldNames => Table name fields -> fieldNames -> InsertInto name fields fieldNames
+insertInto table fieldNames = InsertInto table fieldNames
