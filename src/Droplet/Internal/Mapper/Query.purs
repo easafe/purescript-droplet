@@ -152,11 +152,11 @@ instance fromTableToQuery :: (IsSymbol name, ToQuery rest p is ()) => ToQuery (F
 else instance fromAsToQuery :: (ToQuery s p is (), ToQuery rest pp is ()) => ToQuery (From s fields rest) projection is () where
       toQuery (From s rest) is = NotParameterized $ fromKeyword <> extract (toQuery s is) <> extract (toQuery rest is)
 
---from
+--where
 instance whereFailToQuery :: Fail (Text "Parameters must be set. See Droplet.prepare") => ToQuery (Where Parameterized rest) projection NotParameterized () where
       toQuery _ _ = NotParameterized "impossible"
-else
-instance whereToQuery :: ToQuery rest p is () => ToQuery (Where has rest) projection is () where
+
+else instance whereToQuery :: ToQuery rest p is () => ToQuery (Where has rest) projection is () where
       toQuery (Where filtered rest) is = NotParameterized $ whereKeyword <> printFilter filtered <> extract (toQuery rest is)
             where printFilter = case _ of
                         Operation field otherField op -> field <> printOperator op <> otherField
@@ -166,6 +166,8 @@ instance whereToQuery :: ToQuery rest p is () => ToQuery (Where has rest) projec
                   printOperator = case _ of
                         Equals -> equalsSymbol
                         NotEquals -> notEqualsSymbol
+
+-- instance insertValuesToQuery :: ToQuery (InsertInto name fields fieldNames (Values fieldValues))
 
 --helpers
 toAsQuery :: forall name p s is parameters projection . IsSymbol name => ToQuery s p is () => Select s projection parameters (As E name) -> Proxy is -> String

@@ -9,7 +9,7 @@ import Droplet.Internal.Edsl.Filter
 import Prelude
 
 import Data.Tuple (Tuple(..))
-import Prim.Row (class Cons, class Nub, class Union)
+import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
@@ -96,12 +96,13 @@ data E = E
 -- | Unnamed statements will only employ parameter substitution
 -- |
 -- | Named statements will result into PREPARE
-data Prepare q (parameters :: Row Type) = Prepare q (Record parameters) Plan
+data Prepare s (parameters :: Row Type) = Prepare s (Record parameters) Plan
 
 data Plan =
       NotNamed |
       Named String
 
+--could a type class check here prevent the need to lug and check parameters around elsewhere?
 prepare :: forall s projection parameters rest. Plan -> Record parameters -> Select s projection parameters rest -> Prepare (Select s projection parameters rest) parameters
 prepare plan record s = Prepare s record plan
 
@@ -295,18 +296,41 @@ and conflict_action is one of:
 
 full insert syntax supported by droplet
 
-INSERT INTO table
+INSERT INTO
+      table name fields
+      [VALUES { values |  }]
 
 -}
 
 ---------------------------INSERT------------------------------------------
 
-data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames = InsertInto (Table name fields) fieldNames
+data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames (parameters :: Row Type) rest = InsertInto (Table name fields) fieldNames rest
 
-class ToTableFields (fields :: Row Type) (fieldNames :: Type) | fieldNames -> fields
+newtype Values fieldValues = Values fieldValues
 
-instance fieldToTableFields :: Cons name t e fields => ToTableFields fields (Field name)
-instance tupleToTableFields :: (Cons name t e fields, ToTableFields fields rest) => ToTableFields fields (Tuple (Field name) rest)
 
-insertInto :: forall name fields fieldNames. ToTableFields fields fieldNames => Table name fields -> fieldNames -> InsertInto name fields fieldNames
-insertInto table fieldNames = InsertInto table fieldNames
+--need to check if we are missing mandatory fields
+class ToInsertFields (fields :: Row Type) (fieldNames :: Type) | fieldNames -> fields
+
+instance fieldToInsertFields :: Cons name t e fields => ToInsertFields fields (Field name)
+
+instance tupleToInsertFields :: (Cons name t e fields, ToInsertFields fields rest) => ToInsertFields fields (Tuple (Field name) rest)
+
+insertInto :: forall tableName fields fieldNames parameters. ToInsertFields fields fieldNames => Table tableName fields -> fieldNames -> InsertInto tableName fields fieldNames parameters E
+insertInto table fieldNames = InsertInto table fieldNames E
+
+
+class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (fieldValues :: Type) (parameters :: Row Type) | fieldNames -> fields, fieldNames -> fieldValues, fieldNames -> parameters
+
+instance fieldToInsertValues :: (Cons name t e fields, Cons name t () single) => ToInsertValues fields (Field name) (Parameter n) single
+
+else instance tupleToInsertValues :: (
+      Cons name t e fields,
+      Cons name t () head,
+      ToInsertValues fields some more tail,
+      Lacks name tail,
+      Union head tail all
+) => ToInsertValues fields (Tuple (Field name) some) (Tuple (Parameter n) more) all
+
+values :: forall tableName fields fieldNames fieldValues parameters. ToInsertValues fields fieldNames fieldValues parameters => fieldValues -> InsertInto tableName fields fieldNames parameters E -> InsertInto tableName fields fieldNames parameters (Values fieldValues)
+values fieldValues (InsertInto table fieldNames _) = InsertInto table fieldNames (Values fieldValues)
