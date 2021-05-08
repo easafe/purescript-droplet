@@ -108,9 +108,10 @@ main = TUM.runTest do
 
             TU.suite "field" do
                   TU.test "equals" do
-                        let q = select (34 # as n) # from users # wher (name .=. surname)
-                        notParameterized "SELECT 34 AS n FROM users WHERE name = surname" $ Query.query q
-                        result q []
+                        let q = select (34 # as n) # from users # wher (name .=. name)
+                        notParameterized "SELECT 34 AS n FROM users WHERE name = name" $ Query.query q
+                        TU.failure "investigate why this needs a type annotation"
+                        --result q []
                   TU.test "not equals" do
                         let q = select (34 # as n) # from users # wher (name .<>. surname)
                         notParameterized "SELECT 34 AS n FROM users WHERE name <> surname" $ Query.query q
@@ -227,7 +228,7 @@ main = TUM.runTest do
                         result q [{birthday: makeDate 1990 1 1}, {birthday: makeDate 1900 11 11}]
                   TU.test "renamed field" do
                         let q = select (Field :: Field "t") # from (select (birthday # as t) # from users # as t)
-                        notParameterized "SELECT t FROM (SELECT birthday t FROM users) AS t" $ Query.query q
+                        notParameterized "SELECT t FROM (SELECT birthday AS t FROM users) AS t" $ Query.query q
                         result q [{t: makeDate 1990 1 1}, {t: makeDate 1900 11 11}]
                   TU.testSkip "sub query" do
                         let q = select date # from (select (select date # from messages) # from users # as t)
@@ -309,9 +310,9 @@ main = TUM.runTest do
                   notParameterized "SELECT 3 AS n" $ Query.query q
                   result q [{n : 3}]
             TU.testSkip "sub query" do
-                  let q = select (select (34 # as n) # from users # wher (name .=. surname) # as t)
-                  notParameterized "SELECT (SELECT 34 AS n FROM users WHERE name = surname) AS t" $ Query.query q
-                  result q []
+                  let q = select (select (34 # as n) # from users # wher (name .=. name) # as t)
+                  notParameterized "SELECT (SELECT 34 AS n FROM users WHERE name = name) AS t" $ Query.query q
+                  result q [{t : 34}, {t: 34}]
             TU.test "tuple" do
                   --subqueries need to have type Maybe
                   let q = select ((3 # as b) /\ (select (34 # as n) # from users # wher (name .=. surname) # as t) /\ (4 # as (Alias :: Alias "a")) /\ (select name # from users # as (Alias :: Alias "u")))

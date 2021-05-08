@@ -87,13 +87,13 @@ instance consToNames :: (IsSymbol name, ToNames rest) => ToNames (RL.Cons name t
       toNames _ = DS.reflectSymbol (Proxy :: Proxy name) : toNames (Proxy :: Proxy rest)
 
 --naked selects
-instance intToQuery :: IsSymbol name => ToQuery (NakedSelect (As Int name projection)) projection is () where
+instance intToQuery :: IsSymbol name => ToQuery (NakedSelect (As Int name)) projection is () where
       toQuery (NakedSelect (As n)) _ = NotParameterized $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-else instance asNakedSelectToQuery :: (IsSymbol name, ToQuery s p is ()) => ToQuery (NakedSelect (Select s pp parameters (As E name projection))) projection is () where
+else instance asNakedSelectToQuery :: (IsSymbol name, ToQuery s p is ()) => ToQuery (NakedSelect (Select s pp parameters (As E name))) ppp is () where
       toQuery (NakedSelect a) is = NotParameterized $ toAsQuery a is
 
-else instance tupleToQuery :: (ToQuery (NakedSelect s) some is (), ToQuery (NakedSelect t) more is (), Union some more projection) => ToQuery (NakedSelect (Tuple (Select s ss parameters E) (Select t tt parameters E))) projection is () where
+else instance tupleToQuery :: (ToQuery (NakedSelect s) p is (), ToQuery (NakedSelect t) pp is ()) => ToQuery (NakedSelect (Tuple (Select s ss parameters E) (Select t tt parameters E))) ppp is () where
       toQuery (NakedSelect (Tuple (Select s _) (Select t _))) is = NotParameterized $ extract (toQuery (NakedSelect s) is) <> comma <> extract (toQuery (NakedSelect t) is)
 
 else instance failNakedToQuery :: Fail (Text "Naked select columns must be either scalar values or named subqueries") => ToQuery (NakedSelect s) projection is () where
@@ -101,14 +101,15 @@ else instance failNakedToQuery :: Fail (Text "Naked select columns must be eithe
 
 --this can be made a lot simpler
 instance selectToQuery :: (
-      ToQuery (NakedSelect s) projection is (),
+      ToQuery (NakedSelect s) pp is (),
+      ToProjection s () projection,
       Nub projection unique,
       UniqueColumnNames projection unique
 ) => ToQuery (Select s p parameters E) unique is () where
       toQuery (Select s _) is = NotParameterized $ selectKeyword <> extract (toQuery (NakedSelect s) is)
 
 --fully clothed selects
-else instance asSelectToQuery :: (ToColumnQuery s is, ToQuery s pp is (), IsSymbol name) => ToQuery (Select s projection parameters (As E name p)) projection is () where
+else instance asSelectToQuery :: (ToColumnQuery s is, ToQuery s pp is (), IsSymbol name) => ToQuery (Select s projection parameters (As E name)) projection is () where
       toQuery s is = NotParameterized $ toAsQuery s is
 
 else instance fullSelectToQuery :: (ToColumnQuery s is, ToQuery rest p is ()) => ToQuery (Select s projection parameters rest) projection is () where
@@ -123,13 +124,13 @@ instance fieldToColumnQuery :: IsSymbol name => ToColumnQuery (Field name) is wh
 else instance tableToColumnQuery :: ToColumnQuery Star is  where
       toColumnQuery _ _ = starToken
 
-else instance asIntToColumnQuery :: IsSymbol name => ToColumnQuery (As Int name projection) is where
+else instance asIntToColumnQuery :: IsSymbol name => ToColumnQuery (As Int name) is where
       toColumnQuery (As n) _ =
             show n <>
             asKeyword <>
             DS.reflectSymbol (Proxy :: Proxy name)
 
-else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Field name) alias projection) is where
+else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Field name) alias) is where
       toColumnQuery _ _ =
             DS.reflectSymbol (Proxy :: Proxy name) <>
             asKeyword <>
@@ -138,7 +139,7 @@ else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColum
 else instance tupleToColumnQuery :: (ToColumnQuery s is, ToColumnQuery t is, ToQuery rest p is (), ToQuery extra pp is ()) => ToColumnQuery (Tuple (Select s some parameters rest) (Select t more parameters extra)) is where
       toColumnQuery (Tuple (Select s rest) (Select t extra)) is = toColumnQuery s is <> extract (toQuery rest is) <> comma <> toColumnQuery t is <> extract (toQuery extra is)
 
-else instance asSelectToColumnQuery :: (ToColumnQuery s is, ToQuery s projection is (), IsSymbol name) => ToColumnQuery (Select s projection parameters (As E name p)) is where
+else instance asSelectToColumnQuery :: (ToColumnQuery s is, ToQuery s projection is (), IsSymbol name) => ToColumnQuery (Select s projection parameters (As E name)) is where
       toColumnQuery s is = toAsQuery s is
 
 else instance elseToColumnQuery :: ToQuery q projection is () => ToColumnQuery q is where
@@ -167,7 +168,7 @@ instance whereToQuery :: ToQuery rest p is () => ToQuery (Where has rest) projec
                         NotEquals -> notEqualsSymbol
 
 --helpers
-toAsQuery :: forall name p pp s is parameters projection . IsSymbol name => ToQuery s pp is () => Select s projection parameters (As E name p) -> Proxy is -> String
+toAsQuery :: forall name p s is parameters projection . IsSymbol name => ToQuery s p is () => Select s projection parameters (As E name) -> Proxy is -> String
 toAsQuery (Select s (As E)) is =
       openBracket <>
       extract (toQuery s is) <>

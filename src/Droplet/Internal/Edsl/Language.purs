@@ -8,12 +8,11 @@ import Droplet.Internal.Edsl.Definition
 import Droplet.Internal.Edsl.Filter
 import Prelude
 
-import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
-import Prim.TypeError (class Fail, Above, Quote, Text)
+import Prim.TypeError (class Fail, Text)
 
 {-
 
@@ -126,10 +125,10 @@ instance fieldToSelect :: ToSelect (Field name) (Field name) projection paramete
 else instance starToSelect :: ToSelect Star Star projection parameters where
       toSelect s = Select s E
 
-else instance asIntToSelect :: ToSelect (As Int alias p) (As Int alias p) projection parameters where
+else instance asIntToSelect :: ToSelect (As Int alias) (As Int alias) projection parameters where
       toSelect a = Select a E
 
-else instance asFieldToSelect :: ToSelect (As (Field name) alias projection) (As (Field name) alias projection) projection parameters where
+else instance asFieldToSelect :: ToSelect (As (Field name) alias) (As (Field name) alias) projection parameters where
       toSelect a = Select a E
 
 else instance tupleToSelect :: (ToSelect r s projection parameters, ToSelect t u projection parameters) => ToSelect (Tuple r t) (Tuple (Select s projection parameters E) (Select u projection parameters E)) projection parameters where
@@ -143,13 +142,13 @@ class ToSubExpression (r :: Type) (parameters :: Row Type) | r -> parameters
 --for sub queries only a single column can be returned
 instance fromFieldToSubExpression :: ToSubExpression (Select (Field name) projection parameters rest) parameters
 
-else instance fromIntToSubExpression :: ToSubExpression (Select (As Int name projection) projection parameters rest) parameters
+else instance fromIntToSubExpression :: ToSubExpression (Select (As Int name) projection parameters rest) parameters
 
-else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As (Field name) alias p) projection parameters rest) parameters
+else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As (Field name) alias) projection parameters rest) parameters
 
 else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (Select (Tuple a b) projection parameters rest) parameters
 
-else instance asFieldToSubExpression :: ToSubExpression s parameters => ToSubExpression (Select s projection parameters (As E alias projection)) parameters
+else instance asFieldToSubExpression :: ToSubExpression s parameters => ToSubExpression (Select s projection parameters (As E alias)) parameters
 
 select :: forall r s projection parameters. ToSelect r s projection parameters => r -> Select s projection parameters E
 select = toSelect
@@ -161,8 +160,7 @@ select = toSelect
 data From f (fields :: Row Type) rest = From f rest
 
 --lets try to simplify this too
--- easy to get rid of parameters?
-class ToFrom f s projection parameters fields | f -> s, f -> projection, f -> parameters, f -> fields where
+class ToFrom f s projection parameters fields | f -> s, f -> parameters, f -> projection, f -> fields where
       toFrom :: forall p. f -> Select s p parameters E -> Select s projection parameters (From f fields E)
 
 instance tableToFrom :: (
@@ -172,17 +170,13 @@ instance tableToFrom :: (
 ) => ToFrom (Table name fields) s unique parameters fields where
       toFrom table (Select s _) = Select s $ From table E
 
-else instance asToFrom :: (
+instance asToFrom :: (
       ToProjection t fields selected,
       ToProjection s selected projection,
       Nub projection unique,
       UniqueColumnNames projection unique
-) => ToFrom (Select (Select t pp parameters (From f fields rest)) p parameters (As E a pr)) s unique parameters unique where
+) => ToFrom (Select (Select t pp parameters (From f fields rest)) p parameters (As E a)) s unique parameters selected where
       toFrom as (Select s _) = Select s $ From as E
-
---not ideal, should be able to be regular type error
-else instance elseToFrom :: Fail (Above (Text "Droplet.ToFrom cannot recognize fields of") (Quote x)) => ToFrom x x g p f where
-      toFrom f (Select s _) = Select s (From f E)
 
 from :: forall f s p projection parameters fields. ToFrom f s projection parameters fields => f -> Select s p parameters E -> Select s projection parameters (From f fields E)
 from = toFrom
@@ -200,21 +194,18 @@ wher (Filters filtered) (Select s (From f E)) = Select s <<< From f $ Where filt
 
 ----------------------------AS----------------------------
 
-newtype As q (alias :: Symbol) (projection :: Row Type) = As q
+newtype As q (alias :: Symbol) = As q
 
---restrict it to fields that were actually selected
 class ToAs q as name | q -> name, q -> as where
       toAs :: Alias name -> q -> as
 
-instance intToAs :: (IsSymbol name, Cons name Int () projection) => ToAs Int (As Int name projection) name where
+instance intToAs :: ToAs Int (As Int name) name where
       toAs _ n = As n
 
-instance fieldToAs :: ToAs (Field name) (As (Field name) alias ()) alias where
+instance fieldToAs :: ToAs (Field name) (As (Field name) alias) alias where
       toAs _ fd = As fd
 
---wacky, but here we pretend to be always renaming a single column
--- from should do the right thing for named queries
-instance subQueryFromToAs :: ToProjection (Select s p parameters (As E name p)) fields projection => ToAs (Select s p parameters (From f fields rest)) (Select (Select s p parameters (From f fields rest)) projection parameters (As E name projection)) name where
+instance subQueryFromToAs :: ToAs (Select s projection parameters (From f fields rest)) (Select (Select s projection parameters (From f fields rest)) projection parameters (As E name)) name where
       toAs _ s = Select s (As E)
 
 as :: forall q as name. ToAs q as name => Alias name -> q -> as
@@ -240,13 +231,13 @@ class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s
 --simple columns
 instance fieldToProjection :: (Cons name t e fields, Cons name t () projection) => ToProjection (Field name) fields projection
 
-else instance intAsToProjection :: ToProjection (As Int alias projection) fields projection
+else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As Int alias) fields projection
 
-else instance fieldAsToProjection :: (Cons name t e fields, Cons alias t () projection) => ToProjection (As (Field name) alias p) fields projection
+else instance fieldAsToProjection :: (Cons name t e fields, Cons alias t () projection) => ToProjection (As (Field name) alias) fields projection
 
 else instance starToProjection :: Union fields () projection => ToProjection Star fields projection
 
-else instance tupleToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple (Select s p parameters sr) (Select t p parameters tr)) fields extra
+else instance tupleToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple (Select s p parameters sr) (Select t pp parameters tr)) fields extra
 
 --subquery columns
 else instance selectFromRestToProjection :: ToProjection s fields projection => ToProjection (Select s p parameters (From f fields rest)) fd projection
@@ -256,7 +247,7 @@ else instance asToProjection :: (
       RowToList extra list,
       ToSingleColumn list t,
       Cons alias t () single
-) => ToProjection (Select s p parameters (As E alias projection)) fields single
+) => ToProjection (Select s p parameters (As E alias)) fields single
 
 else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f p
 
