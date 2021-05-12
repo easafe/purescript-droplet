@@ -2,17 +2,9 @@ module Droplet.Internal.Mapper.Driver where
 
 import Prelude
 
-import Control.Monad.Except as CME
-import Data.Array ((:))
 import Data.Bifunctor as DB
-import Data.Date (Date)
-import Data.Date as DD
-import Data.DateTime (DateTime(..), Time(..))
 import Data.Either (Either(..))
-import Data.Either as DE
-import Data.Enum as DEN
 import Data.Generic.Rep (class Generic)
-import Data.Int as DI
 import Data.Maybe (Maybe(..), maybe)
 import Data.Maybe as DM
 import Data.Newtype (class Newtype)
@@ -21,12 +13,12 @@ import Data.Nullable as DN
 import Data.Profunctor (lcmap)
 import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..))
-import Data.String as DST
 import Data.String as String
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Traversable as DT
-import Droplet (NotParameterized)
+import Droplet.Internal.Edsl.Definition (class FromValue)
+import Droplet.Internal.Edsl.Definition as DIED
 import Droplet.Internal.Edsl.Language (Plan(..))
 import Droplet.Internal.Mapper.Pool (Pool)
 import Droplet.Internal.Mapper.Query (class ToQuery, Query(..))
@@ -38,7 +30,6 @@ import Effect.Aff.Compat as EAC
 import Effect.Class (liftEffect)
 import Effect.Exception (Error)
 import Foreign (Foreign)
-import Foreign as F
 import Foreign.Object (Object)
 import Foreign.Object as FO
 import Partial.Unsafe as PU
@@ -125,94 +116,6 @@ instance showPGError :: Show PgError where
       show = genericShow
 
 
-
-
-class ToValue v where
-      toValue :: v -> Foreign
-
-instance stringToValue :: ToValue String where
-      toValue = F.unsafeToForeign
-
-instance intToValue :: ToValue Int where
-      toValue = F.unsafeToForeign
-
-instance dateToValue :: ToValue Date where
-      toValue = F.unsafeToForeign <<< formatDate
-
-instance dateTimeToValue :: ToValue DateTime where
-      toValue (DateTime date (Time h m s ms)) = F.unsafeToForeign $ formatDate date <> "T" <> time <> "+0000"
-            where time = show (DEN.fromEnum h) <> ":" <> show (DEN.fromEnum m) <> ":" <> show (DEN.fromEnum s) <> "." <> show (DEN.fromEnum ms)
-
-formatDate :: Date -> String
-formatDate date = show y <> "-" <> show m <> "-" <> show d
-      where y = DEN.fromEnum $ DD.year date
-            m = DEN.fromEnum $ DD.month date
-            d = DEN.fromEnum $ DD.day date
-
-
-
-class FromValue t where
-      fromValue :: Foreign -> Either String t
-
-instance intFromValue :: FromValue Int where
-      fromValue = DB.lmap show <<< CME.runExcept <<< F.readInt
-
-instance stringFromValue :: FromValue String where
-      fromValue = DB.lmap show <<< CME.runExcept <<< F.readString
-
-instance booleanFromValue :: FromValue Boolean where
-      fromValue = DB.lmap show <<< CME.runExcept <<< F.readBoolean
-
-instance dateFromValue :: FromValue Date where
-      fromValue v = do
-            s <- DB.lmap show <<< CME.runExcept $ F.readString v
-            parseDate s $ "ISO 8601 date parsing failed for value: " <> s
-
-instance dateTimeFromValue :: FromValue DateTime where
-      fromValue v = do
-            s <- DB.lmap show <<< CME.runExcept $ F.readString v
-            let errorMessage = "ISO 8601 date time parsing failed for value: " <> s
-            case DST.split (Pattern " ") s of
-                  [datePart, timePart] -> do
-                        date <- parseDate datePart errorMessage
-                        time <- parseTime timePart errorMessage
-                        Right $ DateTime date time
-                  _ -> Left errorMessage
-
-parseDate :: String -> String -> Either String Date
-parseDate input errorMessage =
-      case DST.split (Pattern "-") input of
-            [y, m, d] -> do
-                  let result = DD.canonicalDate <$> (DEN.toEnum =<< DI.fromString y) <*> (DEN.toEnum =<< DI.fromString m) <*> (DEN.toEnum =<< DI.fromString d)
-                  DE.note errorMessage result
-            _ -> Left errorMessage
-
-parseTime :: String -> String -> Either String Time
-parseTime input errorMessage =
-      case DST.split (Pattern ":") input of
-            [h, m, s] -> do
-                  let result = Time <$> (DEN.toEnum =<< DI.fromString h) <*> (DEN.toEnum =<< DI.fromString m) <*> (DEN.toEnum =<< DI.fromString (DST.take 2 s)) <*> (DEN.toEnum 0)
-                  DE.note errorMessage result
-            _ -> Left errorMessage
-
-
-
-class ToParameters record (list :: RowList Type) where
-      toValues :: Proxy list -> Record record -> Array Foreign
-
-instance nilToParameters :: ToParameters record RL.Nil where
-      toValues _ _ = []
-
-instance consToParameters :: (
-      IsSymbol name,
-      ToValue t,
-      Cons name t e record,
-      ToParameters record rest
-) => ToParameters record (RL.Cons name t rest) where
-      toValues _ record = toValue (R.get (Proxy :: Proxy name) record) : toValues (Proxy :: Proxy rest) record
-
-
-
 class FromResult (projection :: RowList Type) result | projection -> result where
       toResult :: Proxy projection -> Object Foreign -> Either String result
 
@@ -226,7 +129,7 @@ instance consFromResult :: (
       Lacks name restProjection,
       Cons name t restProjection projection
 ) => FromResult (RL.Cons name t rest) (Record projection) where
-      toResult _ raw = case fromValue value of
+      toResult _ raw = case DIED.fromValue value of
             Left error -> Left error
             Right converted -> map (R.insert (Proxy :: Proxy name) converted) $ toResult (Proxy :: Proxy rest) raw
             where value = PU.unsafePartial (DM.fromJust $ FO.lookup (DS.reflectSymbol (Proxy :: Proxy name)) raw)
@@ -304,13 +207,10 @@ withConnection p k = withClient p (lcmap (map fromClient) k)
 
 -------------------------------QUERYING----------------------------------
 
-type Has = NotParameterized
 
 -- select columns need a way to map fields to whatever type (only for outermost select tho!)
-query :: forall q projection parameters pro par.
-      RowToList parameters par =>
-      ToParameters parameters par =>
-      ToQuery q projection Has parameters =>
+query :: forall q projection pro.
+      ToQuery q projection =>
       RowToList projection pro =>
       FromResult pro (Record projection) =>
       Connection ->
@@ -321,29 +221,23 @@ query connection q = do
       case raw of
             Left error -> pure $ Left error
             Right r -> pure $ DT.traverse (DB.lmap ConversionError <<< toResult (Proxy :: Proxy pro)) r
-      where rawResults :: Aff (Either PgError (Array (Object Foreign)))
-            rawResults = EAC.fromEffectFnAff <<< rawQuery_ rightLeft (toUntaggedHandler connection) $ case DIMQ.query q of
-                  NotParameterized s -> {
-                        name: null,
-                        text: s,
-                        values: []
-                  }
-                  Parameterized plan _ s p -> {
-                        name: case plan of
-                              NotNamed -> null
-                              Named n -> DN.notNull n,
-                        text: s,
-                        values: toValues (Proxy :: Proxy par) p
-                  }
+      where Query plan sql parameters = DIMQ.query q
+
+            rawResults :: Aff (Either PgError (Array (Object Foreign)))
+            rawResults = EAC.fromEffectFnAff $ rawQuery_ rightLeft (toUntaggedHandler connection) {
+                  name: case plan of
+                        Nothing -> null
+                        Just (Plan name) -> DN.notNull name,
+                  text: sql,
+                  values: parameters
+            }
 
 --should this be made nicer?
-unsafeQuery :: forall projection parameters pro par.
-      RowToList parameters par =>
-      ToParameters parameters par =>
+unsafeQuery :: forall projection pro .
       RowToList projection pro =>
       FromResult pro (Record projection) =>
       Connection ->
-      Query projection parameters ->
+      Query projection ->
       Aff (Either PgError (Array (Record projection)))
 unsafeQuery connection q = query connection q
 

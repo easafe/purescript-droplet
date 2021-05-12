@@ -91,67 +91,59 @@ data E = E
 
 ----------------------PREPARE----------------------------
 
---this shouldnt create an actual prepare statement (since it'd require unique names and $n parameters)
--- but rather type check all parameter usage in a single place
--- | Unnamed statements will only employ parameter substitution
--- |
--- | Named statements will result into PREPARE
-data Prepare s (parameters :: Row Type) = Prepare s (Record parameters) Plan
+data Prepare s = Prepare s Plan
 
-data Plan =
-      NotNamed |
-      Named String
+newtype Plan = Plan String
 
---could a type class check here prevent the need to lug and check parameters around elsewhere?
-prepare :: forall s projection parameters rest. Plan -> Record parameters -> Select s projection parameters rest -> Prepare (Select s projection parameters rest) parameters
-prepare plan record s = Prepare s record plan
+prepare :: forall s projection rest. Plan -> Select s projection rest -> Prepare (Select s projection rest)
+prepare plan s = Prepare s plan
 
 
 
 ----------------------SELECT----------------------------
 
 --the projection is not really needed here but it might help with understanding type errors for the most common queries
-data Select s (projection :: Row Type) (parameters :: Row Type) rest = Select s rest
+data Select s (projection :: Row Type) rest = Select s rest
 
-class ToSelect r s projection parameters | r -> s, r -> projection, r -> parameters where
-      toSelect :: r -> Select s projection parameters E
+class ToSelect r s projection | r -> s, r -> projection where
+      toSelect :: r -> Select s projection E
 
 --needs more instance for scalars
 -- might be nice to able to project parameters too
 -- we also dont accept naked selects as subqueries/as/whatever
 
-instance fieldToSelect :: ToSelect (Field name) (Field name) projection parameters where
+instance fieldToSelect :: ToSelect (Field name) (Field name) projection where
       toSelect s = Select s E
 
-else instance starToSelect :: ToSelect Star Star projection parameters where
+else instance starToSelect :: ToSelect Star Star projection where
       toSelect s = Select s E
 
-else instance asIntToSelect :: ToSelect (As Int alias) (As Int alias) projection parameters where
+else instance asIntToSelect :: ToSelect (As Int alias) (As Int alias) projection where
       toSelect a = Select a E
 
-else instance asFieldToSelect :: ToSelect (As (Field name) alias) (As (Field name) alias) projection parameters where
+else instance asFieldToSelect :: ToSelect (As (Field name) alias) (As (Field name) alias) projection where
       toSelect a = Select a E
 
-else instance tupleToSelect :: (ToSelect r s projection parameters, ToSelect t u projection parameters) => ToSelect (Tuple r t) (Tuple (Select s projection parameters E) (Select u projection parameters E)) projection parameters where
+else instance tupleToSelect :: (ToSelect r s projection, ToSelect t u projection) => ToSelect (Tuple r t) (Tuple (Select s projection E) (Select u projection E)) projection where
       toSelect (Tuple s t) = Select (Tuple (toSelect s) (toSelect t)) E
 
-else instance fromFieldsToSelect :: ToSubExpression q parameters => ToSelect q q projection parameters where
+else instance fromFieldsToSelect :: ToSubExpression q => ToSelect q q projection where
       toSelect q = Select q E
 
-class ToSubExpression (r :: Type) (parameters :: Row Type) | r -> parameters
+class ToSubExpression (r :: Type)
 
 --for sub queries only a single column can be returned
-instance fromFieldToSubExpression :: ToSubExpression (Select (Field name) projection parameters rest) parameters
+instance fromFieldToSubExpression :: ToSubExpression (Select (Field name) projection rest)
 
-else instance fromIntToSubExpression :: ToSubExpression (Select (As Int name) projection parameters rest) parameters
+else instance fromIntToSubExpression :: ToSubExpression (Select (As Int name) projection rest)
 
-else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As (Field name) alias) projection parameters rest) parameters
+else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As (Field name) alias) projection rest)
 
-else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (Select (Tuple a b) projection parameters rest) parameters
+else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (Select (Tuple a b) projection rest)
 
-else instance asFieldToSubExpression :: ToSubExpression s parameters => ToSubExpression (Select s projection parameters (As E alias)) parameters
+else instance asFieldToSubExpression :: ToSubExpression s => ToSubExpression (Select s projection (As E alias))
 
-select :: forall r s projection parameters. ToSelect r s projection parameters => r -> Select s projection parameters E
+select :: forall r s projection. ToSelect r s projection => r -> Select s projection  E
 select = toSelect
 
 
@@ -160,15 +152,14 @@ select = toSelect
 
 data From f (fields :: Row Type) rest = From f rest
 
---lets try to simplify this too
-class ToFrom f s projection parameters fields | f -> s, f -> parameters, f -> projection, f -> fields where
-      toFrom :: forall p. f -> Select s p parameters E -> Select s projection parameters (From f fields E)
+class ToFrom f s projection fields | f -> s, f -> projection, f -> fields where
+      toFrom :: forall p. f -> Select s p E -> Select s projection (From f fields E)
 
 instance tableToFrom :: (
       ToProjection s fields selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Table name fields) s unique parameters fields where
+) => ToFrom (Table name fields) s unique fields where
       toFrom table (Select s _) = Select s $ From table E
 
 instance asToFrom :: (
@@ -176,19 +167,19 @@ instance asToFrom :: (
       ToProjection s selected projection,
       Nub projection unique,
       UniqueColumnNames projection unique
-) => ToFrom (Select (Select t pp parameters (From f fields rest)) p parameters (As E a)) s unique parameters selected where
+) => ToFrom (Select (Select t pp (From f fields rest)) p (As E a)) s unique selected where
       toFrom as (Select s _) = Select s $ From as E
 
-from :: forall f s p projection parameters fields. ToFrom f s projection parameters fields => f -> Select s p parameters E -> Select s projection parameters (From f fields E)
+from :: forall f s p projection fields. ToFrom f s projection fields => f -> Select s p E -> Select s projection (From f fields E)
 from = toFrom
 
 
 
 -------------------------------WHERE----------------------------
 
-data Where (has :: IsParameterized) rest = Where Filtered rest
+data Where rest = Where Filtered rest
 
-wher :: forall f s projection has fields parameters. Filters fields parameters has -> Select s projection parameters (From f fields E) -> Select s projection parameters (From f fields (Where has E))
+wher :: forall f s projection fields. Filters fields -> Select s projection (From f fields E) -> Select s projection (From f fields (Where E))
 wher (Filters filtered) (Select s (From f E)) = Select s <<< From f $ Where filtered E
 
 
@@ -206,7 +197,7 @@ instance intToAs :: ToAs Int (As Int name) name where
 instance fieldToAs :: ToAs (Field name) (As (Field name) alias) alias where
       toAs _ fd = As fd
 
-instance subQueryFromToAs :: ToAs (Select s projection parameters (From f fields rest)) (Select (Select s projection parameters (From f fields rest)) projection parameters (As E name)) name where
+instance subQueryFromToAs :: ToAs (Select s projection (From f fields rest)) (Select (Select s projection (From f fields rest)) projection (As E name)) name where
       toAs _ s = Select s (As E)
 
 as :: forall q as name. ToAs q as name => Alias name -> q -> as
@@ -238,17 +229,17 @@ else instance fieldAsToProjection :: (Cons name t e fields, Cons alias t () proj
 
 else instance starToProjection :: Union fields () projection => ToProjection Star fields projection
 
-else instance tupleToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple (Select s p parameters sr) (Select t pp parameters tr)) fields extra
+else instance tupleToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple (Select s p sr) (Select t pp tr)) fields extra
 
 --subquery columns
-else instance selectFromRestToProjection :: ToProjection s fields projection => ToProjection (Select s p parameters (From f fields rest)) fd projection
+else instance selectFromRestToProjection :: ToProjection s fields projection => ToProjection (Select s p (From f fields rest)) fd projection
 
 else instance asToProjection :: (
       ToProjection s fields extra,
       RowToList extra list,
       ToSingleColumn list t,
       Cons alias t () single
-) => ToProjection (Select s p parameters (As E alias)) fields single
+) => ToProjection (Select s p (As E alias)) fields single
 
 else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f p
 
@@ -304,33 +295,33 @@ INSERT INTO
 
 ---------------------------INSERT------------------------------------------
 
-data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames (parameters :: Row Type) rest = InsertInto (Table name fields) fieldNames rest
+-- data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames (parameters :: Row Type) rest = InsertInto (Table name fields) fieldNames rest
 
-newtype Values fieldValues = Values fieldValues
-
-
---need to check if we are missing mandatory fields
-class ToInsertFields (fields :: Row Type) (fieldNames :: Type) | fieldNames -> fields
-
-instance fieldToInsertFields :: Cons name t e fields => ToInsertFields fields (Field name)
-
-instance tupleToInsertFields :: (Cons name t e fields, ToInsertFields fields rest) => ToInsertFields fields (Tuple (Field name) rest)
-
-insertInto :: forall tableName fields fieldNames parameters. ToInsertFields fields fieldNames => Table tableName fields -> fieldNames -> InsertInto tableName fields fieldNames parameters E
-insertInto table fieldNames = InsertInto table fieldNames E
+-- newtype Values fieldValues = Values fieldValues
 
 
-class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (fieldValues :: Type) (parameters :: Row Type) | fieldNames -> fields, fieldNames -> fieldValues, fieldNames -> parameters
+-- --need to check if we are missing mandatory fields
+-- class ToInsertFields (fields :: Row Type) (fieldNames :: Type) | fieldNames -> fields
 
-instance fieldToInsertValues :: (Cons name t e fields, Cons name t () single) => ToInsertValues fields (Field name) (Parameter n) single
+-- instance fieldToInsertFields :: Cons name t e fields => ToInsertFields fields (Field name)
 
-else instance tupleToInsertValues :: (
-      Cons name t e fields,
-      Cons name t () head,
-      ToInsertValues fields some more tail,
-      Lacks name tail,
-      Union head tail all
-) => ToInsertValues fields (Tuple (Field name) some) (Tuple (Parameter n) more) all
+-- instance tupleToInsertFields :: (Cons name t e fields, ToInsertFields fields rest) => ToInsertFields fields (Tuple (Field name) rest)
 
-values :: forall tableName fields fieldNames fieldValues parameters. ToInsertValues fields fieldNames fieldValues parameters => fieldValues -> InsertInto tableName fields fieldNames parameters E -> InsertInto tableName fields fieldNames parameters (Values fieldValues)
-values fieldValues (InsertInto table fieldNames _) = InsertInto table fieldNames (Values fieldValues)
+-- insertInto :: forall tableName fields fieldNames parameters. ToInsertFields fields fieldNames => Table tableName fields -> fieldNames -> InsertInto tableName fields fieldNames parameters E
+-- insertInto table fieldNames = InsertInto table fieldNames E
+
+
+-- class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (fieldValues :: Type) (parameters :: Row Type) | fieldNames -> fields, fieldNames -> fieldValues, fieldNames -> parameters
+
+-- instance fieldToInsertValues :: (Cons name t e fields, Cons name t () single) => ToInsertValues fields (Field name) (Parameter n) single
+
+-- else instance tupleToInsertValues :: (
+--       Cons name t e fields,
+--       Cons name t () head,
+--       ToInsertValues fields some more tail,
+--       Lacks name tail,
+--       Union head tail all
+-- ) => ToInsertValues fields (Tuple (Field name) some) (Tuple (Parameter n) more) all
+
+-- values :: forall tableName fields fieldNames fieldValues parameters. ToInsertValues fields fieldNames fieldValues parameters => fieldValues -> InsertInto tableName fields fieldNames parameters E -> InsertInto tableName fields fieldNames parameters (Values fieldValues)
+-- values fieldValues (InsertInto table fieldNames _) = InsertInto table fieldNames (Values fieldValues)

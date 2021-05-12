@@ -1,67 +1,47 @@
 module Droplet.Internal.Edsl.Filter where
 
-import Droplet.Internal.Edsl.Definition
 import Prelude
 
+import Data.Either (Either(..))
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
+import Droplet.Internal.Edsl.Definition (class ToValue, Field)
+import Droplet.Internal.Edsl.Definition as DIED
+import Foreign (Foreign)
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy(..))
-
-data IsParameterized
-
-foreign import data Parameterized :: IsParameterized
-foreign import data NotParameterized  :: IsParameterized
 
 data Operator =
       Equals |
       NotEquals
 
 data Filtered =
-      Operation String String Operator |
+      Operation (Either Foreign String) (Either Foreign String) Operator |
       And Filtered Filtered |
       Or Filtered Filtered
 
-newtype Filters (fields :: Row Type) (parameters :: Row Type) (has :: IsParameterized) = Filters Filtered
+newtype Filters (fields :: Row Type) = Filters Filtered
 
 --it d be nicer if field parsing was entirely in ToQuery....
-class ToCompared c (t :: Type) (fields :: Row Type) (parameters :: Row Type) | c -> fields, c -> t, c -> parameters where
-      toCompared :: c -> String
+class ToFilter c (t :: Type) (fields :: Row Type) | c -> fields, c -> t where
+      toCompared :: c -> Either Foreign String
 
-instance fieldToCompared :: (IsSymbol name, Cons name t e fields) => ToCompared (Field name) t fields parameters where
-      toCompared _ = DS.reflectSymbol (Proxy :: Proxy name)
+instance fieldToCompared :: (IsSymbol name, Cons name t e fields) => ToFilter (Field name) t fields where
+      toCompared _ = Right $ DS.reflectSymbol (Proxy :: Proxy name)
 
-instance parameterToCompared :: (IsSymbol name, Cons name t e parameters) => ToCompared (Parameter name) t fields parameters where
-      toCompared _ = atToken <> DS.reflectSymbol (Proxy :: Proxy name)
+else instance parameterToCompared :: ToValue c => ToFilter c t fields where
+      toCompared s = Left $ DIED.toValue s
 
--- oh well...
-class HasParameter :: forall k1 k2. k1 -> k2 -> IsParameterized -> Constraint
-class HasParameter c d (has :: IsParameterized) | c -> has, d -> has
-
-instance dontHaveParameter :: (IsSymbol name, IsSymbol otherName) => HasParameter (Field name) (Field otherName) NotParameterized
-else
-instance stillDontHaveParameter :: HasParameter NotParameterized NotParameterized NotParameterized
-else
-instance hasParameter :: HasParameter fp pf Parameterized
-
-equals :: forall parameters fields t field has compared.
-      HasParameter field compared has =>
-      ToCompared field t fields parameters =>
-      ToCompared compared t fields parameters =>
-      field -> compared -> Filters fields parameters has
+equals :: forall fields t field compared. ToFilter field t fields => ToFilter compared t fields => field -> compared -> Filters fields
 equals field compared = Filters $ Operation (toCompared field) (toCompared compared) Equals
 
-notEquals :: forall parameters has fields field t compared.
-      HasParameter field compared has =>
-      ToCompared field t fields parameters =>
-      ToCompared compared t fields parameters =>
-      field -> compared -> Filters fields parameters has
+notEquals :: forall compared fields field t. ToFilter field t fields => ToFilter compared t fields => field -> compared -> Filters fields
 notEquals field compared = Filters $ Operation (toCompared field) (toCompared compared) NotEquals
 
-and :: forall fields parameters has aHas otherHas. HasParameter aHas otherHas has => Filters fields parameters aHas -> Filters fields parameters otherHas -> Filters fields parameters has
+and :: forall fields. Filters fields -> Filters fields -> Filters fields
 and (Filters first) (Filters second) = Filters (And first second)
 
-or :: forall fields aHas otherHas has parameters. HasParameter aHas otherHas has => Filters fields parameters aHas -> Filters fields parameters otherHas -> Filters fields parameters has
+or :: forall fields. Filters fields -> Filters fields -> Filters fields
 or (Filters first) (Filters second) = Filters (Or first second)
 
 infix 4 notEquals as .<>.
