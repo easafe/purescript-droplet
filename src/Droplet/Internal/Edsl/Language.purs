@@ -162,13 +162,17 @@ instance tableToFrom :: (
 ) => ToFrom (Table name fields) s unique fields where
       toFrom table (Select s _) = Select s $ From table E
 
-instance asToFrom :: (
+else instance asToFrom :: (
       ToProjection t fields selected,
       ToProjection s selected projection,
       Nub projection unique,
       UniqueColumnNames projection unique
 ) => ToFrom (Select (Select t pp (From f fields rest)) p (As E a)) s unique selected where
       toFrom as (Select s _) = Select s $ From as E
+
+--not ideal!
+else instance elseToFrom :: Fail (Text "Projection source must be table or aliased subquery") => ToFrom f s p fd where
+      toFrom f (Select s _) = Select s (From f E)
 
 from :: forall f s p projection fields. ToFrom f s projection fields => f -> Select s p E -> Select s projection (From f fields E)
 from = toFrom
