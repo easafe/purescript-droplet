@@ -40,6 +40,7 @@ ToQuery should print valid sql strings but reject queries that can't be executed
 1. naked selects (i.e. not projecting from a source) can be potentially invalid (e.g. SELECT id) so only a limited sub set of SELECT is accepted as top level
 
 2. literal values in comparisions are automatically bound to parameters
+      $1, $2, $n, in the order they appear, left to right
 
 3. PREPARE statements are not printed here
       pg will do it for us
@@ -70,8 +71,8 @@ else instance asNakedSelectToQuery :: (IsSymbol name, ToQuery s p) => ToQuery (N
 
 else instance tupleToQuery :: (ToQuery (NakedSelect s) p, ToQuery (NakedSelect t) pp) => ToQuery (NakedSelect (Tuple (Select s ss E) (Select t tt E))) ppp where
       toQuery (NakedSelect (Tuple (Select s _) (Select t _))) = do
-            otherQ <- toQuery $ NakedSelect t
             q <- toQuery $ NakedSelect s
+            otherQ <- toQuery $ NakedSelect t
             pure $ q <> comma <> otherQ
 
 else instance failNakedToQuery :: Fail (Text "Naked select columns must be either scalar values or named subqueries") => ToQuery (NakedSelect s) projection where
@@ -94,9 +95,9 @@ else instance asSelectToQuery :: (ToColumnQuery s, ToQuery s pp, IsSymbol name) 
 
 else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery (Select s projection rest) projection where
       toQuery (Select s rest) = do
-            q <- toQuery rest
-            otherQ <- toColumnQuery s
-            pure $ selectKeyword <> otherQ <> q
+            q <-  toColumnQuery s
+            otherQ <- toQuery rest
+            pure $ selectKeyword <> q <> otherQ
 
 class ToColumnQuery q where
       toColumnQuery :: q -> State QueryState String
@@ -115,11 +116,11 @@ else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColum
 
 else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t, ToQuery rest p, ToQuery extra pp) => ToColumnQuery (Tuple (Select s some rest) (Select t more extra)) where
       toColumnQuery (Tuple (Select s rest) (Select t extra)) = do
-            q <- toQuery rest
-            extraQ <- toQuery extra
             sQ <- toColumnQuery s
+            restQ <- toQuery rest
             tQ <- toColumnQuery t
-            pure $ sQ <> q <> comma <> tQ <> extraQ
+            extraQ <- toQuery extra
+            pure $ sQ <> restQ <> comma <> tQ <> extraQ
 
 else instance asSelectToColumnQuery :: (ToQuery s projection, IsSymbol name) => ToColumnQuery (Select s projection (As E name)) where
       toColumnQuery s = toAsQuery s
@@ -138,16 +139,16 @@ instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (T
 --typing only s instead of (Select s p (As E name)) breaks purescript instance resolution
 else instance fromAsToQuery :: (ToQuery (Select s p (As E name)) p, ToQuery rest pp) => ToQuery (From (Select s p (As E name)) fields rest) projection where
       toQuery (From s rest) = do
-            otherQ <- toQuery rest
             q <- toQuery s
+            otherQ <- toQuery rest
             pure $ fromKeyword <> q <> otherQ
 
 --where
 instance whereToQuery :: ToQuery rest p => ToQuery (Where rest) projection where
       toQuery (Where filtered rest) = do
-            q <- toQuery rest
-            otherQ <- printFilters filtered
-            pure $ whereKeyword <> otherQ <> q
+            q <- printFilters filtered
+            otherQ <- toQuery rest
+            pure $ whereKeyword <> q <> otherQ
 
 printFilters :: Filtered -> State QueryState String
 printFilters filtered = case filtered of

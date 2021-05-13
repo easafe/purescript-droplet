@@ -1,15 +1,7 @@
 'use strict';
 
-// `pg related code/bindings are done here as we want to
-// allow frontend modules to access `PostgreSQL.*` classes too.
-// Putting this import into `PostgreSQL/Value.js` caused is a problem
-// for the web bundlers etc.
-
 var pg = require('pg');
 
-// pg does strange thing converting DATE
-// value to js Date, so we have
-// to prevent this craziness
 pg.types.setTypeParser(1082 /* DATE_OID */, function (dateString) { return dateString; });
 
 exports.connect_ = function (config) {
@@ -40,7 +32,6 @@ exports.connect_ = function (config) {
 };
 
 exports.rawQuery_ = function (config) {
-    // Either `Pool` or `Client` instance
     return function (dbHandle) {
         return function (rq) {
             return function (onError, onSuccess) {
