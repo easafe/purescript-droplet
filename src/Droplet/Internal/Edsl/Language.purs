@@ -5,7 +5,7 @@
 module Droplet.Internal.Edsl.Language where
 
 import Droplet.Internal.Edsl.Definition
-import Droplet.Internal.Edsl.Filter
+import Droplet.Internal.Edsl.Condition
 import Prelude
 
 import Data.Tuple (Tuple(..))
@@ -183,8 +183,8 @@ from = toFrom
 
 data Where rest = Where Filtered rest
 
-wher :: forall f s projection fields. Filters fields -> Select s projection (From f fields E) -> Select s projection (From f fields (Where E))
-wher (Filters filtered) (Select s (From f E)) = Select s <<< From f $ Where filtered E
+wher :: forall f s projection fields. Condition fields -> Select s projection (From f fields E) -> Select s projection (From f fields (Where E))
+wher (Condition filtered) (Select s (From f E)) = Select s <<< From f $ Where filtered E
 
 
 

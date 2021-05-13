@@ -1,7 +1,7 @@
 module Test.Main where
 
 import Droplet.Internal.Edsl.Definition
-import Droplet.Internal.Edsl.Filter
+import Droplet.Internal.Edsl.Condition
 import Droplet.Internal.Edsl.Language
 import Prelude
 

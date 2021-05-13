@@ -4,7 +4,7 @@
 module Droplet.Internal.Mapper.Query where
 
 import Droplet.Internal.Edsl.Definition
-import Droplet.Internal.Edsl.Filter
+import Droplet.Internal.Edsl.Condition
 import Droplet.Internal.Edsl.Language
 import Prelude
 
@@ -152,12 +152,12 @@ instance whereToQuery :: ToQuery rest p => ToQuery (Where rest) projection where
 
 printFilters :: Filtered -> State QueryState String
 printFilters filtered = case filtered of
-      Operation field otherField op -> printFilterParameter field otherField op
+      Operation opFields op -> printFilterParameter opFields op
       And filter otherFilter -> printBracketedFilters andKeyword filter otherFilter
       Or filter otherFilter -> printBracketedFilters orKeyword filter otherFilter
 
-printFilterParameter :: Either Foreign String -> Either Foreign String -> Operator -> State QueryState String
-printFilterParameter field otherField op = do
+printFilterParameter :: OperationFields -> Operator -> State QueryState String
+printFilterParameter (OperationFields field otherField) op = do
       q <- fieldParameters field
       otherQ <- fieldParameters otherField
       pure $ q <> printOperator op <> otherQ
