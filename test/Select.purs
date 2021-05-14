@@ -6,32 +6,13 @@ import Droplet.Internal.Edsl.Language
 import Prelude
 import Test.Types
 
-import Data.Date (Date)
-import Data.Date as DD
-import Data.DateTime (DateTime(..), Time(..))
-import Data.Either (Either(..))
-import Data.Enum (class BoundedEnum)
-import Data.Enum as DE
-import Data.Eq (class EqRecord)
-import Data.Maybe (Maybe(..))
-import Data.Maybe as DM
-import Data.Show (class ShowRecordFields)
 import Data.Tuple.Nested ((/\))
-import Droplet.Internal.Mapper.Driver (class FromResult)
-import Droplet.Internal.Mapper.Driver as Driver
-import Droplet.Internal.Mapper.Pool as DIMP
-import Droplet.Internal.Mapper.Query (class ToQuery, Query(..))
 import Droplet.Internal.Mapper.Query as Query
-import Effect.Aff (Aff)
-import Effect.Class (liftEffect)
-import Partial.Unsafe as PU
-import Prim.RowList (class RowToList)
 import Test.Unit (TestSuite)
 import Test.Unit as TU
 import Test.Model as TM
-import Test.Unit.Assert as TUA
 
---lets clean these test out of these meaningless suie categories
+--lets clean these test out of these meaningless suite categories
 tests :: TestSuite
 tests = do
       TU.suite "from" do

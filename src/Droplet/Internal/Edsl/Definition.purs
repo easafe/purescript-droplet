@@ -3,7 +3,6 @@ module Droplet.Internal.Edsl.Definition where
 import Prelude
 
 import Control.Monad.Except as CME
-import Data.Array ((:))
 import Data.Bifunctor as DB
 import Data.Date (Date)
 import Data.Date as DD
@@ -14,14 +13,8 @@ import Data.Enum as DEN
 import Data.Int as DI
 import Data.String (Pattern(..))
 import Data.String as DST
-import Data.Symbol (class IsSymbol)
 import Foreign (Foreign)
 import Foreign as F
-import Prim.Row (class Cons)
-import Prim.RowList (RowList)
-import Prim.RowList as RL
-import Record as R
-import Type.Proxy (Proxy(..))
 
 data Field (name :: Symbol) = Field
 
@@ -43,6 +36,9 @@ instance stringToValue :: ToValue String where
       toValue = F.unsafeToForeign
 
 instance intToValue :: ToValue Int where
+      toValue = F.unsafeToForeign
+
+instance booleanToValue :: ToValue Boolean where
       toValue = F.unsafeToForeign
 
 instance dateToValue :: ToValue Date where

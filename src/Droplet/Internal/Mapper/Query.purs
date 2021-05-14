@@ -181,11 +181,19 @@ printOperator = case _ of
       Equals -> equalsSymbol
       NotEquals -> notEqualsSymbol
 
---gonna have to change for insert into ... select ...
-instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues rest) => ToQuery (InsertInto name fields fieldNames rest) () where
-      toQuery (InsertInto fieldNames rest) = do
-            q <- toFieldValues rest
-            pure $ insertKeyword <> openBracket <> toFieldNames fieldNames <> closeBracket <> valuesKeyword <> q
+
+instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v) => ToQuery (InsertInto name fields fieldNames (Values v)) () where
+      toQuery (InsertInto fieldNames (Values v)) = do
+            q <- toFieldValues v
+            pure $ insertKeyword <>
+                  DS.reflectSymbol (Proxy :: Proxy name) <>
+                  openBracket <>
+                  toFieldNames fieldNames <>
+                  closeBracket <>
+                  valuesKeyword <>
+                  openBracket <>
+                  q <>
+                  closeBracket
 
 class ToFieldNames fieldNames where
       toFieldNames :: fieldNames -> String

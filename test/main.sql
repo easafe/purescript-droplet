@@ -18,21 +18,24 @@ create table messages (
       constraint recipient_user foreign key (recipient) references users(id)
 );
 
+create table tags (
+      id integer generated always as identity primary key,
+      name text not null,
+      created date,
+      by integer,
+
+      constraint by_user foreign key (by) references users(id)
+);
+
 create or replace function truncate_tables()
   returns void as
 $body$
 begin
       truncate table users restart identity cascade;
-      truncate table messages restart identity cascade ;
+      truncate table messages restart identity cascade;
+      truncate table tags restart identity cascade;
 end;
   $body$
   language plpgsql;
 
-
---while we dont support select
-insert into users (name, surname, birthday) values ('josh', 'j.', '1990-01-01');
-insert into users (name, surname, birthday) values ('mary', 'sue', '1900-11-11');
-
-insert into messages (sender, recipient, sent, date, second_date) values (1, 2, true, '2000-03-04', '2000-03-04');
-insert into messages (sender, recipient, sent, date, second_date) values (2, 1, true, '2000-03-04', '2000-03-04');
 

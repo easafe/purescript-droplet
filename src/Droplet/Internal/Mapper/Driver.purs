@@ -232,14 +232,15 @@ query connection q = do
                   values: parameters
             }
 
---should this be made nicer?
+--needs work, parameters should be record, string query shuld accept @named syntax for parameters
 unsafeQuery :: forall projection pro .
       RowToList projection pro =>
       FromResult pro (Record projection) =>
       Connection ->
-      Query projection ->
+      String ->
+      Array Foreign ->
       Aff (Either PgError (Array (Record projection)))
-unsafeQuery connection q = query connection q
+unsafeQuery connection q p = query connection $ Query Nothing q p
 
 -- -- | Execute a PostgreSQL query and discard its results.
 -- execute ::
