@@ -3,8 +3,8 @@
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
 module Droplet.Internal.Mapper.Query where
 
-import Droplet.Internal.Edsl.Definition
 import Droplet.Internal.Edsl.Condition
+import Droplet.Internal.Edsl.Definition
 import Droplet.Internal.Edsl.Language
 import Prelude
 
@@ -13,6 +13,7 @@ import Control.Monad.State as CMS
 import Data.Array as DA
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
+import Data.String as DST
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
@@ -180,7 +181,36 @@ printOperator = case _ of
       Equals -> equalsSymbol
       NotEquals -> notEqualsSymbol
 
--- -- instance insertValuesToQuery :: ToQuery (InsertInto name fields fieldNames (Values fieldValues))
+--gonna have to change for insert into ... select ...
+instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues rest) => ToQuery (InsertInto name fields fieldNames rest) () where
+      toQuery (InsertInto fieldNames rest) = do
+            q <- toFieldValues rest
+            pure $ insertKeyword <> openBracket <> toFieldNames fieldNames <> closeBracket <> valuesKeyword <> q
+
+class ToFieldNames fieldNames where
+      toFieldNames :: fieldNames -> String
+
+instance fieldToFieldNames :: IsSymbol name => ToFieldNames (Field name) where
+      toFieldNames _ = DS.reflectSymbol (Proxy :: Proxy name)
+
+instance tupleToFieldNames :: (IsSymbol name, ToFieldNames rest) => ToFieldNames (Tuple (Field name) rest) where
+      toFieldNames (Tuple _ rest) = DS.reflectSymbol (Proxy :: Proxy name) <> comma <> toFieldNames rest
+
+
+class ToFieldValues fieldValues where
+      toFieldValues :: fieldValues -> State QueryState String
+
+instance tupleToFieldValues :: (ToFieldValues p, ToFieldValues rest) => ToFieldValues (Tuple p rest) where
+      toFieldValues (Tuple p rest) = do
+            q <- toFieldValues p
+            otherQ <- toFieldValues rest
+            pure $ q <> comma <> otherQ
+
+else instance fieldToFieldValues :: ToValue p => ToFieldValues p where
+      toFieldValues p = do
+            {parameters} <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters $ toValue p }
+            pure $ "$" <> show (DA.length parameters)
+
 
 toAsQuery :: forall name p s projection. IsSymbol name => ToQuery s p => Select s projection (As E name) -> State QueryState String
 toAsQuery (Select s (As E)) = do
@@ -230,3 +260,9 @@ notEqualsSymbol = " <> "
 
 parameterToken :: String
 parameterToken = "$"
+
+insertKeyword :: String
+insertKeyword = "INSERT INTO "
+
+valuesKeyword :: String
+valuesKeyword = " VALUES "

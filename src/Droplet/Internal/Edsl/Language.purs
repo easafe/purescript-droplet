@@ -299,7 +299,7 @@ INSERT INTO
 
 ---------------------------INSERT------------------------------------------
 
-data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames rest = InsertInto (Table name fields) fieldNames rest
+data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames rest = InsertInto fieldNames rest
 
 newtype Values fieldValues = Values fieldValues
 
@@ -312,14 +312,14 @@ instance fieldToInsertFields :: Cons name t e fields => ToInsertFields fields (F
 instance tupleToInsertFields :: (Cons name t e fields, ToInsertFields fields rest) => ToInsertFields fields (Tuple (Field name) rest)
 
 insertInto :: forall tableName fields fieldNames. ToInsertFields fields fieldNames => Table tableName fields -> fieldNames -> InsertInto tableName fields fieldNames E
-insertInto table fieldNames = InsertInto table fieldNames E
+insertInto _ fieldNames = InsertInto fieldNames E
 
 
 class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fieldNames -> fields, fieldNames -> t
 
-instance fieldToInsertValues :: (Cons name t e fields) => ToInsertValues fields (Field name) t
+instance fieldToInsertValues :: (Cons name t e fields, ToValue t) => ToInsertValues fields (Field name) t
 
-else instance tupleToInsertValues :: (Cons name t e fields, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Field name) some) (Tuple t more)
+else instance tupleToInsertValues :: (Cons name t e fields, ToValue t, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Field name) some) (Tuple t more)
 
 values :: forall tableName fields fieldNames fieldValues. ToInsertValues fields fieldNames fieldValues => fieldValues -> InsertInto tableName fields fieldNames E -> InsertInto tableName fields fieldNames (Values fieldValues)
-values fieldValues (InsertInto table fieldNames _) = InsertInto table fieldNames (Values fieldValues)
+values fieldValues (InsertInto fieldNames _) = InsertInto fieldNames (Values fieldValues)
