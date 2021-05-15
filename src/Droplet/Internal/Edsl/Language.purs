@@ -14,7 +14,7 @@ import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
-import Prim.TypeError (class Fail, Text)
+import Prim.TypeError (class Fail, Quote, Text)
 import Type.Equality (class TypeEquals)
 import Type.RowList (class RowListAppend, class RowListSet)
 
@@ -309,20 +309,22 @@ data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames rest = InsertIn
 newtype Values fieldValues = Values fieldValues
 
 
-class ToInsertFields (fields :: Row Type) (fieldNames :: Type) (inserted :: RowList Type) | fieldNames -> fields, fieldNames -> inserted
+class ToInsertFields (fields :: Row Type) (fieldNames :: Type) (inserted :: Row Type) | fieldNames -> fields, fieldNames -> inserted
 
-instance fieldToInsertFields :: (Cons name t e fields, RowListSet name t RL.Nil single) => ToInsertFields fields (Field name) single
+instance fieldToInsertFields :: (Cons name t e fields, Cons name t () single) => ToInsertFields fields (Field name) single
 
 instance tupleToInsertFields :: (
       Cons name t e fields,
+      Cons name t () head,
       ToInsertFields fields rest tail,
-      RowListSet name t tail all
+      Lacks name tail,
+      Union head tail all
 ) => ToInsertFields fields (Tuple (Field name) rest) all
 
 
-class RequiredFields (fieldList :: RowList Type) (required :: RowList Type) | fieldList -> required
+class RequiredFields (fieldList :: RowList Type) (required :: Row Type) | fieldList -> required
 
-instance nilRequiredFields :: RequiredFields RL.Nil RL.Nil
+instance nilRequiredFields :: RequiredFields RL.Nil ()
 
 instance pkIdCons :: RequiredFields rest required => RequiredFields (RL.Cons n (PrimaryKey (AlwaysIdentity t)) rest) required
 
@@ -330,17 +332,19 @@ else instance aiCons :: RequiredFields rest required => RequiredFields (RL.Cons 
 
 else instance maybeCons :: RequiredFields rest required => RequiredFields (RL.Cons n (Maybe t) rest) required
 
-else instance elseCons :: (RequiredFields rest tail, RowListSet n t tail required) => RequiredFields (RL.Cons n t rest) required
+else instance elseCons :: (RequiredFields rest tail, Cons name t () head, Lacks name tail, Union head tail required) => RequiredFields (RL.Cons name t rest) required
 
 
---this needs to be in such a way that
--- field order doesnt matter
--- it is clear the error comes from required field is missing
+class FieldsMatchRequiredFields (a :: Row Type) (b :: Row Type)
+
+instance sameFieldsMatchRequiredFields :: FieldsMatchRequiredFields a a
+
+
 insertInto :: forall tableName fields fieldNames fieldList required inserted.
       RowToList fields fieldList =>
       RequiredFields fieldList required =>
       ToInsertFields fields fieldNames inserted =>
-      TypeEquals required inserted =>
+      FieldsMatchRequiredFields inserted required  =>
       Table tableName fields -> fieldNames -> InsertInto tableName fields fieldNames E
 insertInto _ fieldNames = InsertInto fieldNames E
 

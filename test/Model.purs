@@ -80,10 +80,10 @@ insertDefaultRecords = do
             Left error -> TU.failure $ "Error connecting" <> show error
             Right connection -> do
                   pure unit
-                  -- void <<< Driver.query connection $ insertInto users (name /\ surname /\ birthday) # values ("josh" /\ "j." /\ makeDate 1990 1 1)
-                  -- void <<< Driver.query connection $ insertInto users (name /\  surname /\ birthday) # values ("mary" /\ "sue" /\ makeDate 1900 11 11)
-                  -- void <<< Driver.query connection $ insertInto messages (sender /\  recipient /\ sent /\ date /\ secondDate) # values (1 /\ 2 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
-                  -- void <<< Driver.query connection $ insertInto messages (sender /\ recipient /\ sent /\ date /\ secondDate) # values (2 /\ 1 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
+                  void <<< Driver.query connection $ insertInto users (name /\ surname /\ birthday) # values ("josh" /\ "j." /\ makeDate 1990 1 1)
+                  void <<< Driver.query connection $ insertInto users (name /\  surname /\ birthday) # values ("mary" /\ "sue" /\ makeDate 1900 11 11)
+                  void <<< Driver.query connection $ insertInto messages (sender /\  recipient /\ sent /\ date /\ secondDate) # values (1 /\ 2 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
+                  void <<< Driver.query connection $ insertInto messages (sender /\ recipient /\ sent /\ date /\ secondDate) # values (2 /\ 1 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
 
 connectionInfo :: Configuration
 connectionInfo = (DIMP.defaultConfiguration "droplet") {
