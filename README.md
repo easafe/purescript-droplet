@@ -5,7 +5,6 @@ _work in progress, pls check back later_
 
 ```bash
 npm install pg
-spago install droplet
 ```
 
 

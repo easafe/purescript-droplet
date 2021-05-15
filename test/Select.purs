@@ -23,13 +23,13 @@ tests = do
 
       TU.suite "parameters" do
             TU.test "equals" do
-                  let q = select id # from users # wher (name .=. "josh")
-                  TM.parameterized "SELECT id FROM users WHERE name = $1" $ Query.query q
-                  TM.result q [{id : 1}]
+                  let q = select recipient # from messages # wher (sender .=. 1)
+                  TM.parameterized "SELECT recipient FROM messages WHERE name = $1" $ Query.query q
+                  TM.result q [{recipient :  2}]
             TU.test "not equals" do
-                  let q = select id # from users # wher (id .<>. 3)
-                  TM.parameterized "SELECT id FROM users WHERE id <> $1" $ Query.query q
-                  TM.result q [{id : 1}, {id: 2}]
+                  let q = select sender # from messages # wher (recipient .<>. 2)
+                  TM.parameterized "SELECT id FROM messages WHERE id <> $1" $ Query.query q
+                  TM.result q [{sender : 1}]
 
             TU.suite "field" do
                   TU.test "equals" do
@@ -46,31 +46,31 @@ tests = do
                         TU.test "single" do
                               let q = select id # from users # wher (name .=. "josh" .&&. name .<>. surname)
                               TM.parameterized "SELECT id FROM users WHERE (name = $1 AND name <> surname)" $ Query.query q
-                              TM.result q [{id : 1}]
+                              TM.result q [{id: pkId 1}]
                         TU.test "many" do
                               let q = select id # from users # wher (name .=. "josh" .&&. "josh" .=. name .&&. surname .=. "j.")
                               TM.parameterized "SELECT id FROM users WHERE ((name = $1 AND $2 = name) AND surname = $3)" $ Query.query q
-                              TM.result q [{id : 1}]
+                              TM.result q [{id: pkId 1}]
 
                   TU.suite "or" do
                         TU.test "single" do
                               let q = select id # from users # wher (name .=. "mary" .||. name .=. surname)
                               TM.parameterized "SELECT id FROM users WHERE (name = $1 OR name = surname)" $ Query.query q
-                              TM.result q [{id : 2}]
+                              TM.result q [{id: pkId 2}]
                         TU.test "many" do
                               let q = select id # from users # wher (name .=. "josh" .||. name .=. "j." .||. surname .<>. "josh")
                               TM.parameterized "SELECT id FROM users WHERE ((name = $1 OR name = $2) OR surname <> $3)" $ Query.query q
-                              TM.result q [{id : 1}, {id : 2}]
+                              TM.result q [{id: pkId 1}, {id: pkId 2}]
 
                   TU.suite "tuple" do
                         TU.test "not bracketed" do
-                              let q = select id # from users # wher (id .=. 333 .||. id .=. 33 .&&. id .=. 3)
+                              let q = select id # from users # wher (id .=. pkId 333 .||. id .=. pkId 33 .&&. id .=. pkId 3)
                               TM.parameterized "SELECT id FROM users WHERE (id = $1 OR (id = $2 AND id = $3))" $ Query.query q
                               TM.result q []
                         TU.test "bracketed" do
-                              let q = select id # from users # wher ((id .=. 2 .||. id .=. 22) .&&. id .=. 2)
+                              let q = select id # from users # wher ((id .=. pkId 2 .||. id .=. pkId 22) .&&. id .=. pkId 2)
                               TM.parameterized "SELECT id FROM users WHERE ((id = $1 OR id = $2) AND id = $3)" $ Query.query q
-                              TM.result q [{id: 2 }]
+                              TM.result q [{id: pkId 2 }]
 
             TU.suite "subqueries" do
                   TU.test "scalar" do
@@ -82,17 +82,17 @@ tests = do
                         let namep = "josh"
                         let q = select (select id # from users # wher (name .=. namep) # as b)
                         TM.parameterized "SELECT (SELECT id FROM users WHERE name = $1) AS b" $ Query.query q
-                        TM.result q [{b: 1 }]
+                        TM.result q [{b: pkId 1 }]
                   TU.test "tuple" do
-                        let parameters = { d : "mary", e : 2 }
+                        let parameters = { d : "mary", e : pkId 2 }
                         let q = select ((3 # as (Alias :: Alias "e")) /\ (select id # from users # wher (name .=. parameters.d) # as b) /\ (select id # from messages # wher (id .=. parameters.e) # as n))
                         TM.parameterized "SELECT 3 AS e, (SELECT id FROM users WHERE name = $1) AS b, (SELECT id FROM messages WHERE id = $2) AS n" $ Query.query q
-                        TM.result q [{e: 3, b: 2, n: 2 }]
+                        TM.result q [{e: 3, b: pkId 2, n: pkId 2 }]
                   TU.test "where" do
-                        let parameters = { d : "mary", e : 2 }
-                        let q = select ((3 # as (Alias :: Alias "e")) /\ (select id # from users # wher (name .=. parameters.d) # as b) /\ (select id # from messages # wher (id .=. parameters.e) # as n)) # from users # wher (id .=. 1 .||. id .=. 2)
+                        let parameters = { d : "mary", e : pkId 2 }
+                        let q = select ((3 # as (Alias :: Alias "e")) /\ (select id # from users # wher (name .=. parameters.d) # as b) /\ (select id # from messages # wher (id .=. parameters.e) # as n)) # from users # wher (id .=. pkId 1 .||. id .=. pkId 2)
                         TM.parameterized "SELECT 3 AS e, (SELECT id FROM users WHERE name = $1) AS b, (SELECT id FROM messages WHERE id = $2) AS n FROM users WHERE (id = $3 OR id = $4)" $ Query.query q
-                        TM.result q [{e: 3, b: 2, n: 2 }, {e: 3, b: 2, n: 2 }]
+                        TM.result q [{e: 3, b: pkId 2, n: pkId 2 }, {e: 3, b: pkId 2, n: pkId 2 }]
 
       TU.suite "as" do
             TU.suite "from" do
@@ -117,7 +117,7 @@ tests = do
                         let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages)) # from messages # as t)
                         TM.notParameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages) AS sent FROM messages) AS t" $ Query.query q
                         --needs limit
-                        TM.result q [{id: 1, date: TM.makeDateTime 2000 3 4, n: 4, sent: true}, {id: 1, date: TM.makeDateTime 2000 3 4, n: 4, sent: true}]
+                        TM.result q [{id: pkId 1, date: TM.makeDateTime 2000 3 4, n: 4, sent: true}, {id: pkId 1, date: TM.makeDateTime 2000 3 4, n: 4, sent: true}]
 
             TU.suite "where" do
                   TU.test "scalar" do
@@ -127,17 +127,17 @@ tests = do
                   TU.test "field" do
                         let q = select id # from (select id # from messages # wher (id .=. id) # as t)
                         TM.notParameterized "SELECT id FROM (SELECT id FROM messages WHERE id = id) AS t" $ Query.query q
-                        TM.result q [{id: 1}, {id: 2}]
+                        TM.result q [{id: pkId 1}, {id: pkId 2}]
                   TU.testSkip "sub query" do
                         let q = select (Field :: Field "id") # from (select (select id # from messages # wher (id .=. id)) # from users # wher (id .=. id) # as t)
                         TM.notParameterized "SELECT id FROM (SELECT (SELECT id FROM messages WHERE id = id) FROM users WHERE id = id) AS t" $ Query.query q
                         --needs limit
-                        TM.result q [{id: 1}, {id: 2}]
+                        TM.result q [{id: pkId 1}, {id: pkId 2}]
                   TU.testSkip "tuple" do
                         let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # wher (id .=. id))) # from messages # wher (id .=. id) # as t)
                         TM.notParameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages WHERE id = id) FROM messages WHERE id = id) AS t" $ Query.query q
                         --needs limit
-                        --TM.result q [{id: 1}, {id: 2}]
+                        --TM.result q [{id: pkId 1}, {id: pkId 2}]
 
             TU.suite "parameters" do
                   TU.testSkip "scalar" do
@@ -149,18 +149,18 @@ tests = do
                         let parameters = {date : TM.makeDateTime 2000 3 4 }
                         let q = select id # from (select id # from messages # wher (date .=. parameters.date) # as t)
                         TM.parameterized "SELECT id FROM (SELECT id FROM messages WHERE date = $1) AS t" $ Query.query q
-                        TM.result q [{id: 1}, {id: 2}]
+                        TM.result q [{id: pkId 1}, {id: pkId 2}]
                   TU.testSkip "sub query" do
-                        let parameters = {id :1 }
+                        let parameters = {id : pkId 1 }
                         let q = select id # from (select (select id # from messages # wher (parameters.id .=. id)) # from users # wher (id .=. parameters.id) # as t)
                         TM.parameterized "SELECT id FROM (SELECT (SELECT id FROM messages WHERE $1 = id) FROM users WHERE id = $2) AS t" $ Query.query q
-                        TM.result q [{id: 1}, {id: 2}]
+                        TM.result q [{id: pkId 1}, {id: pkId 2}]
                   TU.testSkip "tuple" do
-                        let parameters = {id :3 }
+                        let parameters = {id : pkId 3 }
                         --needs limit
                         let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages # wher (parameters.id .=. parameters.id))) # from messages # wher (parameters.id .=. id) # as t)
                         TM.parameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages WHERE $1 = $1) FROM messages WHERE $1 = id) AS t" $ Query.query q
-                        --TM.result q [{id: 1}, {id: 2}]
+                        --TM.result q [{id: pkId 1}, {id: pkId 2}]
 
       TU.suite "naked select" do
             TU.test "scalar" do

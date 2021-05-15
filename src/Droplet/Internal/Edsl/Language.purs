@@ -4,15 +4,20 @@
 
 module Droplet.Internal.Edsl.Language where
 
-import Droplet.Internal.Edsl.Definition
 import Droplet.Internal.Edsl.Condition
+import Droplet.Internal.Edsl.Definition
 import Prelude
 
+import Data.Eq (class EqRecord)
+import Data.Maybe (Maybe)
 import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
+import Type.Equality (class TypeEquals)
+import Type.RowList (class RowListAppend, class RowListSet)
+
 
 {-
 
@@ -304,14 +309,39 @@ data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames rest = InsertIn
 newtype Values fieldValues = Values fieldValues
 
 
---need to check if we are missing mandatory fields
-class ToInsertFields (fields :: Row Type) (fieldNames :: Type) | fieldNames -> fields
+class ToInsertFields (fields :: Row Type) (fieldNames :: Type) (inserted :: RowList Type) | fieldNames -> fields, fieldNames -> inserted
 
-instance fieldToInsertFields :: Cons name t e fields => ToInsertFields fields (Field name)
+instance fieldToInsertFields :: (Cons name t e fields, RowListSet name t RL.Nil single) => ToInsertFields fields (Field name) single
 
-instance tupleToInsertFields :: (Cons name t e fields, ToInsertFields fields rest) => ToInsertFields fields (Tuple (Field name) rest)
+instance tupleToInsertFields :: (
+      Cons name t e fields,
+      ToInsertFields fields rest tail,
+      RowListSet name t tail all
+) => ToInsertFields fields (Tuple (Field name) rest) all
 
-insertInto :: forall tableName fields fieldNames. ToInsertFields fields fieldNames => Table tableName fields -> fieldNames -> InsertInto tableName fields fieldNames E
+
+class RequiredFields (fieldList :: RowList Type) (required :: RowList Type) | fieldList -> required
+
+instance nilRequiredFields :: RequiredFields RL.Nil RL.Nil
+
+instance pkIdCons :: RequiredFields rest required => RequiredFields (RL.Cons n (PrimaryKey (AlwaysIdentity t)) rest) required
+
+else instance aiCons :: RequiredFields rest required => RequiredFields (RL.Cons n (AlwaysIdentity t) rest) required
+
+else instance maybeCons :: RequiredFields rest required => RequiredFields (RL.Cons n (Maybe t) rest) required
+
+else instance elseCons :: (RequiredFields rest tail, RowListSet n t tail required) => RequiredFields (RL.Cons n t rest) required
+
+
+--this needs to be in such a way that
+-- field order doesnt matter
+-- it is clear the error comes from required field is missing
+insertInto :: forall tableName fields fieldNames fieldList required inserted.
+      RowToList fields fieldList =>
+      RequiredFields fieldList required =>
+      ToInsertFields fields fieldNames inserted =>
+      TypeEquals required inserted =>
+      Table tableName fields -> fieldNames -> InsertInto tableName fields fieldNames E
 insertInto _ fieldNames = InsertInto fieldNames E
 
 

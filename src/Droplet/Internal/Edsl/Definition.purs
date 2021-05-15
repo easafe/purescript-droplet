@@ -25,8 +25,31 @@ data Star = Star
 star :: Star
 star = Star
 
+newtype PrimaryKey a = PrimaryKey a
+
+--gotta think this through
+-- data ForeignKey (table :: Row Type) (pkField :: Symbol) t = ForeignKey t
+
+-- | GENERATED ALWAYS AS IDENTITY
+newtype AlwaysIdentity a = AlwaysIdentity a
+
+newtype ByDefaultIdentity a = ByDefaultIdentity a
+
+pkId :: forall a. a -> PrimaryKey (AlwaysIdentity a)
+pkId = PrimaryKey <<< AlwaysIdentity
+
 data Table (name :: Symbol) (fields :: Row Type) = Table
 
+
+derive instance primaryKeyEq :: Eq a => Eq (PrimaryKey a)
+
+derive instance alwaysIdentityEq :: Eq a => Eq (AlwaysIdentity a)
+
+instance primaryKeyShow :: Show a => Show (PrimaryKey a) where
+      show (PrimaryKey a) = show a
+
+instance alwaysIdentityShow :: Show a => Show (AlwaysIdentity a) where
+      show (AlwaysIdentity a) = show a
 
 
 class ToValue v where
@@ -40,6 +63,12 @@ instance intToValue :: ToValue Int where
 
 instance booleanToValue :: ToValue Boolean where
       toValue = F.unsafeToForeign
+
+instance primaryKeyToValue :: ToValue a => ToValue (PrimaryKey a) where
+      toValue (PrimaryKey a) = toValue a
+
+instance alwaysIdentityToValue :: ToValue a => ToValue (AlwaysIdentity a) where
+      toValue (AlwaysIdentity a) = toValue a
 
 instance dateToValue :: ToValue Date where
       toValue = F.unsafeToForeign <<< formatDate
@@ -67,6 +96,13 @@ instance stringFromValue :: FromValue String where
 
 instance booleanFromValue :: FromValue Boolean where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readBoolean
+
+instance primaryKeyFromValue :: FromValue v => FromValue (PrimaryKey v) where
+      fromValue v = PrimaryKey <$> fromValue v
+
+instance alwaysIdentityFromValue :: FromValue v => FromValue (AlwaysIdentity v) where
+      fromValue v = AlwaysIdentity <$>  fromValue v
+
 
 instance dateFromValue :: FromValue Date where
       fromValue v = do
