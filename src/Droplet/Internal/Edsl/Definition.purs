@@ -25,31 +25,25 @@ data Star = Star
 star :: Star
 star = Star
 
-newtype PrimaryKey a = PrimaryKey a
-
 --gotta think this through
 -- data ForeignKey (table :: Row Type) (pkField :: Symbol) t = ForeignKey t
 
--- | GENERATED ALWAYS AS IDENTITY
-newtype AlwaysIdentity a = AlwaysIdentity a
+newtype Auto a = Auto a
 
-newtype ByDefaultIdentity a = ByDefaultIdentity a
-
-pkId :: forall a. a -> PrimaryKey (AlwaysIdentity a)
-pkId = PrimaryKey <<< AlwaysIdentity
+newtype Default a = Default a
 
 data Table (name :: Symbol) (fields :: Row Type) = Table
 
 
-derive instance primaryKeyEq :: Eq a => Eq (PrimaryKey a)
+derive instance defaultEq :: Eq a => Eq (Default a)
 
-derive instance alwaysIdentityEq :: Eq a => Eq (AlwaysIdentity a)
+derive instance autoEq :: Eq a => Eq (Auto a)
 
-instance primaryKeyShow :: Show a => Show (PrimaryKey a) where
-      show (PrimaryKey a) = show a
+instance defaultShow :: Show a => Show (Default a) where
+      show (Default a) = show a
 
-instance alwaysIdentityShow :: Show a => Show (AlwaysIdentity a) where
-      show (AlwaysIdentity a) = show a
+instance autoShow :: Show a => Show (Auto a) where
+      show (Auto a) = show a
 
 
 class ToValue v where
@@ -64,11 +58,11 @@ instance intToValue :: ToValue Int where
 instance booleanToValue :: ToValue Boolean where
       toValue = F.unsafeToForeign
 
-instance primaryKeyToValue :: ToValue a => ToValue (PrimaryKey a) where
-      toValue (PrimaryKey a) = toValue a
+instance defaultToValue :: ToValue a => ToValue (Default a) where
+      toValue (Default a) = toValue a
 
-instance alwaysIdentityToValue :: ToValue a => ToValue (AlwaysIdentity a) where
-      toValue (AlwaysIdentity a) = toValue a
+instance autoToValue :: ToValue a => ToValue (Auto a) where
+      toValue (Auto a) = toValue a
 
 instance dateToValue :: ToValue Date where
       toValue = F.unsafeToForeign <<< formatDate
@@ -97,11 +91,11 @@ instance stringFromValue :: FromValue String where
 instance booleanFromValue :: FromValue Boolean where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readBoolean
 
-instance primaryKeyFromValue :: FromValue v => FromValue (PrimaryKey v) where
-      fromValue v = PrimaryKey <$> fromValue v
+instance defaultFromValue :: FromValue v => FromValue (Default v) where
+      fromValue v = Default <$> fromValue v
 
-instance alwaysIdentityFromValue :: FromValue v => FromValue (AlwaysIdentity v) where
-      fromValue v = AlwaysIdentity <$>  fromValue v
+instance autoFromValue :: FromValue v => FromValue (Auto v) where
+      fromValue v = Auto <$>  fromValue v
 
 
 instance dateFromValue :: FromValue Date where
