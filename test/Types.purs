@@ -4,17 +4,17 @@ import Data.Date (Date)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
 import Droplet (Alias(..), Field(..), Table(..))
-import Droplet.Internal.Edsl.Definition (AlwaysIdentity, Default, PrimaryKey)
+import Droplet.Internal.Edsl.Definition (Default, Auto)
 
 type Users = (
-    id :: PrimaryKey (AlwaysIdentity Int),
+    id :: Auto Int,
     name :: String,
     surname :: String,
     birthday :: Default Date,
     joined :: Default Date
 )
 type Messages = (
-    id :: PrimaryKey (AlwaysIdentity Int),
+    id :: Auto Int,
     sender :: Int,
     recipient :: Int,
     date :: Default DateTime,
@@ -22,7 +22,7 @@ type Messages = (
     sent :: Boolean
 )
 type Tags = (
-    id :: PrimaryKey (AlwaysIdentity Int),
+    id :: Auto Int,
     name :: String,
     created :: Maybe Date,
     by :: Maybe Int

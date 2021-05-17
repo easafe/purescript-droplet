@@ -230,11 +230,11 @@ as a q = toAs a q
 class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s -> fields, s -> projection
 
 --simple columns
-instance fieldToProjection :: (Cons name t e fields, Cons name t () projection) => ToProjection (Field name) fields projection
+instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Field name) fields projection
 
 else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As Int alias) fields projection
 
-else instance fieldAsToProjection :: (Cons name t e fields, Cons alias t () projection) => ToProjection (As (Field name) alias) fields projection
+else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As (Field name) alias) fields projection
 
 else instance starToProjection :: Union fields () projection => ToProjection Star fields projection
 
@@ -298,7 +298,7 @@ full insert syntax supported by droplet
 
 INSERT INTO
       table name fields
-      [VALUES { values |  }]
+      [VALUES values ]
 
 -}
 
@@ -311,49 +311,49 @@ newtype Values fieldValues = Values fieldValues
 
 class ToInsertFields (fields :: Row Type) (fieldNames :: Type) (inserted :: Row Type) | fieldNames -> fields, fieldNames -> inserted
 
-instance fieldToInsertFields :: (Cons name t e fields, Cons name t () single) => ToInsertFields fields (Field name) single
+instance fieldToInsertFields :: (InvalidField t, Cons name t e fields, Cons name t () single) => ToInsertFields fields (Field name) single
 
 instance tupleToInsertFields :: (
-      Cons name t e fields,
-      Cons name t () head,
+      ToInsertFields fields f head,
       ToInsertFields fields rest tail,
-      Lacks name tail,
       Union head tail all
-) => ToInsertFields fields (Tuple (Field name) rest) all
+) => ToInsertFields fields (Tuple f rest) all
 
+
+class InvalidField (t :: Type)
+
+instance autoInvalidField :: Fail (Text "Auto columns cannot be inserted") => InvalidField (Auto t)
+
+else instance elseInvalidField :: InvalidField t
 
 class RequiredFields (fieldList :: RowList Type) (required :: Row Type) | fieldList -> required
 
 instance nilRequiredFields :: RequiredFields RL.Nil ()
 
-instance pkIdCons :: RequiredFields rest required => RequiredFields (RL.Cons n (PrimaryKey (AlwaysIdentity t)) rest) required
+instance autoCons :: RequiredFields rest required => RequiredFields (RL.Cons n (Auto t) rest) required
 
-else instance aiCons :: RequiredFields rest required => RequiredFields (RL.Cons n (AlwaysIdentity t) rest) required
+else instance defaultCons :: RequiredFields rest required => RequiredFields (RL.Cons n (Default t) rest) required
 
 else instance maybeCons :: RequiredFields rest required => RequiredFields (RL.Cons n (Maybe t) rest) required
 
 else instance elseCons :: (RequiredFields rest tail, Cons name t () head, Lacks name tail, Union head tail required) => RequiredFields (RL.Cons name t rest) required
 
 
-class FieldsMatchRequiredFields (a :: Row Type) (b :: Row Type)
-
-instance sameFieldsMatchRequiredFields :: FieldsMatchRequiredFields a a
-
-
-insertInto :: forall tableName fields fieldNames fieldList required inserted.
+--as it is, error messages are not intuitive at all
+insertInto :: forall tableName fields fieldNames fieldList required e inserted.
       RowToList fields fieldList =>
       RequiredFields fieldList required =>
       ToInsertFields fields fieldNames inserted =>
-      FieldsMatchRequiredFields inserted required  =>
+      Union required e inserted =>
       Table tableName fields -> fieldNames -> InsertInto tableName fields fieldNames E
 insertInto _ fieldNames = InsertInto fieldNames E
 
 
 class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fieldNames -> fields, fieldNames -> t
 
-instance fieldToInsertValues :: (Cons name t e fields, ToValue t) => ToInsertValues fields (Field name) t
+instance fieldToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u) => ToInsertValues fields (Field name) u
 
-else instance tupleToInsertValues :: (Cons name t e fields, ToValue t, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Field name) some) (Tuple t more)
+else instance tupleToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Field name) some) (Tuple u more)
 
 values :: forall tableName fields fieldNames fieldValues. ToInsertValues fields fieldNames fieldValues => fieldValues -> InsertInto tableName fields fieldNames E -> InsertInto tableName fields fieldNames (Values fieldValues)
 values fieldValues (InsertInto fieldNames _) = InsertInto fieldNames (Values fieldValues)

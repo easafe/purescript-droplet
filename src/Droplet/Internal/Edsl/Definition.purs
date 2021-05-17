@@ -34,7 +34,6 @@ newtype Default a = Default a
 
 data Table (name :: Symbol) (fields :: Row Type) = Table
 
-
 derive instance defaultEq :: Eq a => Eq (Default a)
 
 derive instance autoEq :: Eq a => Eq (Auto a)
@@ -130,3 +129,11 @@ parseTime input errorMessage =
                   DE.note errorMessage result
             _ -> Left errorMessage
 
+
+class UnwrapDefinition (w :: Type) (t :: Type) | w -> t
+
+instance autoUnwrapDefinition :: UnwrapDefinition (Auto t) t
+
+else instance defaultUnwrapDefinition :: UnwrapDefinition (Default t) t
+
+else instance elseUnwrapDefinition :: UnwrapDefinition t t

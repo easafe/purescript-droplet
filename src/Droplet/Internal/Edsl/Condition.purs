@@ -5,7 +5,7 @@ import Prelude
 import Data.Either (Either(..))
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
-import Droplet.Internal.Edsl.Definition (class ToValue, Field)
+import Droplet.Internal.Edsl.Definition (class ToValue, class UnwrapDefinition, Field)
 import Droplet.Internal.Edsl.Definition as DIED
 import Foreign (Foreign)
 import Prim.Row (class Cons)
@@ -39,20 +39,24 @@ instance fieldFieldToCondition :: (
 
 else instance fieldParameterToCondition :: (
       IsSymbol name,
+      UnwrapDefinition t u,
       Cons name t d fields,
-      ToValue t
-) => ToCondition (Field name) t fields where
+      ToValue u
+) => ToCondition (Field name) u fields where
       toCondition _ p = OperationFields (Right $ DS.reflectSymbol (Proxy :: Proxy name)) (Left $ DIED.toValue p)
 
 else instance parameterFieldToCondition :: (
       IsSymbol name,
+      UnwrapDefinition t u,
       Cons name t d fields,
-      ToValue t
-) => ToCondition t (Field name) fields where
+      ToValue u
+) => ToCondition u (Field name) fields where
       toCondition p _ = OperationFields (Left $ DIED.toValue p) (Right $ DS.reflectSymbol (Proxy :: Proxy name))
 
 else instance parameterParameterToCondition :: (
+      UnwrapDefinition r s,
       ToValue s,
+      UnwrapDefinition u t,
       ToValue t
 ) => ToCondition s t fields where
       toCondition s t = OperationFields (Left $ DIED.toValue s) (Left $ DIED.toValue t)
