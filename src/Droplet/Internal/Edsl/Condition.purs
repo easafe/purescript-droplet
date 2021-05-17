@@ -53,12 +53,7 @@ else instance parameterFieldToCondition :: (
 ) => ToCondition u (Field name) fields where
       toCondition p _ = OperationFields (Left $ DIED.toValue p) (Right $ DS.reflectSymbol (Proxy :: Proxy name))
 
-else instance parameterParameterToCondition :: (
-      UnwrapDefinition r s,
-      ToValue s,
-      UnwrapDefinition u t,
-      ToValue t
-) => ToCondition s t fields where
+else instance parameterParameterToCondition :: ToValue s => ToCondition s s fields where
       toCondition s t = OperationFields (Left $ DIED.toValue s) (Left $ DIED.toValue t)
 
 equals :: forall fields field compared. ToCondition field compared fields => field -> compared -> Condition fields

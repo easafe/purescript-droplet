@@ -24,12 +24,12 @@ tests = do
       TU.suite "parameters" do
             TU.test "equals" do
                   let q = select recipient # from messages # wher (sender .=. 1)
-                  TM.parameterized "SELECT recipient FROM messages WHERE name = $1" $ Query.query q
+                  TM.parameterized "SELECT recipient FROM messages WHERE sender = $1" $ Query.query q
                   TM.result q [{recipient :  2}]
             TU.test "not equals" do
                   let q = select sender # from messages # wher (recipient .<>. 2)
-                  TM.parameterized "SELECT id FROM messages WHERE id <> $1" $ Query.query q
-                  TM.result q [{sender : 1}]
+                  TM.parameterized "SELECT sender FROM messages WHERE recipient <> $1" $ Query.query q
+                  TM.result q [{sender : 2}]
 
             TU.suite "field" do
                   TU.test "equals" do
