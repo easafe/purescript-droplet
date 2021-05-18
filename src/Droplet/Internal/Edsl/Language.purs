@@ -8,15 +8,12 @@ import Droplet.Internal.Edsl.Condition
 import Droplet.Internal.Edsl.Definition
 import Prelude
 
-import Data.Eq (class EqRecord)
 import Data.Maybe (Maybe)
 import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
-import Prim.TypeError (class Fail, Quote, Text)
-import Type.Equality (class TypeEquals)
-import Type.RowList (class RowListAppend, class RowListSet)
+import Prim.TypeError (class Fail, Text)
 
 
 {-
@@ -96,12 +93,22 @@ data E = E
 
 ----------------------PREPARE----------------------------
 
-data Prepare s = Prepare s Plan
+data Prepare q = Prepare q Plan
 
 newtype Plan = Plan String
 
-prepare :: forall s projection rest. Plan -> Select s projection rest -> Prepare (Select s projection rest)
-prepare plan s = Prepare s plan
+class ToPrepare q where
+      toPrepare :: Plan -> q -> Prepare q
+
+--to allow general selects/insert, ToQuery would need to check for invalid statements
+instance selectToPrepare :: ToPrepare (Select s p (From f fields rest)) where
+      toPrepare p q = Prepare q p
+
+instance insertToPrepare :: ToPrepare (InsertInto name fields fieldNames (Values v)) where
+      toPrepare p q = Prepare q p
+
+prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
+prepare plan s = toPrepare plan s
 
 
 
@@ -320,12 +327,6 @@ instance tupleToInsertFields :: (
 ) => ToInsertFields fields (Tuple f rest) all
 
 
-class InvalidField (t :: Type)
-
-instance autoInvalidField :: Fail (Text "Auto columns cannot be inserted") => InvalidField (Auto t)
-
-else instance elseInvalidField :: InvalidField t
-
 class RequiredFields (fieldList :: RowList Type) (required :: Row Type) | fieldList -> required
 
 instance nilRequiredFields :: RequiredFields RL.Nil ()
@@ -339,6 +340,13 @@ else instance maybeCons :: RequiredFields rest required => RequiredFields (RL.Co
 else instance elseCons :: (RequiredFields rest tail, Cons name t () head, Lacks name tail, Union head tail required) => RequiredFields (RL.Cons name t rest) required
 
 
+class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fieldNames -> fields, fieldNames -> t
+
+instance fieldToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u) => ToInsertValues fields (Field name) u
+
+else instance tupleToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Field name) some) (Tuple u more)
+
+
 --as it is, error messages are not intuitive at all
 insertInto :: forall tableName fields fieldNames fieldList required e inserted.
       RowToList fields fieldList =>
@@ -348,12 +356,59 @@ insertInto :: forall tableName fields fieldNames fieldList required e inserted.
       Table tableName fields -> fieldNames -> InsertInto tableName fields fieldNames E
 insertInto _ fieldNames = InsertInto fieldNames E
 
-
-class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fieldNames -> fields, fieldNames -> t
-
-instance fieldToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u) => ToInsertValues fields (Field name) u
-
-else instance tupleToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Field name) some) (Tuple u more)
-
 values :: forall tableName fields fieldNames fieldValues. ToInsertValues fields fieldNames fieldValues => fieldValues -> InsertInto tableName fields fieldNames E -> InsertInto tableName fields fieldNames (Values fieldValues)
 values fieldValues (InsertInto fieldNames _) = InsertInto fieldNames (Values fieldValues)
+
+
+
+{-
+
+full update syntax supported by postgresql https://www.postgresql.org/docs/current/sql-insert.html
+
+[ WITH [ RECURSIVE ] with_query [, ...] ]
+UPDATE [ ONLY ] table_name [ * ] [ [ AS ] alias ]
+    SET { column_name = { expression | DEFAULT } |
+          ( column_name [, ...] ) = [ ROW ] ( { expression | DEFAULT } [, ...] ) |
+          ( column_name [, ...] ) = ( sub-SELECT )
+        } [, ...]
+    [ FROM from_item [, ...] ]
+    [ WHERE condition | WHERE CURRENT OF cursor_name ]
+    [ RETURNING * | output_expression [ [ AS ] output_name ] [, ...] ]
+
+-}
+
+{-
+
+full update syntax supported by droplet
+
+UPDATE table name
+      SET field = value | [, ...]
+-}
+
+---------------------------UPDATE------------------------------------------
+
+newtype Update (name :: Symbol) (fields :: Row Type) rest = Update rest
+
+newtype Set pairs = Set pairs
+
+
+class ToUpdatePairs (fields :: Row Type) (pairs :: Type)
+
+instance tupleToUpdatePairs :: (
+      InvalidField t,
+      UnwrapDefinition t u,
+      ToValue u,
+      Cons name t e fields
+) => ToUpdatePairs fields (Tuple (Field name) u)
+
+else instance tupleTuplesToUpdatePairs :: (
+      ToUpdatePairs fields head,
+      ToUpdatePairs fields tail
+) => ToUpdatePairs fields (Tuple head tail)
+
+
+update :: forall name fields. Table name fields -> Update name fields E
+update _ = Update E
+
+set :: forall name fields pairs. ToUpdatePairs fields pairs => pairs -> Update name fields E -> Update name fields (Set pairs)
+set pairs (Update _) = Update $ Set pairs

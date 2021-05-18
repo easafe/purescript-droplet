@@ -181,7 +181,7 @@ printOperator = case _ of
       Equals -> equalsSymbol
       NotEquals -> notEqualsSymbol
 
-
+--insert
 instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v) => ToQuery (InsertInto name fields fieldNames (Values v)) () where
       toQuery (InsertInto fieldNames (Values v)) = do
             q <- toFieldValues v
@@ -218,6 +218,29 @@ else instance fieldToFieldValues :: ToValue p => ToFieldValues p where
       toFieldValues p = do
             {parameters} <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters $ toValue p }
             pure $ "$" <> show (DA.length parameters)
+
+--update
+instance updateToQuery :: (IsSymbol name, ToFieldValuePairs pairs) => ToQuery (Update name fields (Set pairs)) () where
+      toQuery (Update (Set pairs)) = do
+            q <- toFieldValuePairs pairs
+            pure $ updateKeyword <>
+                  DS.reflectSymbol (Proxy :: Proxy name) <>
+                  setKeyword <>
+                  q
+
+class ToFieldValuePairs pairs where
+      toFieldValuePairs :: pairs -> State QueryState String
+
+instance fieldToFieldValuePairs :: (IsSymbol name, ToValue p) => ToFieldValuePairs (Tuple (Field name) p) where
+      toFieldValuePairs (Tuple _ p) = do
+            { parameters } <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters $ toValue p }
+            pure $ DS.reflectSymbol (Proxy :: Proxy name) <> equalsSymbol <> "$" <> show (DA.length parameters)
+
+else instance tupleTupleToFieldValuePairs :: (ToFieldValuePairs p, ToFieldValuePairs rest) => ToFieldValuePairs (Tuple p rest) where
+      toFieldValuePairs (Tuple p rest) = do
+            q <- toFieldValuePairs p
+            otherQ <- toFieldValuePairs rest
+            pure $ q <> comma <> otherQ
 
 
 toAsQuery :: forall name p s projection. IsSymbol name => ToQuery s p => Select s projection (As E name) -> State QueryState String
@@ -274,3 +297,9 @@ insertKeyword = "INSERT INTO "
 
 valuesKeyword :: String
 valuesKeyword = " VALUES "
+
+updateKeyword :: String
+updateKeyword = "UPDATE "
+
+setKeyword :: String
+setKeyword = " SET "

@@ -15,6 +15,7 @@ import Data.String (Pattern(..))
 import Data.String as DST
 import Foreign (Foreign)
 import Foreign as F
+import Prim.TypeError (class Fail, Text)
 
 data Field (name :: Symbol) = Field
 
@@ -137,3 +138,10 @@ instance autoUnwrapDefinition :: UnwrapDefinition (Auto t) t
 else instance defaultUnwrapDefinition :: UnwrapDefinition (Default t) t
 
 else instance elseUnwrapDefinition :: UnwrapDefinition t t
+
+
+class InvalidField (t :: Type)
+
+instance autoInvalidField :: Fail (Text "Auto columns cannot be inserted or updated") => InvalidField (Auto t)
+
+else instance elseInvalidField :: InvalidField t
