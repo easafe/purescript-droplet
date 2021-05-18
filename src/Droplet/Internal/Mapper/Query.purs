@@ -244,6 +244,12 @@ else instance tupleTupleToFieldValuePairs :: (ToFieldValuePairs p, ToFieldValueP
             otherQ <- toFieldValuePairs rest
             pure $ q <> comma <> otherQ
 
+--delete
+instance deleteToQuery :: ToQuery (From f fields rest) p => ToQuery (Delete fields (From f fields rest)) () where
+      toQuery (Delete fr) = do
+            q <- toQuery fr
+            pure $ deleteKeyword <> q
+
 
 toAsQuery :: forall name p s projection. IsSymbol name => ToQuery s p => Select s projection (As E name) -> State QueryState String
 toAsQuery (Select s (As E)) = do
@@ -305,3 +311,6 @@ updateKeyword = "UPDATE "
 
 setKeyword :: String
 setKeyword = " SET "
+
+deleteKeyword :: String
+deleteKeyword = "DELETE"

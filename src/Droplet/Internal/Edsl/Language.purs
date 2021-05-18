@@ -108,6 +108,9 @@ instance selectToPrepare :: ToPrepare (Select s p (From f fields rest)) where
 instance insertToPrepare :: ToPrepare (InsertInto name fields fieldNames (Values v)) where
       toPrepare p q = Prepare q p
 
+instance updateToPrepare :: ToPrepare (Update name fields (Set v rest)) where
+      toPrepare p q = Prepare q p
+
 prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
 prepare plan s = toPrepare plan s
 
@@ -165,29 +168,32 @@ select = toSelect
 
 data From f (fields :: Row Type) rest = From f rest
 
-class ToFrom f s projection fields | f -> s, f -> projection, f -> fields where
-      toFrom :: forall p. f -> Select s p E -> Select s projection (From f fields E)
+class ToFrom f q r | q -> r where
+      toFrom :: f -> q -> r
 
 instance tableToFrom :: (
       ToProjection s fields selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Table name fields) s unique fields where
+) => ToFrom (Table name fields) (Select s p E) (Select s unique (From (Table name fields) fields E)) where
       toFrom table (Select s _) = Select s $ From table E
+
+else instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete f E) (Delete fields (From (Table name fields) fields E)) where
+      toFrom table (Delete _) = Delete $ From table E
 
 else instance asToFrom :: (
       ToProjection t fields selected,
       ToProjection s selected projection,
       Nub projection unique,
       UniqueColumnNames projection unique
-) => ToFrom (Select (Select t pp (From f fields rest)) p (As E a)) s unique selected where
+) => ToFrom (Select (Select t p (From f fields rest)) pp (As E a)) (Select s ppp E) (Select s unique (From (Select (Select t p (From f fields rest)) pp (As E a)) selected E)) where
       toFrom as (Select s _) = Select s $ From as E
 
 --not ideal!
-else instance elseToFrom :: Fail (Text "Projection source must be table or aliased subquery") => ToFrom f s p fd where
-      toFrom f (Select s _) = Select s (From f E)
+else instance elseToFrom :: Fail (Text "Projection source must be table or aliased subquery") => ToFrom f q r  where
+      toFrom _ _ = UC.unsafeCoerce 23
 
-from :: forall f s p projection fields. ToFrom f s projection fields => f -> Select s p E -> Select s projection (From f fields E)
+from :: forall f q r. ToFrom f q r => f -> q -> r
 from = toFrom
 
 
@@ -376,7 +382,7 @@ values fieldValues (InsertInto fieldNames _) = InsertInto fieldNames (Values fie
 
 {-
 
-full update syntax supported by postgresql https://www.postgresql.org/docs/current/sql-insert.html
+full update syntax supported by postgresql https://www.postgresql.org/docs/current/sql-update.html
 
 [ WITH [ RECURSIVE ] with_query [, ...] ]
 UPDATE [ ONLY ] table_name [ * ] [ [ AS ] alias ]
@@ -396,6 +402,7 @@ full update syntax supported by droplet
 
 UPDATE table name
       SET field = value | [, ...]
+      [WHERE conditions]
 -}
 
 ---------------------------UPDATE------------------------------------------
@@ -425,3 +432,31 @@ update _ = Update E
 
 set :: forall name fields pairs. ToUpdatePairs fields pairs => pairs -> Update name fields E -> Update name fields (Set pairs E)
 set pairs (Update _) = Update $ Set pairs E
+
+
+
+{-
+
+full delete syntax supported by postgresql https://www.postgresql.org/docs/current/sql-insert.html
+
+[ WITH [ RECURSIVE ] with_query [, ...] ]
+DELETE FROM [ ONLY ] table_name [ * ] [ [ AS ] alias ]
+    [ USING from_item [, ...] ]
+    [ WHERE condition | WHERE CURRENT OF cursor_name ]
+    [ RETURNING * | output_expression [ [ AS ] output_name ] [, ...] ]
+
+-}
+
+{-
+
+full update syntax supported by droplet
+
+DELETE FROM table name
+-}
+
+---------------------------DELETE------------------------------------------
+
+newtype Delete (fields :: Row Type) rest = Delete rest
+
+delete :: forall fields. Delete fields E
+delete = Delete E
