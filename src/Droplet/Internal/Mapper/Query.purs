@@ -220,13 +220,15 @@ else instance fieldToFieldValues :: ToValue p => ToFieldValues p where
             pure $ "$" <> show (DA.length parameters)
 
 --update
-instance updateToQuery :: (IsSymbol name, ToFieldValuePairs pairs) => ToQuery (Update name fields (Set pairs)) () where
-      toQuery (Update (Set pairs)) = do
+instance updateToQuery :: (IsSymbol name, ToFieldValuePairs pairs, ToQuery rest p) => ToQuery (Update name fields (Set pairs rest)) () where
+      toQuery (Update (Set pairs rest)) = do
             q <- toFieldValuePairs pairs
+            otherQ <- toQuery rest
             pure $ updateKeyword <>
                   DS.reflectSymbol (Proxy :: Proxy name) <>
                   setKeyword <>
-                  q
+                  q <>
+                  otherQ
 
 class ToFieldValuePairs pairs where
       toFieldValuePairs :: pairs -> State QueryState String

@@ -14,6 +14,7 @@ import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
+import Unsafe.Coerce as UC
 
 
 {-
@@ -195,8 +196,20 @@ from = toFrom
 
 data Where rest = Where Filtered rest
 
-wher :: forall f s projection fields. Condition fields -> Select s projection (From f fields E) -> Select s projection (From f fields (Where E))
-wher (Condition filtered) (Select s (From f E)) = Select s <<< From f $ Where filtered E
+class ToWhere q w fields | q -> w, q -> fields where
+      toWhere :: Condition fields -> q -> w
+
+instance selectToWhere :: ToWhere (Select s projection (From f fields E)) (Select s projection (From f fields (Where E))) fields where
+      toWhere (Condition filtered) (Select s (From f E)) = Select s <<< From f $ Where filtered E
+
+else instance updateToWhere :: ToWhere (Update name fields (Set v E)) (Update name fields (Set v (Where E))) fields where
+      toWhere (Condition filtered) (Update (Set v E)) = Update <<< Set v $ Where filtered E
+
+else instance elseToWhere :: Fail (Text "Only full SELECT, UPDATE and DELETE statements can use WHERE clauses") => ToWhere q w fields where
+      toWhere _ _ = UC.unsafeCoerce 3
+
+wher :: forall q w fields. ToWhere q w fields => Condition fields -> q -> w
+wher conditions q = toWhere conditions q
 
 
 
@@ -389,7 +402,7 @@ UPDATE table name
 
 newtype Update (name :: Symbol) (fields :: Row Type) rest = Update rest
 
-newtype Set pairs = Set pairs
+data Set pairs rest = Set pairs rest
 
 
 class ToUpdatePairs (fields :: Row Type) (pairs :: Type)
@@ -410,5 +423,5 @@ else instance tupleTuplesToUpdatePairs :: (
 update :: forall name fields. Table name fields -> Update name fields E
 update _ = Update E
 
-set :: forall name fields pairs. ToUpdatePairs fields pairs => pairs -> Update name fields E -> Update name fields (Set pairs)
-set pairs (Update _) = Update $ Set pairs
+set :: forall name fields pairs. ToUpdatePairs fields pairs => pairs -> Update name fields E -> Update name fields (Set pairs E)
+set pairs (Update _) = Update $ Set pairs E
