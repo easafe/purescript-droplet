@@ -111,6 +111,9 @@ instance insertToPrepare :: ToPrepare (InsertInto name fields fieldNames (Values
 instance updateToPrepare :: ToPrepare (Update name fields (Set v rest)) where
       toPrepare p q = Prepare q p
 
+instance deleteToPrepare :: ToPrepare (Delete fields (From f fields rest)) where
+      toPrepare p q = Prepare q p
+
 prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
 prepare plan s = toPrepare plan s
 
@@ -455,6 +458,7 @@ DELETE FROM [ ONLY ] table_name [ * ] [ [ AS ] alias ]
 full update syntax supported by droplet
 
 DELETE FROM table name
+      [WHERE condition]
 -}
 
 ---------------------------DELETE------------------------------------------

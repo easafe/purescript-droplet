@@ -2,6 +2,7 @@ module Droplet.Internal.Mapper.Driver where
 
 import Prelude
 
+import Data.Array ((:))
 import Data.Bifunctor as DB
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
@@ -17,7 +18,7 @@ import Data.String as String
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Traversable as DT
-import Droplet.Internal.Edsl.Definition (class FromValue)
+import Droplet.Internal.Edsl.Definition (class FromValue, class ToValue)
 import Droplet.Internal.Edsl.Definition as DIED
 import Droplet.Internal.Edsl.Language (Plan(..))
 import Droplet.Internal.Mapper.Pool (Pool)
@@ -135,6 +136,22 @@ instance consFromResult :: (
             where value = PU.unsafePartial (DM.fromJust $ FO.lookup (DS.reflectSymbol (Proxy :: Proxy name)) raw)
 
 
+class ToParameters record (list :: RowList Type) where
+      toParameters :: Proxy list -> Record record -> Array Foreign
+
+instance nilToParameters :: ToParameters record RL.Nil where
+      toParameters _ _ = []
+
+instance consToParameters :: (
+      IsSymbol name,
+      ToValue t,
+      Cons name t e record,
+      ToParameters record rest
+) => ToParameters record (RL.Cons name t rest) where
+      toParameters _ record = DIED.toValue (R.get (Proxy :: Proxy name) record) : toParameters (Proxy :: Proxy rest) record
+
+
+
 
 foreign import connect_ :: forall a. {
       nullableLeft :: Error -> Nullable (Either PgError ConnectResult),
@@ -232,15 +249,18 @@ query connection q = do
                   values: parameters
             }
 
---needs work, parameters should be record, string query shuld accept @named syntax for parameters
-unsafeQuery :: forall projection pro .
+--replace @name for $n
+unsafeQuery :: forall projection pro parameters pra.
       RowToList projection pro =>
+      RowToList parameters pra =>
+      ToParameters parameters pra =>
       FromResult pro (Record projection) =>
       Connection ->
+      Maybe Plan ->
       String ->
-      Array Foreign ->
+      Record parameters ->
       Aff (Either PgError (Array (Record projection)))
-unsafeQuery connection q p = query connection $ Query Nothing q p
+unsafeQuery connection plan q p = query connection <<< Query plan q $ toParameters (Proxy :: Proxy pra) p
 
 -- -- | Execute a PostgreSQL query and discard its results.
 -- execute ::
