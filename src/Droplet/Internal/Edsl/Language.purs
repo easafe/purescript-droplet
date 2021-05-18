@@ -190,7 +190,7 @@ else instance asToFrom :: (
       toFrom as (Select s _) = Select s $ From as E
 
 --not ideal!
-else instance elseToFrom :: Fail (Text "Projection source must be table or aliased subquery") => ToFrom f q r  where
+else instance elseToFrom :: Fail (Text "Projection source must be table or aliased subquery") => ToFrom f q r where
       toFrom _ _ = UC.unsafeCoerce 23
 
 from :: forall f q r. ToFrom f q r => f -> q -> r
@@ -210,6 +210,9 @@ instance selectToWhere :: ToWhere (Select s projection (From f fields E)) (Selec
 
 else instance updateToWhere :: ToWhere (Update name fields (Set v E)) (Update name fields (Set v (Where E))) fields where
       toWhere (Condition filtered) (Update (Set v E)) = Update <<< Set v $ Where filtered E
+
+else instance deleteToWhere :: ToWhere (Delete fields (From f fields E)) (Delete fields (From f fields (Where E))) fields where
+      toWhere (Condition filtered) (Delete (From f E)) = Delete <<< From f $ Where filtered E
 
 else instance elseToWhere :: Fail (Text "Only full SELECT, UPDATE and DELETE statements can use WHERE clauses") => ToWhere q w fields where
       toWhere _ _ = UC.unsafeCoerce 3
