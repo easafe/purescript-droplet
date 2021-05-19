@@ -34,6 +34,7 @@ import Droplet.Internal.Mapper.Query (class ToQuery, Query(..))
 import Droplet.Internal.Mapper.Query as DIMQ
 import Effect (Effect)
 import Effect.Aff (Aff, bracket)
+import Effect.Aff as EA
 import Effect.Aff.Compat (EffectFnAff)
 import Effect.Aff.Compat as EAC
 import Effect.Class (liftEffect)
@@ -48,7 +49,7 @@ import Prim.RowList as RL
 import Record (delete) as Record
 import Record as R
 import Type.Proxy (Proxy(..))
-import Unsafe.Coerce (unsafeCoerce)
+import Unsafe.Coerce as UC
 
 type ConnectResult = {
       client :: Client,
@@ -65,7 +66,8 @@ data PgError =
       DataError PGErrorDetail |
       NotSupportedError PGErrorDetail |
       QueryCanceledError PGErrorDetail |
-      TransactionRollbackError PGErrorDetail
+      TransactionRollbackError PGErrorDetail |
+      TooManyRows
 
 type PGErrorDetail = {
       severity :: String,
@@ -183,36 +185,26 @@ connect = EAC.fromEffectFnAff <<< connect_ rightLeft
 withConnection :: forall a. Pool -> (Either PgError Connection -> Aff a) -> Aff a
 withConnection p k = withClient p (lcmap (map fromClient) k)
 
--- | TODO: Provide docs
--- withTransaction :: forall a. Pool -> (Connection -> Aff a) -> Aff (Either PgError a)
--- withTransaction pool action =
---       withClient pool case _ of
---             Right client ->
---                   withClientTransaction client do
---                         (action $ fromClient client)
---             Left err -> pure $ Left err
+withTransaction :: forall a. Pool -> (Connection -> Aff a) -> Aff (Either PgError a)
+withTransaction pool action = withClient pool case _ of
+      Right client -> withClientTransaction client (action $ fromClient client)
+      Left err -> pure $ Left err
 
--- -- | TODO: Outdated docs
--- -- | Run an action within a transaction. The transaction is committed if the
--- -- | action returns cleanly, and rolled back if the action throws (either a
--- -- | `PgError` or a JavaScript exception in the Aff context). If you want to
--- -- | change the transaction mode, issue a separate `SET TRANSACTION` statement
--- -- | within the transaction.
--- withClientTransaction :: forall a. Client -> Aff a -> Aff (Either PgError a)
--- withClientTransaction client action =
---       begin >>= case _ of
---                   Nothing -> do
---                         a <- action `catchError` \jsErr -> do
---                               void $ rollback
---                               throwError jsErr
---                         commit >>= case _ of
---                               Just pgError -> pure (Left pgError)
---                               Nothing -> pure (Right a)
---                   Just pgError -> pure (Left pgError)
---       where conn = fromClient client
---             begin = execute conn (Query "BEGIN TRANSACTION") Row0
---             commit = execute conn (Query "COMMIT TRANSACTION") Row0
---             rollback = execute conn (Query "ROLLBACK TRANSACTION") Row0
+withClientTransaction :: forall a. Client -> Aff a -> Aff (Either PgError a)
+withClientTransaction client action =
+      begin >>= case _ of
+                  Nothing -> do
+                        a <- action `EA.catchError` \jsErr -> do
+                              void $ rollback
+                              EA.throwError jsErr
+                        commit >>= case _ of
+                              Nothing -> pure $ Right a
+                              Just pgError -> pure $ Left pgError
+                  Just pgError -> pure $ Left pgError
+      where connection = fromClient client
+            begin = unsafeExecute connection Nothing "BEGIN TRANSACTION" {}
+            commit = unsafeExecute connection Nothing "COMMIT TRANSACTION" {}
+            rollback = unsafeExecute connection Nothing "ROLLBACK TRANSACTION" {}
 
 
 -------------------------------QUERYING----------------------------------
@@ -254,35 +246,47 @@ unsafeQuery :: forall projection pro parameters pra.
       Aff (Either PgError (Array (Record projection)))
 unsafeQuery connection plan q parameters = query connection $ DIMQ.unsafeQuery plan q parameters
 
--- -- | Execute a PostgreSQL query and discard its results.
--- execute ::
---       forall i o.
---       (ToSQLRow i) =>
---       Connection ->
---       Query i o ->
---       i ->
---       Aff (Maybe PgError)
--- execute conn (Query sql) values = hush <<< either Right Left <$> rawQuery conn sql (toSQLRow values)
+execute :: forall q. ToQuery q () => Connection -> q -> Aff (Maybe PgError)
+execute connection q = do
+      results <- query connection q
+      pure $ case results of
+            Left err -> Just err
+            _ -> Nothing
 
--- | Execute a PostgreSQL query and return the first field of the first row in
--- | the result.
--- scalar ::
---       forall i o.
---       ToSQLRow i =>
---       FromSQLValue o =>
---       Connection ->
---       Query i (Row1 o) ->
---       i ->
---       Aff (Either PgError (Maybe o))
--- scalar conn sql values = query conn sql values <#> map (head >>> map (case _ of Row1 a -> a))
+unsafeExecute :: forall parameters pra.
+      RowToList parameters pra =>
+      ToParameters parameters pra =>
+      Connection ->
+      Maybe Plan ->
+      String ->
+      Record parameters ->
+      Aff (Maybe PgError)
+unsafeExecute connection plan q parameters = do
+      results <- query connection (DIMQ.unsafeQuery plan q parameters :: Query ())
+      pure $ case results of
+            Left err -> Just err
+            _ -> Nothing
 
-
+single ::forall q projection pro.
+      ToQuery q projection =>
+      RowToList projection pro =>
+      FromResult pro (Record projection) =>
+      Connection ->
+      q ->
+      Aff (Either PgError (Maybe (Record projection)))
+single connection q = do
+      results <- query connection q
+      pure $ case results of
+            Left err -> Left err
+            Right [] -> Right Nothing
+            Right [r] -> Right $ Just r
+            _ -> Left TooManyRows
 
 
 toUntaggedHandler :: Connection -> UntaggedConnection
 toUntaggedHandler (Connection c) = case c of
-      Left pool -> unsafeCoerce pool
-      Right client -> unsafeCoerce client
+      Left pool -> UC.unsafeCoerce pool
+      Right client -> UC.unsafeCoerce client
 
 fromPool :: Pool -> Connection
 fromPool pool = Connection (Left pool)
