@@ -230,7 +230,7 @@ wher conditions q = toWhere conditions q
 
 newtype As q (alias :: Symbol) = As q
 
-class ToAs q as name | q -> name as where
+class ToAs q as (name :: Symbol) | q -> name as where
       toAs :: Proxy name -> q -> as
 
 instance intToAs :: ToAs Int (As Int name) name where

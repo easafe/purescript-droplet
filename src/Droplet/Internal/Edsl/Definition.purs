@@ -3,6 +3,7 @@ module Droplet.Internal.Edsl.Definition where
 import Prelude
 
 import Control.Monad.Except as CME
+import Data.Array ((:))
 import Data.Bifunctor as DB
 import Data.Date (Date)
 import Data.Date as DD
@@ -13,9 +14,18 @@ import Data.Enum as DEN
 import Data.Int as DI
 import Data.String (Pattern(..))
 import Data.String as DST
+import Data.Symbol (class IsSymbol)
+import Data.Symbol as DS
+import Data.Tuple (Tuple(..))
+import Data.Tuple.Nested ((/\))
 import Foreign (Foreign)
 import Foreign as F
+import Prim.Row (class Cons)
+import Prim.RowList (RowList)
+import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
+import Record as R
+import Type.Proxy (Proxy(..))
 
 data Star = Star
 
@@ -141,3 +151,20 @@ class InvalidField (t :: Type)
 instance autoInvalidField :: Fail (Text "Auto columns cannot be inserted or updated") => InvalidField (Auto t)
 
 else instance elseInvalidField :: InvalidField t
+
+
+
+class ToParameters record (list :: RowList Type) where
+      toParameters :: Proxy list -> Record record -> Array (Tuple String Foreign)
+
+instance nilToParameters :: ToParameters record RL.Nil where
+      toParameters _ _ = []
+
+instance consToParameters :: (
+      IsSymbol name,
+      ToValue t,
+      Cons name t e record,
+      ToParameters record rest
+) => ToParameters record (RL.Cons name t rest) where
+      toParameters _ record = (DS.reflectSymbol name /\ toValue (R.get name record)) : toParameters (Proxy :: Proxy rest) record
+            where name = Proxy :: Proxy name

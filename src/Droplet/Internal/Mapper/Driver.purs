@@ -2,7 +2,8 @@ module Droplet.Internal.Mapper.Driver where
 
 import Prelude
 
-import Data.Array ((:))
+import Data.Array ((..), (:))
+import Data.Array as DA
 import Data.Bifunctor as DB
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
@@ -15,11 +16,18 @@ import Data.Profunctor (lcmap)
 import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..))
 import Data.String as String
+import Data.String.Regex as DSR
+import Data.String.Regex.Flags (global)
+import Data.String.Regex.Unsafe as DSRU
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Traversable as DT
-import Droplet.Internal.Edsl.Definition (class FromValue, class ToValue)
+import Data.Tuple (Tuple(..))
+import Data.Tuple as DTP
+import Data.Tuple.Nested ((/\))
+import Droplet.Internal.Edsl.Definition (class FromValue, class ToParameters, class ToValue)
 import Droplet.Internal.Edsl.Definition as DIED
+import Droplet.Internal.Edsl.Keyword (atToken, parameterToken)
 import Droplet.Internal.Edsl.Language (Plan(..))
 import Droplet.Internal.Mapper.Pool (Pool)
 import Droplet.Internal.Mapper.Query (class ToQuery, Query(..))
@@ -132,24 +140,9 @@ instance consFromResult :: (
 ) => FromResult (RL.Cons name t rest) (Record projection) where
       toResult _ raw = case DIED.fromValue value of
             Left error -> Left error
-            Right converted -> map (R.insert (Proxy :: Proxy name) converted) $ toResult (Proxy :: Proxy rest) raw
-            where value = PU.unsafePartial (DM.fromJust $ FO.lookup (DS.reflectSymbol (Proxy :: Proxy name)) raw)
-
-
-class ToParameters record (list :: RowList Type) where
-      toParameters :: Proxy list -> Record record -> Array Foreign
-
-instance nilToParameters :: ToParameters record RL.Nil where
-      toParameters _ _ = []
-
-instance consToParameters :: (
-      IsSymbol name,
-      ToValue t,
-      Cons name t e record,
-      ToParameters record rest
-) => ToParameters record (RL.Cons name t rest) where
-      toParameters _ record = DIED.toValue (R.get (Proxy :: Proxy name) record) : toParameters (Proxy :: Proxy rest) record
-
+            Right converted -> map (R.insert name converted) $ toResult (Proxy :: Proxy rest) raw
+            where name = Proxy :: Proxy name
+                  value = PU.unsafePartial (DM.fromJust $ FO.lookup (DS.reflectSymbol name) raw)
 
 
 foreign import connect_ :: forall a. {
@@ -248,7 +241,6 @@ query connection q = do
                   values: parameters
             }
 
---replace @name for $n
 unsafeQuery :: forall projection pro parameters pra.
       RowToList projection pro =>
       RowToList parameters pra =>
@@ -259,7 +251,7 @@ unsafeQuery :: forall projection pro parameters pra.
       String ->
       Record parameters ->
       Aff (Either PgError (Array (Record projection)))
-unsafeQuery connection plan q p = query connection <<< Query plan q $ toParameters (Proxy :: Proxy pra) p
+unsafeQuery connection plan q parameters = query connection $ DIMQ.unsafeQuery plan q parameters
 
 -- -- | Execute a PostgreSQL query and discard its results.
 -- execute ::

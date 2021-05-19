@@ -73,6 +73,3 @@ infix 4 equals as .=.
 --left associativity is what sql uses
 infixl 3 and as .&&.
 infixl 2 or as .||.
-
-atToken :: String
-atToken = "@"

@@ -5,20 +5,26 @@ module Droplet.Internal.Mapper.Query where
 
 import Droplet.Internal.Edsl.Condition
 import Droplet.Internal.Edsl.Definition
+import Droplet.Internal.Edsl.Keyword
 import Droplet.Internal.Edsl.Language
 import Prelude
 
 import Control.Monad.State (State)
 import Control.Monad.State as CMS
+import Data.Array ((..))
 import Data.Array as DA
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
-import Data.String as DST
+import Data.String.Regex as DSR
+import Data.String.Regex.Flags (global)
+import Data.String.Regex.Unsafe as DSRU
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
+import Data.Tuple as DTP
 import Foreign (Foreign)
 import Prim.Row (class Nub)
+import Prim.RowList (class RowToList)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy(..))
 
@@ -260,57 +266,18 @@ query :: forall q projection. ToQuery q projection => q -> Query projection
 query qr = Query plan q parameters
       where Tuple q {plan, parameters} = CMS.runState (toQuery qr) { plan: Nothing, parameters: [] }
 
---magic strings
-selectKeyword :: String
-selectKeyword = "SELECT "
-
-fromKeyword :: String
-fromKeyword = " FROM "
-
-whereKeyword :: String
-whereKeyword = " WHERE "
-
-andKeyword :: String
-andKeyword = " AND "
-
-orKeyword :: String
-orKeyword = " OR "
-
-asKeyword :: String
-asKeyword = " AS "
-
-starToken :: String
-starToken = "*"
-
-comma :: String
-comma = ", "
-
-openBracket :: String
-openBracket = "("
-
-closeBracket :: String
-closeBracket = ")"
-
-equalsSymbol :: String
-equalsSymbol = " = "
-
-notEqualsSymbol :: String
-notEqualsSymbol = " <> "
-
-parameterToken :: String
-parameterToken = "$"
-
-insertKeyword :: String
-insertKeyword = "INSERT INTO "
-
-valuesKeyword :: String
-valuesKeyword = " VALUES "
-
-updateKeyword :: String
-updateKeyword = "UPDATE "
-
-setKeyword :: String
-setKeyword = " SET "
-
-deleteKeyword :: String
-deleteKeyword = "DELETE"
+unsafeQuery :: forall projection parameters pra.
+      RowToList parameters pra =>
+      ToParameters parameters pra =>
+      Maybe Plan ->
+      String ->
+      Record parameters ->
+      Query projection
+unsafeQuery plan q p = Query plan dollaredQ parameterValues
+      where parameterPairs = toParameters (Proxy :: Proxy pra) p
+            parameterNames = DTP.fst <$> parameterPairs
+            parameterValues = DTP.snd <$> parameterPairs
+            --HACK
+            parameterIndexes = map (\i -> parameterToken <> show i) (1 .. DA.length parameterNames)
+            replace sql (Tuple name p) = DSR.replace (DSRU.unsafeRegex (atToken <> "\\b" <> name <> "\\b") global) p sql
+            dollaredQ = DA.foldl replace q $ DA.zip parameterNames parameterIndexes
