@@ -3,8 +3,9 @@ module Test.Types where
 import Data.Date (Date)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
-import Droplet (Alias(..), Field(..), Table(..))
+import Droplet (Table(..))
 import Droplet.Internal.Edsl.Definition (Default, Auto)
+import Type.Proxy (Proxy(..))
 
 type Users = (
     id :: Auto Int,
@@ -37,44 +38,44 @@ messages = Table
 tags :: Table "tags" Tags
 tags = Table
 
-id :: Field "id"
-id = Field
+id :: Proxy "id"
+id = Proxy
 
-name :: Field "name"
-name = Field
+name :: Proxy "name"
+name = Proxy
 
-surname :: Field "surname"
-surname = Field
+surname :: Proxy "surname"
+surname = Proxy
 
-sent :: Field "sent"
-sent = Field
+sent :: Proxy "sent"
+sent = Proxy
 
-date :: Field "date"
-date = Field
+date :: Proxy "date"
+date = Proxy
 
-joined :: Field "joined"
-joined = Field
+joined :: Proxy "joined"
+joined = Proxy
 
-birthday :: Field "birthday"
-birthday = Field
+birthday :: Proxy "birthday"
+birthday = Proxy
 
-sender :: Field "sender"
-sender = Field
+sender :: Proxy "sender"
+sender = Proxy
 
-recipient :: Field "recipient"
-recipient = Field
+recipient :: Proxy "recipient"
+recipient = Proxy
 
-secondDate :: Field "second_date"
-secondDate = Field
+secondDate :: Proxy "second_date"
+secondDate = Proxy
 
-b :: Alias "b"
-b = Alias
+b :: Proxy "b"
+b = Proxy
 
-n :: Alias "n"
-n = Alias
+n :: Proxy "n"
+n = Proxy
 
-t :: Alias "t"
-t = Alias
+t :: Proxy "t"
+t = Proxy
 
-u :: Alias "u"
-u = Alias
+u :: Proxy "u"
+u = Proxy

@@ -14,6 +14,7 @@ import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
+import Type.Proxy (Proxy)
 import Unsafe.Coerce as UC
 
 
@@ -124,14 +125,14 @@ prepare plan s = toPrepare plan s
 --the projection is not really needed here but it might help with understanding type errors for the most common queries
 data Select s (projection :: Row Type) rest = Select s rest
 
-class ToSelect r s projection | r -> s, r -> projection where
+class ToSelect r s projection | r -> s projection where
       toSelect :: r -> Select s projection E
 
 --needs more instance for scalars
 -- might be nice to able to project parameters too
 -- we also dont accept naked selects as subqueries/as/whatever
 
-instance fieldToSelect :: ToSelect (Field name) (Field name) projection where
+instance fieldToSelect :: ToSelect (Proxy name) (Proxy name) projection where
       toSelect s = Select s E
 
 else instance starToSelect :: ToSelect Star Star projection where
@@ -140,7 +141,7 @@ else instance starToSelect :: ToSelect Star Star projection where
 else instance asIntToSelect :: ToSelect (As Int alias) (As Int alias) projection where
       toSelect a = Select a E
 
-else instance asFieldToSelect :: ToSelect (As (Field name) alias) (As (Field name) alias) projection where
+else instance asFieldToSelect :: ToSelect (As (Proxy name) alias) (As (Proxy name) alias) projection where
       toSelect a = Select a E
 
 else instance tupleToSelect :: (ToSelect r s projection, ToSelect t u projection) => ToSelect (Tuple r t) (Tuple (Select s projection E) (Select u projection E)) projection where
@@ -152,11 +153,11 @@ else instance fromFieldsToSelect :: ToSubExpression q => ToSelect q q projection
 class ToSubExpression (r :: Type)
 
 --for sub queries only a single column can be returned
-instance fromFieldToSubExpression :: ToSubExpression (Select (Field name) projection rest)
+instance fromFieldToSubExpression :: ToSubExpression (Select (Proxy name) projection rest)
 
 else instance fromIntToSubExpression :: ToSubExpression (Select (As Int name) projection rest)
 
-else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As (Field name) alias) projection rest)
+else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As (Proxy name) alias) projection rest)
 
 else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (Select (Tuple a b) projection rest)
 
@@ -205,7 +206,7 @@ from = toFrom
 
 data Where rest = Where Filtered rest
 
-class ToWhere q w fields | q -> w, q -> fields where
+class ToWhere q w fields | q -> w fields where
       toWhere :: Condition fields -> q -> w
 
 instance selectToWhere :: ToWhere (Select s projection (From f fields E)) (Select s projection (From f fields (Where E))) fields where
@@ -218,7 +219,7 @@ else instance deleteToWhere :: ToWhere (Delete fields (From f fields E)) (Delete
       toWhere (Condition filtered) (Delete (From f E)) = Delete <<< From f $ Where filtered E
 
 else instance elseToWhere :: Fail (Text "Only full SELECT, UPDATE and DELETE statements can use WHERE clauses") => ToWhere q w fields where
-      toWhere _ _ = UC.unsafeCoerce 3
+      toWhere _ _ = UC.unsafeCoerce 23
 
 wher :: forall q w fields. ToWhere q w fields => Condition fields -> q -> w
 wher conditions q = toWhere conditions q
@@ -229,19 +230,19 @@ wher conditions q = toWhere conditions q
 
 newtype As q (alias :: Symbol) = As q
 
-class ToAs q as name | q -> name, q -> as where
-      toAs :: Alias name -> q -> as
+class ToAs q as name | q -> name as where
+      toAs :: Proxy name -> q -> as
 
 instance intToAs :: ToAs Int (As Int name) name where
       toAs _ n = As n
 
-instance fieldToAs :: ToAs (Field name) (As (Field name) alias) alias where
+instance fieldToAs :: ToAs (Proxy name) (As (Proxy name) alias) alias where
       toAs _ fd = As fd
 
 instance subQueryFromToAs :: ToAs (Select s projection (From f fields rest)) (Select (Select s projection (From f fields rest)) projection (As E name)) name where
       toAs _ s = Select s (As E)
 
-as :: forall q as name. ToAs q as name => Alias name -> q -> as
+as :: forall q as name. ToAs q as name => Proxy name -> q -> as
 as a q = toAs a q
 
 
@@ -259,14 +260,14 @@ as a q = toAs a q
 ------------------------Projection machinery---------------------------
 
 -- | Row Type of columns projected by the query
-class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s -> fields, s -> projection
+class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s -> fields projection
 
 --simple columns
-instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Field name) fields projection
+instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields projection
 
 else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As Int alias) fields projection
 
-else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As (Field name) alias) fields projection
+else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As (Proxy name) alias) fields projection
 
 else instance starToProjection :: Union fields () projection => ToProjection Star fields projection
 
@@ -341,9 +342,9 @@ data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames rest = InsertIn
 newtype Values fieldValues = Values fieldValues
 
 
-class ToInsertFields (fields :: Row Type) (fieldNames :: Type) (inserted :: Row Type) | fieldNames -> fields, fieldNames -> inserted
+class ToInsertFields (fields :: Row Type) (fieldNames :: Type) (inserted :: Row Type) | fieldNames -> fields inserted
 
-instance fieldToInsertFields :: (InvalidField t, Cons name t e fields, Cons name t () single) => ToInsertFields fields (Field name) single
+instance fieldToInsertFields :: (InvalidField t, Cons name t e fields, Cons name t () single) => ToInsertFields fields (Proxy name) single
 
 instance tupleToInsertFields :: (
       ToInsertFields fields f head,
@@ -365,11 +366,11 @@ else instance maybeCons :: RequiredFields rest required => RequiredFields (RL.Co
 else instance elseCons :: (RequiredFields rest tail, Cons name t () head, Lacks name tail, Union head tail required) => RequiredFields (RL.Cons name t rest) required
 
 
-class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fieldNames -> fields, fieldNames -> t
+class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fieldNames -> fields t
 
-instance fieldToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u) => ToInsertValues fields (Field name) u
+instance fieldToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u) => ToInsertValues fields (Proxy name) u
 
-else instance tupleToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Field name) some) (Tuple u more)
+else instance tupleToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Proxy name) some) (Tuple u more)
 
 
 --as it is, error messages are not intuitive at all
@@ -425,7 +426,7 @@ instance tupleToUpdatePairs :: (
       UnwrapDefinition t u,
       ToValue u,
       Cons name t e fields
-) => ToUpdatePairs fields (Tuple (Field name) u)
+) => ToUpdatePairs fields (Tuple (Proxy name) u)
 
 else instance tupleTuplesToUpdatePairs :: (
       ToUpdatePairs fields head,

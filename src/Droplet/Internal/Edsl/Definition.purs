@@ -17,10 +17,6 @@ import Foreign (Foreign)
 import Foreign as F
 import Prim.TypeError (class Fail, Text)
 
-data Field (name :: Symbol) = Field
-
-data Alias (name :: Symbol) = Alias
-
 data Star = Star
 
 star :: Star

@@ -1,16 +1,16 @@
 module Test.Select where
 
 import Droplet.Internal.Edsl.Condition
-import Droplet.Internal.Edsl.Definition
 import Droplet.Internal.Edsl.Language
 import Prelude
 import Test.Types
 
 import Data.Tuple.Nested ((/\))
 import Droplet.Internal.Mapper.Query as Query
+import Test.Model as TM
 import Test.Unit (TestSuite)
 import Test.Unit as TU
-import Test.Model as TM
+import Type.Proxy (Proxy(..))
 
 --lets clean these test out of these meaningless suite categories
 tests :: TestSuite
@@ -85,19 +85,19 @@ tests = do
                         TM.result q [{b: 1 }]
                   TU.test "tuple" do
                         let parameters = { d : "mary", e : 2 }
-                        let q = select ((3 # as (Alias :: Alias "e")) /\ (select id # from users # wher (name .=. parameters.d) # as b) /\ (select id # from messages # wher (id .=. parameters.e) # as n))
+                        let q = select ((3 # as (Proxy :: Proxy "e")) /\ (select id # from users # wher (name .=. parameters.d) # as b) /\ (select id # from messages # wher (id .=. parameters.e) # as n))
                         TM.parameterized "SELECT 3 AS e, (SELECT id FROM users WHERE name = $1) AS b, (SELECT id FROM messages WHERE id = $2) AS n" $ Query.query q
                         TM.result q [{e: 3, b: 2, n: 2 }]
                   TU.test "where" do
                         let parameters = { d : "mary", e : 2 }
-                        let q = select ((3 # as (Alias :: Alias "e")) /\ (select id # from users # wher (name .=. parameters.d) # as b) /\ (select id # from messages # wher (id .=. parameters.e) # as n)) # from users # wher (id .=. 1 .||. id .=. 2)
+                        let q = select ((3 # as (Proxy :: Proxy "e")) /\ (select id # from users # wher (name .=. parameters.d) # as b) /\ (select id # from messages # wher (id .=. parameters.e) # as n)) # from users # wher (id .=. 1 .||. id .=. 2)
                         TM.parameterized "SELECT 3 AS e, (SELECT id FROM users WHERE name = $1) AS b, (SELECT id FROM messages WHERE id = $2) AS n FROM users WHERE (id = $3 OR id = $4)" $ Query.query q
                         TM.result q [{e: 3, b: 2, n: 2 }, {e: 3, b: 2, n: 2 }]
 
       TU.suite "as" do
             TU.suite "from" do
                   TU.test "scalar" do
-                        let q = select (4 # as n) # from (select (4 # as n) # from messages # as (Alias :: Alias "u"))
+                        let q = select (4 # as n) # from (select (4 # as n) # from messages # as (Proxy :: Proxy "u"))
                         TM.notParameterized "SELECT 4 AS n FROM (SELECT 4 AS n FROM messages) AS u" $ Query.query q
                         TM.result q [{n: 4}, {n: 4}]
                   TU.test "field" do
@@ -105,7 +105,7 @@ tests = do
                         TM.notParameterized "SELECT birthday FROM (SELECT birthday FROM users) AS t" $ Query.query q
                         TM.result q [{birthday: TM.makeDate 1990 1 1}, {birthday: TM.makeDate 1900 11 11}]
                   TU.test "renamed field" do
-                        let q = select (Field :: Field "t") # from (select (birthday # as t) # from users # as t)
+                        let q = select (Proxy :: Proxy "t") # from (select (birthday # as t) # from users # as t)
                         TM.notParameterized "SELECT t FROM (SELECT birthday AS t FROM users) AS t" $ Query.query q
                         TM.result q [{t: TM.makeDate 1990 1 1}, {t: TM.makeDate 1900 11 11}]
                   TU.testSkip "sub query" do
@@ -121,7 +121,7 @@ tests = do
 
             TU.suite "where" do
                   TU.test "scalar" do
-                        let q = select (4 # as n) # from (select (4 # as n) # from users # wher (id .=. id) # as (Alias :: Alias "u"))
+                        let q = select (4 # as n) # from (select (4 # as n) # from users # wher (id .=. id) # as (Proxy :: Proxy "u"))
                         TM.notParameterized "SELECT 4 AS n FROM (SELECT 4 AS n FROM users WHERE id = id) AS u" $ Query.query q
                         TM.result q [{n: 4}, {n: 4}]
                   TU.test "field" do
@@ -129,7 +129,7 @@ tests = do
                         TM.notParameterized "SELECT id FROM (SELECT id FROM messages WHERE id = id) AS t" $ Query.query q
                         TM.result q [{id: 1}, {id: 2}]
                   TU.testSkip "sub query" do
-                        let q = select (Field :: Field "id") # from (select (select id # from messages # wher (id .=. id)) # from users # wher (id .=. id) # as t)
+                        let q = select (Proxy :: Proxy "id") # from (select (select id # from messages # wher (id .=. id)) # from users # wher (id .=. id) # as t)
                         TM.notParameterized "SELECT id FROM (SELECT (SELECT id FROM messages WHERE id = id) FROM users WHERE id = id) AS t" $ Query.query q
                         --needs limit
                         TM.result q [{id: 1}, {id: 2}]
@@ -142,7 +142,7 @@ tests = do
             TU.suite "parameters" do
                   TU.testSkip "scalar" do
                         let parameters = {date: TM.makeDate 2000 3 4}
-                        let q = select (4 # as n) # from (select (4 # as n) # from users # wher (joined .=. parameters.date) # as (Alias :: Alias "u"))
+                        let q = select (4 # as n) # from (select (4 # as n) # from users # wher (joined .=. parameters.date) # as (Proxy :: Proxy "u"))
                         TM.parameterized "SELECT 4 AS n FROM (SELECT 4 AS n FROM users WHERE joined = $1) AS u" $ Query.query q
                         TM.result q [{n: 4}, {n: 4}]
                   TU.test "field" do
@@ -173,6 +173,6 @@ tests = do
                   TM.result q [{t : 34}, {t: 34}]
             TU.test "tuple" do
                   --subqueries need to have type Maybe
-                  let q = select ((3 # as b) /\ (select (34 # as n) # from users # wher (name .=. surname) # as t) /\ (4 # as (Alias :: Alias "a")) /\ (select name # from users # as (Alias :: Alias "u")))
+                  let q = select ((3 # as b) /\ (select (34 # as n) # from users # wher (name .=. surname) # as t) /\ (4 # as (Proxy :: Proxy "a")) /\ (select name # from users # as (Proxy :: Proxy "u")))
                   TM.notParameterized "SELECT 3 AS b, (SELECT 34 AS n FROM users WHERE name = surname) AS t, 4 AS a, (SELECT name FROM users) AS u" $ Query.query q
                  -- TM.result q [{b: 3, n: 34, a : 4, name: "mary"}, {b: 3, n: 34, a : 4, name: "mary"}]

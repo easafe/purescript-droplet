@@ -103,8 +103,8 @@ else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery 
 class ToColumnQuery q where
       toColumnQuery :: q -> State QueryState String
 
-instance fieldToColumnQuery :: IsSymbol name => ToColumnQuery (Field name) where
-      toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name)
+instance fieldToColumnQuery :: IsSymbol name => ToColumnQuery (Proxy name) where
+      toColumnQuery name = pure $ DS.reflectSymbol name
 
 else instance tableToColumnQuery :: ToColumnQuery Star where
       toColumnQuery _ = pure starToken
@@ -112,7 +112,7 @@ else instance tableToColumnQuery :: ToColumnQuery Star where
 else instance asIntToColumnQuery :: IsSymbol name => ToColumnQuery (As Int name) where
       toColumnQuery (As n) = pure $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Field name) alias) where
+else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Proxy name) alias) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
 else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t, ToQuery rest p, ToQuery extra pp) => ToColumnQuery (Tuple (Select s some rest) (Select t more extra)) where
@@ -198,11 +198,11 @@ instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues
 class ToFieldNames fieldNames where
       toFieldNames :: fieldNames -> String
 
-instance fieldToFieldNames :: IsSymbol name => ToFieldNames (Field name) where
-      toFieldNames _ = DS.reflectSymbol (Proxy :: Proxy name)
+instance fieldToFieldNames :: IsSymbol name => ToFieldNames (Proxy name) where
+      toFieldNames name = DS.reflectSymbol name
 
-instance tupleToFieldNames :: (IsSymbol name, ToFieldNames rest) => ToFieldNames (Tuple (Field name) rest) where
-      toFieldNames (Tuple _ rest) = DS.reflectSymbol (Proxy :: Proxy name) <> comma <> toFieldNames rest
+instance tupleToFieldNames :: (IsSymbol name, ToFieldNames rest) => ToFieldNames (Tuple (Proxy name) rest) where
+      toFieldNames (Tuple name rest) = DS.reflectSymbol name <> comma <> toFieldNames rest
 
 
 class ToFieldValues fieldValues where
@@ -233,10 +233,10 @@ instance updateToQuery :: (IsSymbol name, ToFieldValuePairs pairs, ToQuery rest 
 class ToFieldValuePairs pairs where
       toFieldValuePairs :: pairs -> State QueryState String
 
-instance fieldToFieldValuePairs :: (IsSymbol name, ToValue p) => ToFieldValuePairs (Tuple (Field name) p) where
-      toFieldValuePairs (Tuple _ p) = do
+instance fieldToFieldValuePairs :: (IsSymbol name, ToValue p) => ToFieldValuePairs (Tuple (Proxy name) p) where
+      toFieldValuePairs (Tuple name p) = do
             { parameters } <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters $ toValue p }
-            pure $ DS.reflectSymbol (Proxy :: Proxy name) <> equalsSymbol <> "$" <> show (DA.length parameters)
+            pure $ DS.reflectSymbol name <> equalsSymbol <> "$" <> show (DA.length parameters)
 
 else instance tupleTupleToFieldValuePairs :: (ToFieldValuePairs p, ToFieldValuePairs rest) => ToFieldValuePairs (Tuple p rest) where
       toFieldValuePairs (Tuple p rest) = do

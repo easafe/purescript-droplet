@@ -71,7 +71,7 @@ result' q o = do
                   truncateTables connection
 
 truncateTables :: Connection -> Aff Unit
-truncateTables connection = void (Driver.unsafeQuery connection "select truncate_tables()" [] :: Aff (Either PgError (Array {})))
+truncateTables connection = void (Driver.unsafeQuery connection Nothing "select truncate_tables()" {} :: Aff (Either PgError (Array {})))
 
 insertDefaultRecords :: Aff Unit
 insertDefaultRecords = do

@@ -152,7 +152,6 @@ instance consToParameters :: (
 
 
 
-
 foreign import connect_ :: forall a. {
       nullableLeft :: Error -> Nullable (Either PgError ConnectResult),
       right :: a -> Either PgError ConnectResult
