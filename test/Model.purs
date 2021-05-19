@@ -15,7 +15,7 @@ import Data.Maybe (Maybe(..))
 import Data.Maybe as DM
 import Data.Show (class ShowRecordFields)
 import Data.Tuple.Nested ((/\))
-import Droplet (class ToQuery, Query(..))
+import Droplet (class ToParameters, class ToQuery, Query(..))
 import Droplet.Internal.Mapper.Driver (class FromResult, Connection, PgError)
 import Droplet.Internal.Mapper.Driver as Driver
 import Droplet.Internal.Mapper.Pool (Configuration)
@@ -67,6 +67,17 @@ result' q o = do
             Left error -> TU.failure $ "Error connecting" <> show error
             Right connection -> do
                   r <- Driver.query connection q
+                  TUA.equal (Right o) r
+                  truncateTables connection
+
+unsafeResult :: forall re parameters par result. RowToList result re  => RowToList parameters par => ToParameters parameters par => FromResult re (Record result) => EqRecord re result => ShowRecordFields re result => Maybe Plan -> String -> Record parameters -> Array (Record result) -> Aff Unit
+unsafeResult plan q parameters o = do
+      pool <- liftEffect $ DIMP.new connectionInfo
+      Driver.withConnection pool case _ of
+            Left error -> TU.failure $ "Error connecting" <> show error
+            Right connection -> do
+                  insertDefaultRecords
+                  r <- Driver.unsafeQuery connection plan q parameters
                   TUA.equal (Right o) r
                   truncateTables connection
 

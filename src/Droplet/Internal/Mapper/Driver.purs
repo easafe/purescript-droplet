@@ -138,11 +138,12 @@ instance consFromResult :: (
       Lacks name restProjection,
       Cons name t restProjection projection
 ) => FromResult (RL.Cons name t rest) (Record projection) where
-      toResult _ raw = case DIED.fromValue value of
-            Left error -> Left error
-            Right converted -> map (R.insert name converted) $ toResult (Proxy :: Proxy rest) raw
+      toResult _ raw = case FO.lookup (DS.reflectSymbol name) raw of
+            Nothing -> Left $ "Could not find column matching field: " <> DS.reflectSymbol name
+            Just value -> case DIED.fromValue value of
+                  Left error -> Left error
+                  Right converted -> map (R.insert name converted) $ toResult (Proxy :: Proxy rest) raw
             where name = Proxy :: Proxy name
-                  value = PU.unsafePartial (DM.fromJust $ FO.lookup (DS.reflectSymbol name) raw)
 
 
 foreign import connect_ :: forall a. {
