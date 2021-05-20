@@ -209,6 +209,7 @@ data Where rest = Where Filtered rest
 class ToWhere q w fields | q -> w fields where
       toWhere :: Condition fields -> q -> w
 
+--are we missing AS here?
 instance selectToWhere :: ToWhere (Select s projection (From f fields E)) (Select s projection (From f fields (Where E))) fields where
       toWhere (Condition filtered) (Select s (From f E)) = Select s <<< From f $ Where filtered E
 
