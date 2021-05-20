@@ -14,3 +14,7 @@ Scratch.*
 Invalid.*
 
 todo
+
+_site/
+vendor/
+.bundle/

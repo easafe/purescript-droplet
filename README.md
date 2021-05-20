@@ -129,7 +129,7 @@ select star # from (select (id /\ name) # from users # as u)
 select (id /\ (select id # from users # where id .=. 23)) # from users
 ```
 
-doesn't type check. The solution again is to alias the column, e.g.
+doesn't type check. The solution again is to alias the column, e.g.,
 
 ```purescript
 select (id /\ (select id # from users # where id .=. 23 # as u)) # from users
