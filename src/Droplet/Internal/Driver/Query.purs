@@ -1,4 +1,4 @@
-module Droplet.Internal.Driver.Query (class FromResult, Connection(..), Client, PGErrorDetail, PgError(..), connect, execute, query, single, toResult, unsafeExecute, unsafeQuery, withConnection, withTransaction) where
+module Droplet.Internal.Driver.Query (class FromResult, Connection(..), Client, PGErrorDetail, PgError(..), connect, execute, query, single, toResult, unsafeExecute, unsafeQuery, unsafeSingle, withConnection, withTransaction) where
 
 import Prelude
 
@@ -271,6 +271,17 @@ single connection q = do
             Right [r] -> Right $ Just r
             _ -> Left TooManyRows
 
+unsafeSingle ::forall parameters pra projection pro.
+      RowToList parameters pra =>
+      ToParameters parameters pra =>
+      RowToList projection pro =>
+      FromResult pro (Record projection) =>
+      Connection ->
+      Maybe Plan ->
+      String ->
+      Record parameters ->
+      Aff (Either PgError (Maybe (Record projection)))
+unsafeSingle connection plan q parameters = single connection $ DIMQ.unsafeQuery plan q parameters
 
 toUntaggedHandler :: Connection -> UntaggedConnection
 toUntaggedHandler (Connection c) = case c of
