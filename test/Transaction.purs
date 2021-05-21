@@ -27,7 +27,7 @@ tests = do
                   void $ DIMD.withTransaction pool $ \connection -> do
                         TM.truncateTables connection
 
-                        let ins = insertInto users (name /\ surname /\ birthday) # values ("josh" /\ "j." /\ TM.makeDate 1990 1 1)
+                        let ins = insert # into users (name /\ surname /\ birthday) # values ("josh" /\ "j." /\ TM.makeDate 1990 1 1)
                         errors <- DIMD.execute connection ins
                         TUA.equal Nothing errors
 
@@ -46,7 +46,7 @@ tests = do
                   flip EA.catchError (const (pure unit)) <<< void <<< DIMD.withTransaction pool $ \connection -> do
                         TM.truncateTables connection
 
-                        let ins = insertInto users (name /\ surname /\ birthday) # values ("josh" /\ "j." /\ TM.makeDate 1990 1 1)
+                        let ins = insert # into users (name /\ surname /\ birthday) # values ("josh" /\ "j." /\ TM.makeDate 1990 1 1)
                         errors <- DIMD.execute connection ins
                         TUA.equal Nothing errors
 

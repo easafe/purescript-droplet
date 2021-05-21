@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Internal.Language.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), InsertInto(..), Plan(..), Prepare(..), Select(..), Set(..), Update(..), Values(..), Where(..), as, delete, from, insertInto, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, wher)  where
+module Droplet.Internal.Language.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), InsertInto(..), Plan(..), Prepare(..), Select(..), Set(..), Update(..), Values(..), Where(..), Insert, as, delete, from, insert, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, wher)  where
 
 import Droplet.Internal.Language.Condition
 import Droplet.Internal.Language.Definition
@@ -337,6 +337,8 @@ INSERT INTO
 
 ---------------------------INSERT------------------------------------------
 
+data Insert = Insert
+
 data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames rest = InsertInto fieldNames rest
 
 newtype Values fieldValues = Values fieldValues
@@ -373,14 +375,17 @@ instance fieldToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToV
 else instance tupleToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Proxy name) some) (Tuple u more)
 
 
+--purely cosmetic
+insert :: Insert
+insert = Insert
 --as it is, error messages are not intuitive at all
-insertInto :: forall tableName fields fieldNames fieldList required e inserted.
+into :: forall tableName fields fieldNames fieldList required e inserted.
       RowToList fields fieldList =>
       RequiredFields fieldList required =>
       ToInsertFields fields fieldNames inserted =>
       Union required e inserted =>
-      Table tableName fields -> fieldNames -> InsertInto tableName fields fieldNames E
-insertInto _ fieldNames = InsertInto fieldNames E
+      Table tableName fields -> fieldNames -> Insert -> InsertInto tableName fields fieldNames E
+into _ fieldNames _ = InsertInto fieldNames E
 
 values :: forall tableName fields fieldNames fieldValues. ToInsertValues fields fieldNames fieldValues => fieldValues -> InsertInto tableName fields fieldNames E -> InsertInto tableName fields fieldNames (Values fieldValues)
 values fieldValues (InsertInto fieldNames _) = InsertInto fieldNames (Values fieldValues)

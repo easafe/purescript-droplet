@@ -58,7 +58,7 @@ SELECT * FROM users
 Using the types above, the same in Droplet reads
 
 ```purescript
-insertInto users (name /\ joined) # values ("Mary Sue" /\ canonicalDate year month day)
+insert # into users (name /\ joined) # values ("Mary Sue" /\ canonicalDate year month day)
 
 select star # from users
 ```
@@ -96,9 +96,9 @@ select name # from users # wher (id .=. "23")
 In insert/update lists
 
 ```purescript
-insertInto users (id /\ name) # values (23 /\ "Mary Sue") -- cannot insert identity column
+insert # into users (id /\ name) # values (23 /\ "Mary Sue") -- cannot insert identity column
 
-insertInto users joined # values (canonicalDate year month day) -- name is a required field
+insert # into users joined # values (canonicalDate year month day) -- name is a required field
 ```
 
 * Invalid column subqueries
