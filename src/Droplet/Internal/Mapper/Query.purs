@@ -1,7 +1,7 @@
--- | This module define `ToQuery`, a type class to generate parameterized SQL statements strings
+-- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
-module Droplet.Internal.Mapper.Query where
+module Droplet.Internal.Mapper.Query (class ToColumnQuery, class ToFieldNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, NakedSelect, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
 
 import Droplet.Internal.Edsl.Condition
 import Droplet.Internal.Edsl.Definition
@@ -258,7 +258,7 @@ instance deleteToQuery :: ToQuery (From f fields rest) p => ToQuery (Delete fiel
 
 
 toAsQuery :: forall name p s projection. IsSymbol name => ToQuery s p => Select s projection (As E name) -> State QueryState String
-toAsQuery (Select s (As E)) = do
+toAsQuery (Select s (As _)) = do
       q <- toQuery s
       pure $ openBracket <> q <> closeBracket <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 

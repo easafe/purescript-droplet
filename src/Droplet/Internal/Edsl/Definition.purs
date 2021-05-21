@@ -1,4 +1,7 @@
-module Droplet.Internal.Edsl.Definition where
+-- | Definition of SQL columns types as well conversions from and to columns
+-- |
+-- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
+module Droplet.Internal.Edsl.Definition (class FromValue, class InvalidField, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue) where
 
 import Prelude
 
@@ -16,7 +19,7 @@ import Data.String (Pattern(..))
 import Data.String as DST
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
 import Foreign (Foreign)
 import Foreign as F

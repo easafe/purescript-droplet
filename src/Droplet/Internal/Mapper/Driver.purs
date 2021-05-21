@@ -1,14 +1,11 @@
-module Droplet.Internal.Mapper.Driver where
+module Droplet.Internal.Mapper.Driver (class FromResult, Connection(..), Client, PGErrorDetail, PgError(..), connect, execute, query, single, toResult, unsafeExecute, unsafeQuery, withConnection, withTransaction) where
 
 import Prelude
 
-import Data.Array ((..), (:))
-import Data.Array as DA
 import Data.Bifunctor as DB
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..), maybe)
-import Data.Maybe as DM
 import Data.Newtype (class Newtype)
 import Data.Nullable (Nullable, null, toMaybe, toNullable)
 import Data.Nullable as DN
@@ -16,18 +13,11 @@ import Data.Profunctor (lcmap)
 import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..))
 import Data.String as String
-import Data.String.Regex as DSR
-import Data.String.Regex.Flags (global)
-import Data.String.Regex.Unsafe as DSRU
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Traversable as DT
-import Data.Tuple (Tuple(..))
-import Data.Tuple as DTP
-import Data.Tuple.Nested ((/\))
-import Droplet.Internal.Edsl.Definition (class FromValue, class ToParameters, class ToValue)
+import Droplet.Internal.Edsl.Definition (class FromValue, class ToParameters)
 import Droplet.Internal.Edsl.Definition as DIED
-import Droplet.Internal.Edsl.Keyword (atToken, parameterToken)
 import Droplet.Internal.Edsl.Language (Plan(..))
 import Droplet.Internal.Mapper.Pool (Pool)
 import Droplet.Internal.Mapper.Query (class ToQuery, Query(..))
@@ -42,7 +32,6 @@ import Effect.Exception (Error)
 import Foreign (Foreign)
 import Foreign.Object (Object)
 import Foreign.Object as FO
-import Partial.Unsafe as PU
 import Prim.Row (class Cons, class Lacks)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
@@ -287,9 +276,6 @@ toUntaggedHandler :: Connection -> UntaggedConnection
 toUntaggedHandler (Connection c) = case c of
       Left pool -> UC.unsafeCoerce pool
       Right client -> UC.unsafeCoerce client
-
-fromPool :: Pool -> Connection
-fromPool pool = Connection (Left pool)
 
 fromClient :: Client -> Connection
 fromClient client = Connection (Right client)

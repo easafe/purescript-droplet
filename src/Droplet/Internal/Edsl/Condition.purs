@@ -1,4 +1,7 @@
-module Droplet.Internal.Edsl.Condition where
+-- | Logical operators for filtering records
+-- |
+-- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
+module Droplet.Internal.Edsl.Condition (class ToCondition, Condition(..), Filtered(..), OperationFields(..), Operator(..), and, equals, notEquals, or, toCondition, (.&&.), (.<>.), (.=.), (.||.)) where
 
 import Prelude
 
@@ -9,7 +12,7 @@ import Droplet.Internal.Edsl.Definition (class ToValue, class UnwrapDefinition)
 import Droplet.Internal.Edsl.Definition as DIED
 import Foreign (Foreign)
 import Prim.Row (class Cons)
-import Type.Proxy (Proxy(..))
+import Type.Proxy (Proxy)
 
 data Operator =
       Equals |

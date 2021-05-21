@@ -1,4 +1,4 @@
-module Droplet.Internal.Mapper.Pool where
+module Droplet.Internal.Mapper.Pool (Configuration, Database, Pool, defaultConfiguration, new) where
 
 import Data.Maybe (Maybe(..))
 import Data.Nullable (Nullable, toNullable)
@@ -30,8 +30,6 @@ type Configuration = {
       port :: Maybe Int,
       user :: Maybe String
 }
-
-type PGConnectionURI = String
 
 foreign import new_ :: Configuration' -> Effect Pool
 

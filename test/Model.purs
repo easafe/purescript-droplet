@@ -15,11 +15,12 @@ import Data.Maybe (Maybe(..))
 import Data.Maybe as DM
 import Data.Show (class ShowRecordFields)
 import Data.Tuple.Nested ((/\))
-import Droplet (class ToParameters, class ToQuery, Query(..))
+import Droplet (class ToParameters)
 import Droplet.Internal.Mapper.Driver (class FromResult, Connection, PgError)
 import Droplet.Internal.Mapper.Driver as Driver
 import Droplet.Internal.Mapper.Pool (Configuration)
 import Droplet.Internal.Mapper.Pool as DIMP
+import Droplet.Internal.Mapper.Query (class ToQuery, Query(..))
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Partial.Unsafe as PU
