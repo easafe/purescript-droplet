@@ -1,4 +1,4 @@
-module Droplet.Internal.Mapper.Driver (class FromResult, Connection(..), Client, PGErrorDetail, PgError(..), connect, execute, query, single, toResult, unsafeExecute, unsafeQuery, withConnection, withTransaction) where
+module Droplet.Internal.Driver.Query (class FromResult, Connection(..), Client, PGErrorDetail, PgError(..), connect, execute, query, single, toResult, unsafeExecute, unsafeQuery, withConnection, withTransaction) where
 
 import Prelude
 
@@ -16,12 +16,12 @@ import Data.String as String
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Traversable as DT
-import Droplet.Internal.Edsl.Definition (class FromValue, class ToParameters)
-import Droplet.Internal.Edsl.Definition as DIED
-import Droplet.Internal.Edsl.Language (Plan(..))
-import Droplet.Internal.Mapper.Pool (Pool)
-import Droplet.Internal.Mapper.Query (class ToQuery, Query(..))
-import Droplet.Internal.Mapper.Query as DIMQ
+import Droplet.Internal.Language.Definition (class FromValue, class ToParameters)
+import Droplet.Internal.Language.Definition as DIED
+import Droplet.Internal.Language.Syntax (Plan(..))
+import Droplet.Internal.Driver.Pool (Pool)
+import Droplet.Internal.Language.Query (class ToQuery, Query(..))
+import Droplet.Internal.Language.Query as DIMQ
 import Effect (Effect)
 import Effect.Aff (Aff, bracket)
 import Effect.Aff as EA

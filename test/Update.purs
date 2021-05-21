@@ -1,12 +1,12 @@
 module Test.Update where
 
-import Droplet.Internal.Edsl.Language
-import Droplet.Internal.Edsl.Condition
+import Droplet.Internal.Language.Syntax
+import Droplet.Internal.Language.Condition
 import Prelude
 import Test.Types
 
 import Data.Tuple.Nested ((/\))
-import Droplet.Internal.Mapper.Query as Query
+import Droplet.Internal.Language.Query as Query
 import Test.Model as TM
 import Test.Unit (TestSuite)
 import Test.Unit as TU

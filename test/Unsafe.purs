@@ -1,6 +1,6 @@
 module Test.Unsafe where
 
-import Droplet.Internal.Edsl.Language
+import Droplet.Internal.Language.Syntax
 import Prelude
 import Test.Types
 
@@ -10,8 +10,8 @@ import Data.Array.Partial as DAP
 import Data.Maybe (Maybe(..))
 import Data.Maybe as DM
 import Data.Tuple.Nested ((/\))
-import Droplet.Internal.Mapper.Query (Query(..))
-import Droplet.Internal.Mapper.Query as Query
+import Droplet.Internal.Language.Query (Query(..))
+import Droplet.Internal.Language.Query as Query
 import Foreign as F
 import Partial.Unsafe as PU
 import Test.Model as TM

@@ -1,7 +1,7 @@
 module Test.Transaction where
 
-import Droplet.Internal.Edsl.Condition
-import Droplet.Internal.Edsl.Language
+import Droplet.Internal.Language.Condition
+import Droplet.Internal.Language.Syntax
 import Prelude
 import Test.Types
 
@@ -9,8 +9,8 @@ import Control.Monad.Error.Class as EA
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
-import Droplet.Internal.Mapper.Driver as DIMD
-import Droplet.Internal.Mapper.Pool as DIMP
+import Droplet.Internal.Driver.Query as DIMD
+import Droplet.Internal.Driver.Pool as DIMP
 import Effect.Class (liftEffect)
 import Effect.Exception as EE
 import Test.Model (connectionInfo)

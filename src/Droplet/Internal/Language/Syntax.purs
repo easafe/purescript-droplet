@@ -1,10 +1,10 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
--- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
-module Droplet.Internal.Edsl.Language (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), InsertInto(..), Plan(..), Prepare(..), Select(..), Set(..), Update(..), Values(..), Where(..), as, delete, from, insertInto, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, wher)  where
+-- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
+module Droplet.Internal.Language.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), InsertInto(..), Plan(..), Prepare(..), Select(..), Set(..), Update(..), Values(..), Where(..), as, delete, from, insertInto, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, wher)  where
 
-import Droplet.Internal.Edsl.Condition
-import Droplet.Internal.Edsl.Definition
+import Droplet.Internal.Language.Condition
+import Droplet.Internal.Language.Definition
 import Prelude
 
 import Data.Maybe (Maybe)

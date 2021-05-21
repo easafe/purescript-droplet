@@ -1,5 +1,5 @@
 -- | SQL Keywords and tokens
-module Droplet.Internal.Edsl.Keyword where
+module Droplet.Internal.Language.Keyword where
 
 --magic strings
 selectKeyword :: String

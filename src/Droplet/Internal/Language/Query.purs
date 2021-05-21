@@ -1,12 +1,12 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
--- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet` instead
-module Droplet.Internal.Mapper.Query (class ToColumnQuery, class ToFieldNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, NakedSelect, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
+-- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
+module Droplet.Internal.Language.Query (class ToColumnQuery, class ToFieldNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, NakedSelect, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
 
-import Droplet.Internal.Edsl.Condition
-import Droplet.Internal.Edsl.Definition
-import Droplet.Internal.Edsl.Keyword
-import Droplet.Internal.Edsl.Language
+import Droplet.Internal.Language.Condition
+import Droplet.Internal.Language.Definition
+import Droplet.Internal.Language.Keyword
+import Droplet.Internal.Language.Syntax
 import Prelude
 
 import Control.Monad.State (State)
