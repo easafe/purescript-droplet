@@ -23,7 +23,7 @@ tests :: TestSuite
 tests = do
       TU.suite "transactions" do
             TU.test "commited" do
-                  pool <- liftEffect $ DIMP.new connectionInfo
+                  pool <- liftEffect $ DIMP.newPool connectionInfo
                   void $ DIMD.withTransaction pool $ \connection -> do
                         TM.truncateTables connection
 
@@ -42,7 +42,7 @@ tests = do
                   let q = select (name /\ surname) # from users
                   TM.result' q [{name: "Mary", surname: "Sue"}]
             TU.test "rolled back" do
-                  pool <- liftEffect $ DIMP.new connectionInfo
+                  pool <- liftEffect $ DIMP.newPool connectionInfo
                   flip EA.catchError (const (pure unit)) <<< void <<< DIMD.withTransaction pool $ \connection -> do
                         TM.truncateTables connection
 

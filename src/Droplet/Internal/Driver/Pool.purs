@@ -1,4 +1,4 @@
-module Droplet.Internal.Driver.Pool (Configuration, Database, Pool, defaultConfiguration, new) where
+module Droplet.Internal.Driver.Pool (Configuration, Database, Pool, defaultConfiguration, newPool) where
 
 import Data.Maybe (Maybe(..))
 import Data.Nullable (Nullable, toNullable)
@@ -31,7 +31,7 @@ type Configuration = {
       user :: Maybe String
 }
 
-foreign import new_ :: Configuration' -> Effect Pool
+foreign import newPool_ :: Configuration' -> Effect Pool
 
 defaultConfiguration :: Database -> Configuration
 defaultConfiguration database = {
@@ -45,8 +45,8 @@ defaultConfiguration database = {
 }
 
 -- | Create a new connection pool.
-new :: Configuration -> Effect Pool
-new cfg = new_ {
+newPool :: Configuration -> Effect Pool
+newPool cfg = newPool_ {
       user: toNullable cfg.user,
       password: toNullable cfg.password,
       host: toNullable cfg.host,
