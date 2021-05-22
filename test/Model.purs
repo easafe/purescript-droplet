@@ -96,6 +96,7 @@ insertDefaultRecords = do
                   void <<< Driver.query connection $ insert # into users (name /\ surname /\ birthday) # values ("mary" /\ "sue" /\ makeDate 1900 11 11)
                   void <<< Driver.query connection $ insert # into messages (sender /\ recipient /\ sent /\ date /\ secondDate) # values (1 /\ 2 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
                   void <<< Driver.query connection $ insert # into messages (sender /\ recipient /\ sent /\ date /\ secondDate) # values (2 /\ 1 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
+                  void <<< Driver.query connection $ insert # into tags (name /\ by) # values ("tagged" /\ Just 1)
 
 connectionInfo :: Configuration
 connectionInfo = (DIMP.defaultConfiguration "droplet") {

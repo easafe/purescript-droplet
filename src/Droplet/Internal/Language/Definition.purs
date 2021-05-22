@@ -15,6 +15,8 @@ import Data.Either (Either(..))
 import Data.Either as DE
 import Data.Enum as DEN
 import Data.Int as DI
+import Data.Maybe (Maybe(..))
+import Data.Nullable as DN
 import Data.String (Pattern(..))
 import Data.String as DST
 import Data.Symbol (class IsSymbol)
@@ -73,6 +75,11 @@ instance defaultToValue :: ToValue a => ToValue (Default a) where
 instance autoToValue :: ToValue a => ToValue (Auto a) where
       toValue (Auto a) = toValue a
 
+instance maybeToValue :: ToValue a => ToValue (Maybe a) where
+      toValue = case _ of
+            Nothing -> F.unsafeToForeign DN.null
+            Just a -> toValue a
+
 instance dateToValue :: ToValue Date where
       toValue = F.unsafeToForeign <<< formatDate
 
@@ -85,7 +92,6 @@ formatDate date = show y <> "-" <> show m <> "-" <> show d
       where y = DEN.fromEnum $ DD.year date
             m = DEN.fromEnum $ DD.month date
             d = DEN.fromEnum $ DD.day date
-
 
 
 class FromValue t where
@@ -104,8 +110,12 @@ instance defaultFromValue :: FromValue v => FromValue (Default v) where
       fromValue v = Default <$> fromValue v
 
 instance autoFromValue :: FromValue v => FromValue (Auto v) where
-      fromValue v = Auto <$>  fromValue v
+      fromValue v = Auto <$> fromValue v
 
+instance maybeFromValue :: FromValue v => FromValue (Maybe v) where
+      fromValue v
+            | F.isNull v = pure Nothing
+            | otherwise = Just <$> fromValue v
 
 instance dateFromValue :: FromValue Date where
       fromValue v = do
