@@ -18,3 +18,4 @@ todo
 _site/
 vendor/
 .bundle/
+.vscode
