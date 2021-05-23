@@ -488,6 +488,15 @@ https://www.postgresql.org/docs/current/dml-returning.html
       star
 -}
 
+{-
+
+full RETURNING syntax supported by droplet
+
+{ INSERT } RETURNING
+      field | [, ...]
+-}
+
+
 ---------------------------RETURNING------------------------------------------
 
 newtype Returning (fields :: Row Type) f = Returning f
