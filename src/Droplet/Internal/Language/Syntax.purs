@@ -105,7 +105,7 @@ class ToPrepare q where
 instance selectToPrepare :: ToPrepare (Select s p (From f fields rest)) where
       toPrepare p q = Prepare q p
 
-instance insertToPrepare :: ToPrepare (InsertInto name fields fieldNames (Values v)) where
+instance insertToPrepare :: ToPrepare (InsertInto name fields fieldNames (Values v rest)) where
       toPrepare p q = Prepare q p
 
 instance updateToPrepare :: ToPrepare (Update name fields (Set v rest)) where
@@ -341,7 +341,7 @@ data Insert = Insert
 
 data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames rest = InsertInto fieldNames rest
 
-newtype Values fieldValues = Values fieldValues
+data Values fieldValues rest = Values fieldValues rest
 
 
 class ToInsertFields (fields :: Row Type) (fieldNames :: Type) (inserted :: Row Type) | fieldNames -> fields inserted
@@ -387,8 +387,8 @@ into :: forall tableName fields fieldNames fieldList required e inserted.
       Table tableName fields -> fieldNames -> Insert -> InsertInto tableName fields fieldNames E
 into _ fieldNames _ = InsertInto fieldNames E
 
-values :: forall tableName fields fieldNames fieldValues. ToInsertValues fields fieldNames fieldValues => fieldValues -> InsertInto tableName fields fieldNames E -> InsertInto tableName fields fieldNames (Values fieldValues)
-values fieldValues (InsertInto fieldNames _) = InsertInto fieldNames (Values fieldValues)
+values :: forall tableName fields fieldNames fieldValues. ToInsertValues fields fieldNames fieldValues => fieldValues -> InsertInto tableName fields fieldNames E -> InsertInto tableName fields fieldNames (Values fieldValues E)
+values fieldValues (InsertInto fieldNames _) = InsertInto fieldNames (Values fieldValues E)
 
 
 
@@ -469,7 +469,33 @@ DELETE FROM table name
 
 ---------------------------DELETE------------------------------------------
 
+--real work is done in from and wher
 newtype Delete (fields :: Row Type) rest = Delete rest
 
 delete :: forall fields. Delete fields E
 delete = Delete E
+
+
+
+{-
+
+https://www.postgresql.org/docs/current/dml-returning.html
+
+{ INSERT | UPDATE | DELETE } RETURNING
+      field [AS alias] | [, ...]
+      star
+-}
+
+---------------------------RETURNING------------------------------------------
+
+newtype Returning f = Returning f
+
+class ToReturning f q r | q -> r where
+      toReturning :: f -> q -> r
+
+instance insertToReturning :: ToReturningFields f fields => ToReturning f (InsertInto tn fields fn (Values fv E)) (InsertInto tn fields fn (Values fv (Returning f))) where
+      toReturning f (InsertInto fieldNames (Values values E)) = InsertInto fieldNames (Values values (Returning f))
+
+class ToReturningFields f (fields :: Row Type) | f -> fields
+
+instance fieldToReturningFields :: Cons name t e fields => ToReturningFields (Proxy name) fields

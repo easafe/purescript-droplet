@@ -55,7 +55,7 @@ ToQuery should print valid sql strings but reject queries that can't be executed
 -}
 
 --trash
-instance eToQuery :: ToQuery E projection where
+instance eToQuery :: ToQuery E () where
       toQuery _ = pure ""
 
 instance queryToQuery :: ToQuery (Query projection) projection where
@@ -188,9 +188,10 @@ printOperator = case _ of
       NotEquals -> notEqualsSymbol
 
 --insert
-instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v) => ToQuery (InsertInto name fields fieldNames (Values v)) () where
-      toQuery (InsertInto fieldNames (Values v)) = do
+instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v, ToQuery rest projection) => ToQuery (InsertInto name fields fieldNames (Values v rest)) projection where
+      toQuery (InsertInto fieldNames (Values v rest)) = do
             q <- toFieldValues v
+            otherQ <- toQuery rest
             pure $ insertKeyword <>
                   DS.reflectSymbol (Proxy :: Proxy name) <>
                   openBracket <>
@@ -199,7 +200,8 @@ instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues
                   valuesKeyword <>
                   openBracket <>
                   q <>
-                  closeBracket
+                  closeBracket <>
+                  otherQ
 
 class ToFieldNames fieldNames where
       toFieldNames :: fieldNames -> String
