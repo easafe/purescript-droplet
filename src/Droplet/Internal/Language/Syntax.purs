@@ -273,6 +273,8 @@ else instance starToProjection :: Union fields () projection => ToProjection Sta
 
 else instance tupleToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple (Select s p sr) (Select t pp tr)) fields extra
 
+else instance tupleProxyToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple s t) fields extra
+
 --subquery columns
 else instance selectFromRestToProjection :: ToProjection s fields projection => ToProjection (Select s p (From f fields rest)) fd projection
 
@@ -488,12 +490,12 @@ https://www.postgresql.org/docs/current/dml-returning.html
 
 ---------------------------RETURNING------------------------------------------
 
-newtype Returning f = Returning f
+newtype Returning (fields :: Row Type) f = Returning f
 
 class ToReturning f q r | q -> r where
       toReturning :: f -> q -> r
 
-instance insertToReturning :: ToReturningFields f fields => ToReturning f (InsertInto tn fields fn (Values fv E)) (InsertInto tn fields fn (Values fv (Returning f))) where
+instance insertToReturning :: ToReturningFields f fields => ToReturning f (InsertInto tn fields fn (Values fv E)) (InsertInto tn fields fn (Values fv (Returning fields f))) where
       toReturning f (InsertInto fieldNames (Values values E)) = InsertInto fieldNames (Values values (Returning f))
 
 class ToReturningFields (f :: Type) (fields :: Row Type) | f -> fields

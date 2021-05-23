@@ -58,3 +58,6 @@ deleteKeyword = "DELETE"
 
 atToken :: String
 atToken = "@"
+
+returningKeyword :: String
+returningKeyword = " RETURNING "

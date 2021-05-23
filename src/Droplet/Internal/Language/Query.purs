@@ -258,6 +258,10 @@ instance deleteToQuery :: ToQuery (From f fields rest) p => ToQuery (Delete fiel
             q <- toQuery fr
             pure $ deleteKeyword <> q
 
+--returning
+instance returningToQuery :: (ToFieldNames fieldNames, ToProjection fieldNames fields projection) => ToQuery (Returning fields fieldNames) projection where
+      toQuery (Returning fieldNames) = pure $ returningKeyword <> toFieldNames fieldNames
+
 
 toAsQuery :: forall name p s projection. IsSymbol name => ToQuery s p => Select s projection (As E name) -> State QueryState String
 toAsQuery (Select s (As _)) = do
