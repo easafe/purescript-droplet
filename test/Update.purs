@@ -1,7 +1,7 @@
 module Test.Update where
 
-import Droplet.Internal.Language.Syntax
-import Droplet.Internal.Language.Condition
+import Droplet.Language
+import Droplet.Language
 import Prelude
 import Test.Types
 

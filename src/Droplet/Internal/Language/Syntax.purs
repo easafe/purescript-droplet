@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Internal.Language.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), InsertInto(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), Insert, as, delete, from, insert, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
+module Droplet.Internal.Language.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), Order(..), By(..), class ToOrderBy, class ToOrderByFields, toOrderBy, order, by, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, from, insert, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
 
 import Droplet.Internal.Language.Condition
 import Droplet.Internal.Language.Definition
@@ -15,6 +15,34 @@ import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
 import Unsafe.Coerce as UC
+
+data E = E
+
+----------------------PREPARE----------------------------
+
+data Prepare q = Prepare q Plan
+
+newtype Plan = Plan String
+
+class ToPrepare q where
+      toPrepare :: Plan -> q -> Prepare q
+
+--to allow general selects/insert, ToQuery would need to check for invalid statements
+instance selectToPrepare :: ToPrepare (Select s p (From f fields rest)) where
+      toPrepare p q = Prepare q p
+
+instance insertToPrepare :: ToPrepare (Insert (Into name fields fieldNames (Values v rest))) where
+      toPrepare p q = Prepare q p
+
+instance updateToPrepare :: ToPrepare (Update name fields (Set v rest)) where
+      toPrepare p q = Prepare q p
+
+instance deleteToPrepare :: ToPrepare (Delete fields (From f fields rest)) where
+      toPrepare p q = Prepare q p
+
+prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
+prepare plan s = toPrepare plan s
+
 
 
 {-
@@ -75,6 +103,7 @@ SELECT
       * | column | AS | SELECT | [, ...]
       [ FROM ]
       [ WHERE ]
+      [ ORDER BY ]
 
 AS
       integer | FROM output_name | WHERE output_name
@@ -88,40 +117,15 @@ WHERE
 OPERATOR
       = | <> |
 
+ORDER BY
+      { field | number } { ASC | DESC } | [, ...]
+
+
 -}
-
-data E = E
-
-----------------------PREPARE----------------------------
-
-data Prepare q = Prepare q Plan
-
-newtype Plan = Plan String
-
-class ToPrepare q where
-      toPrepare :: Plan -> q -> Prepare q
-
---to allow general selects/insert, ToQuery would need to check for invalid statements
-instance selectToPrepare :: ToPrepare (Select s p (From f fields rest)) where
-      toPrepare p q = Prepare q p
-
-instance insertToPrepare :: ToPrepare (InsertInto name fields fieldNames (Values v rest)) where
-      toPrepare p q = Prepare q p
-
-instance updateToPrepare :: ToPrepare (Update name fields (Set v rest)) where
-      toPrepare p q = Prepare q p
-
-instance deleteToPrepare :: ToPrepare (Delete fields (From f fields rest)) where
-      toPrepare p q = Prepare q p
-
-prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
-prepare plan s = toPrepare plan s
-
 
 
 ----------------------SELECT----------------------------
 
---the projection is not really needed here but it might help with understanding type errors for the most common queries
 data Select s (projection :: Row Type) rest = Select s rest
 
 class ToSelect r s projection | r -> s projection where
@@ -247,7 +251,31 @@ as a q = toAs a q
 
 
 
-------------------------ORDER BY---------------------------
+
+---------------------------ORDER BY------------------------------------------
+
+newtype Order rest = Order rest
+
+data By (fields :: Row Type) f rest = By f rest
+
+class ToOrderBy f q r | q -> r where
+      toOrderBy :: f -> q -> r
+
+-- instance fromToOrderBy :: ToOrderByFields f projection => ToOrderBy f (Select s projection (From fr fd E)) (Select s projection (From fr fd (OrderBy))) where
+--       toOrderBy f (Insert (Into fieldNames (Values values E))) = Insert Into fieldNames (Values values (OrderBy f))
+
+class ToOrderByFields (f :: Type) (fields :: Row Type) | f -> fields
+
+instance fieldToOrderByFields :: Cons name t e fields => ToOrderByFields (Proxy name) fields
+
+instance tupleToOrderByFields :: (ToOrderByFields a fields, ToOrderByFields b fields) => ToOrderByFields (Tuple a b) fields
+
+order :: Order E
+order = Order E
+
+by :: forall fields q r. ToOrderBy fields q r => fields -> q -> Order E -> r
+by fields q _ = toOrderBy fields q
+
 
 
 
@@ -339,9 +367,9 @@ INSERT INTO
 
 ---------------------------INSERT------------------------------------------
 
-data Insert = Insert
+newtype Insert rest = Insert rest
 
-data InsertInto (name :: Symbol) (fields :: Row Type) fieldNames rest = InsertInto fieldNames rest
+data Into (name :: Symbol) (fields :: Row Type) fieldNames rest = Into fieldNames rest
 
 data Values fieldValues rest = Values fieldValues rest
 
@@ -377,20 +405,20 @@ instance fieldToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToV
 else instance tupleToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Proxy name) some) (Tuple u more)
 
 
---purely cosmetic
-insert :: Insert
-insert = Insert
+insert :: Insert E
+insert = Insert E
+
 --as it is, error messages are not intuitive at all
 into :: forall tableName fields fieldNames fieldList required e inserted.
       RowToList fields fieldList =>
       RequiredFields fieldList required =>
       ToInsertFields fields fieldNames inserted =>
       Union required e inserted =>
-      Table tableName fields -> fieldNames -> Insert -> InsertInto tableName fields fieldNames E
-into _ fieldNames _ = InsertInto fieldNames E
+      Table tableName fields -> fieldNames -> Insert E -> Insert (Into tableName fields fieldNames E)
+into _ fieldNames _ = Insert (Into fieldNames E)
 
-values :: forall tableName fields fieldNames fieldValues. ToInsertValues fields fieldNames fieldValues => fieldValues -> InsertInto tableName fields fieldNames E -> InsertInto tableName fields fieldNames (Values fieldValues E)
-values fieldValues (InsertInto fieldNames _) = InsertInto fieldNames (Values fieldValues E)
+values :: forall tableName fields fieldNames fieldValues. ToInsertValues fields fieldNames fieldValues => fieldValues -> Insert (Into tableName fields fieldNames E) -> Insert (Into tableName fields fieldNames (Values fieldValues E))
+values fieldValues (Insert (Into fieldNames _)) = Insert <<< Into fieldNames $ Values fieldValues E
 
 
 
@@ -504,8 +532,8 @@ newtype Returning (fields :: Row Type) f = Returning f
 class ToReturning f q r | q -> r where
       toReturning :: f -> q -> r
 
-instance insertToReturning :: ToReturningFields f fields => ToReturning f (InsertInto tn fields fn (Values fv E)) (InsertInto tn fields fn (Values fv (Returning fields f))) where
-      toReturning f (InsertInto fieldNames (Values values E)) = InsertInto fieldNames (Values values (Returning f))
+instance insertToReturning :: ToReturningFields f fields => ToReturning f (Insert (Into tn fields fn (Values fv E))) (Insert (Into tn fields fn (Values fv (Returning fields f)))) where
+      toReturning f (Insert (Into fieldNames (Values values E))) = Insert (Into fieldNames (Values values (Returning f)))
 
 class ToReturningFields (f :: Type) (fields :: Row Type) | f -> fields
 
@@ -515,3 +543,4 @@ instance tupleToReturningFields :: (ToReturningFields a fields, ToReturningField
 
 returning :: forall fields q r. ToReturning fields q r => fields -> q -> r
 returning = toReturning
+

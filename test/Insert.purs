@@ -1,6 +1,6 @@
 module Test.Insert where
 
-import Droplet.Internal.Language.Syntax
+import Droplet.Language
 import Prelude
 import Test.Types
 

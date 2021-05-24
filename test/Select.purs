@@ -1,11 +1,9 @@
 module Test.Select where
 
-import Droplet.Internal.Language.Condition
-import Droplet.Internal.Language.Syntax
+import Droplet.Language
 import Prelude
 import Test.Types
 
-import Data.Date (Date)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 import Droplet.Internal.Language.Query as Query
@@ -23,7 +21,7 @@ tests = do
                   TM.notParameterized "SELECT 34 AS b FROM messages" $ Query.query q
                   TM.result q [{b : 34}, {b : 34}]
             TU.test "null fields" do
-                  let q = select (created /\ by) # from tags
+                  let q = select (created /\ _by) # from tags
                   TM.notParameterized "SELECT created, by FROM tags" $ Query.query q
                   TM.result q [{created : Nothing, by: Just 1 }]
 

@@ -1,8 +1,6 @@
 module Test.Unsafe where
 
-import Droplet.Internal.Language.Syntax
 import Prelude
-import Test.Types
 
 import Data.Array ((!!))
 import Data.Array as DA

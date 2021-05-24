@@ -188,8 +188,8 @@ printOperator = case _ of
       NotEquals -> notEqualsSymbol
 
 --insert
-instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v, ToQuery rest projection) => ToQuery (InsertInto name fields fieldNames (Values v rest)) projection where
-      toQuery (InsertInto fieldNames (Values v rest)) = do
+instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v, ToQuery rest projection) => ToQuery (Insert (Into name fields fieldNames (Values v rest))) projection where
+      toQuery (Insert (Into fieldNames (Values v rest))) = do
             q <- toFieldValues v
             otherQ <- toQuery rest
             pure $ insertKeyword <>

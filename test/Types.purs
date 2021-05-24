@@ -70,8 +70,8 @@ secondDate = Proxy
 created :: Proxy "created"
 created = Proxy
 
-by :: Proxy "by"
-by = Proxy
+_by :: Proxy "by"
+_by = Proxy
 
 b :: Proxy "b"
 b = Proxy
