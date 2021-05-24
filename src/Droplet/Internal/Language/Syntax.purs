@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Internal.Language.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), Order(..), By(..), class ToOrderBy, class ToOrderByFields, toOrderBy, order, by, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
+module Droplet.Internal.Language.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
 
 import Droplet.Internal.Language.Condition
 import Droplet.Internal.Language.Definition
@@ -254,20 +254,18 @@ as a q = toAs a q
 
 ---------------------------ORDER BY------------------------------------------
 
-newtype Order rest = Order rest
+data OrderBy f (fields :: Row Type) rest = OrderBy f rest
 
-data By (fields :: Row Type) f rest = By f rest
-
-data Sort (f :: Symbol) = Asc | Desc
+data Sort (name :: Symbol) = Asc | Desc
 
 class ToOrderBy f q r | q -> r where
       toOrderBy :: f -> q -> r
 
-instance fromToOrderBy :: ToOrderByFields f projection => ToOrderBy f (Select s projection (From fr fd E)) (Select s projection (From fr fd (Order (By fields f E)))) where
-      toOrderBy f (Select s (From fr E)) = Select s <<< From fr <<< Order $ By f E
+instance fromToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields E)) (Select s projection (From fr fields (OrderBy f fields E))) where
+      toOrderBy f (Select s (From fr E)) = Select s <<< From fr $ OrderBy f E
 
-instance whereToOrderBy :: ToOrderByFields f projection => ToOrderBy f (Select s projection (From fr fd (Where E))) (Select s projection (From fr fd (Where (Order (By fields f E))))) where
-      toOrderBy f (Select s (From fr (Where fl E))) = Select s <<< From fr <<< Where fl <<< Order $ By f E
+instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where E))) (Select s projection (From fr fields (Where (OrderBy f fields E)))) where
+      toOrderBy f (Select s (From fr (Where fl E))) = Select s <<< From fr <<< Where fl $ OrderBy f E
 
 class ToOrderByFields (f :: Type) (fields :: Row Type) | f -> fields
 
@@ -277,19 +275,15 @@ instance sortToOrderByFields :: Cons name t e fields  => ToOrderByFields (Sort n
 
 instance tupleToOrderByFields :: (ToOrderByFields a fields, ToOrderByFields b fields) => ToOrderByFields (Tuple a b) fields
 
---works as long we dont support order by number
+--works as long we dont support order orderby number
 asc :: forall name. Proxy name -> Sort name
 asc _ = Asc
 
 desc :: forall name. Proxy name -> Sort name
 desc _ = Desc
 
-order :: Order E
-order = Order E
-
-by :: forall fields q r. ToOrderBy fields q r => fields -> q -> Order E -> r
-by fields q _ = toOrderBy fields q
-
+orderBy :: forall fields q r. ToOrderBy fields q r => fields -> q -> r
+orderBy fields q = toOrderBy fields q
 
 
 
@@ -301,7 +295,7 @@ by fields q _ = toOrderBy fields q
 
 ------------------------Projection machinery---------------------------
 
--- | Row Type of columns projected by the query
+-- | Row Type of columns projected orderby the query
 class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s -> fields projection
 
 --simple columns
@@ -344,7 +338,7 @@ instance sameUniqueColumnNames :: UniqueColumnNames fields fields
 
 {-
 
-full insert syntax supported by postgresql https://www.postgresql.org/docs/current/sql-insert.html
+full insert syntax supported orderby postgresql https://www.postgresql.org/docs/current/sql-insert.html
 
 [ WITH [ RECURSIVE ] with_query [, ...] ]
 INSERT INTO table_name [ AS alias ] [ ( column_name [, ...] ) ]
@@ -371,7 +365,7 @@ and conflict_action is one of:
 
 {-
 
-full insert syntax supported by droplet
+full insert syntax supported orderby droplet
 
 INSERT INTO
       table name fields
@@ -438,7 +432,7 @@ values fieldValues (Insert (Into fieldNames _)) = Insert <<< Into fieldNames $ V
 
 {-
 
-full update syntax supported by postgresql https://www.postgresql.org/docs/current/sql-update.html
+full update syntax supported orderby postgresql https://www.postgresql.org/docs/current/sql-update.html
 
 [ WITH [ RECURSIVE ] with_query [, ...] ]
 UPDATE [ ONLY ] table_name [ * ] [ [ AS ] alias ]
@@ -454,7 +448,7 @@ UPDATE [ ONLY ] table_name [ * ] [ [ AS ] alias ]
 
 {-
 
-full update syntax supported by droplet
+full update syntax supported orderby droplet
 
 UPDATE table name
       SET field = value | [, ...]
@@ -493,7 +487,7 @@ set pairs (Update _) = Update $ Set pairs E
 
 {-
 
-full delete syntax supported by postgresql https://www.postgresql.org/docs/current/sql-insert.html
+full delete syntax supported orderby postgresql https://www.postgresql.org/docs/current/sql-insert.html
 
 [ WITH [ RECURSIVE ] with_query [, ...] ]
 DELETE FROM [ ONLY ] table_name [ * ] [ [ AS ] alias ]
@@ -505,7 +499,7 @@ DELETE FROM [ ONLY ] table_name [ * ] [ [ AS ] alias ]
 
 {-
 
-full update syntax supported by droplet
+full update syntax supported orderby droplet
 
 DELETE FROM table name
       [WHERE condition]
@@ -532,7 +526,7 @@ https://www.postgresql.org/docs/current/dml-returning.html
 
 {-
 
-full RETURNING syntax supported by droplet
+full RETURNING syntax supported orderby droplet
 
 { INSERT } RETURNING
       field | [, ...]
