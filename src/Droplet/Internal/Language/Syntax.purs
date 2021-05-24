@@ -264,8 +264,11 @@ class ToOrderBy f q r | q -> r where
 instance fromToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields E)) (Select s projection (From fr fields (OrderBy f fields E))) where
       toOrderBy f (Select s (From fr E)) = Select s <<< From fr $ OrderBy f E
 
-instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where E))) (Select s projection (From fr fields (Where (OrderBy f fields E)))) where
+else instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where E))) (Select s projection (From fr fields (Where (OrderBy f fields E)))) where
       toOrderBy f (Select s (From fr (Where fl E))) = Select s <<< From fr <<< Where fl $ OrderBy f E
+
+else instance elseToOrderBy :: Fail (Text "ORDER BY can only follow FROM, WHERE or GROUP BY") => ToOrderBy f q r where
+      toOrderBy _ _ = UC.unsafeCoerce 44
 
 class ToOrderByFields (f :: Type) (fields :: Row Type) | f -> fields
 
@@ -275,7 +278,7 @@ instance sortToOrderByFields :: Cons name t e fields  => ToOrderByFields (Sort n
 
 instance tupleToOrderByFields :: (ToOrderByFields a fields, ToOrderByFields b fields) => ToOrderByFields (Tuple a b) fields
 
---works as long we dont support order orderby number
+--works as long we dont support order by number
 asc :: forall name. Proxy name -> Sort name
 asc _ = Asc
 
@@ -295,7 +298,7 @@ orderBy fields q = toOrderBy fields q
 
 ------------------------Projection machinery---------------------------
 
--- | Row Type of columns projected orderby the query
+-- | Row Type of columns projected by the query
 class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s -> fields projection
 
 --simple columns
@@ -338,7 +341,7 @@ instance sameUniqueColumnNames :: UniqueColumnNames fields fields
 
 {-
 
-full insert syntax supported orderby postgresql https://www.postgresql.org/docs/current/sql-insert.html
+full insert syntax supported by postgresql https://www.postgresql.org/docs/current/sql-insert.html
 
 [ WITH [ RECURSIVE ] with_query [, ...] ]
 INSERT INTO table_name [ AS alias ] [ ( column_name [, ...] ) ]
@@ -365,7 +368,7 @@ and conflict_action is one of:
 
 {-
 
-full insert syntax supported orderby droplet
+full insert syntax supported by droplet
 
 INSERT INTO
       table name fields
@@ -432,7 +435,7 @@ values fieldValues (Insert (Into fieldNames _)) = Insert <<< Into fieldNames $ V
 
 {-
 
-full update syntax supported orderby postgresql https://www.postgresql.org/docs/current/sql-update.html
+full update syntax supported by postgresql https://www.postgresql.org/docs/current/sql-update.html
 
 [ WITH [ RECURSIVE ] with_query [, ...] ]
 UPDATE [ ONLY ] table_name [ * ] [ [ AS ] alias ]
@@ -448,7 +451,7 @@ UPDATE [ ONLY ] table_name [ * ] [ [ AS ] alias ]
 
 {-
 
-full update syntax supported orderby droplet
+full update syntax supported by droplet
 
 UPDATE table name
       SET field = value | [, ...]
@@ -487,7 +490,7 @@ set pairs (Update _) = Update $ Set pairs E
 
 {-
 
-full delete syntax supported orderby postgresql https://www.postgresql.org/docs/current/sql-insert.html
+full delete syntax supported by postgresql https://www.postgresql.org/docs/current/sql-insert.html
 
 [ WITH [ RECURSIVE ] with_query [, ...] ]
 DELETE FROM [ ONLY ] table_name [ * ] [ [ AS ] alias ]
@@ -499,7 +502,7 @@ DELETE FROM [ ONLY ] table_name [ * ] [ [ AS ] alias ]
 
 {-
 
-full update syntax supported orderby droplet
+full update syntax supported by droplet
 
 DELETE FROM table name
       [WHERE condition]
@@ -526,7 +529,7 @@ https://www.postgresql.org/docs/current/dml-returning.html
 
 {-
 
-full RETURNING syntax supported orderby droplet
+full RETURNING syntax supported by droplet
 
 { INSERT } RETURNING
       field | [, ...]
@@ -542,6 +545,9 @@ class ToReturning f q r | q -> r where
 
 instance insertToReturning :: ToReturningFields f fields => ToReturning f (Insert (Into tn fields fn (Values fv E))) (Insert (Into tn fields fn (Values fv (Returning fields f)))) where
       toReturning f (Insert (Into fieldNames (Values values E))) = Insert (Into fieldNames (Values values (Returning f)))
+
+else instance elseToReturning :: Fail (Text "RETURNING can only follow INSERT, UPDATE or DELETE") => ToReturning f q r where
+      toReturning _ _ = UC.unsafeCoerce 3
 
 class ToReturningFields (f :: Type) (fields :: Row Type) | f -> fields
 

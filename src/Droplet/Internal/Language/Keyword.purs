@@ -61,3 +61,15 @@ atToken = "@"
 
 returningKeyword :: String
 returningKeyword = " RETURNING "
+
+descKeyword :: String
+descKeyword = " DESC"
+
+ascKeyword :: String
+ascKeyword = " ASC"
+
+orderKeyword :: String
+orderKeyword = " ORDER "
+
+byKeyword :: String
+byKeyword = "BY "

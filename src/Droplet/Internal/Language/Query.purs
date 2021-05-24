@@ -1,7 +1,7 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Internal.Language.Query (class ToColumnQuery, class ToFieldNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, NakedSelect, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
+module Droplet.Internal.Language.Query (class ToColumnQuery, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, NakedSelect, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
 
 import Droplet.Internal.Language.Condition
 import Droplet.Internal.Language.Definition
@@ -209,8 +209,8 @@ class ToFieldNames fieldNames where
 instance fieldToFieldNames :: IsSymbol name => ToFieldNames (Proxy name) where
       toFieldNames name = DS.reflectSymbol name
 
-instance tupleToFieldNames :: (IsSymbol name, ToFieldNames rest) => ToFieldNames (Tuple (Proxy name) rest) where
-      toFieldNames (Tuple name rest) = DS.reflectSymbol name <> comma <> toFieldNames rest
+instance tupleToFieldNames :: (ToFieldNames f, ToFieldNames rest) => ToFieldNames (Tuple f rest) where
+      toFieldNames (Tuple f rest) = toFieldNames f <> comma <> toFieldNames rest
 
 
 class ToFieldValues fieldValues where
@@ -261,6 +261,27 @@ instance deleteToQuery :: ToQuery (From f fields rest) p => ToQuery (Delete fiel
 --returning
 instance returningToQuery :: (ToFieldNames fieldNames, ToProjection fieldNames fields projection) => ToQuery (Returning fields fieldNames) projection where
       toQuery (Returning fieldNames) = pure $ returningKeyword <> toFieldNames fieldNames
+
+--order by
+instance orderByToQuery :: (ToSortNames f, ToQuery rest p) => ToQuery (OrderBy f fields rest) projection where
+      toQuery (OrderBy f rest) = do
+            q <- toQuery rest
+            pure $ orderKeyword <> byKeyword <> toSortNames f <> q
+
+
+class ToSortNames fieldNames where
+      toSortNames :: fieldNames -> String
+
+instance fieldToSortNames :: IsSymbol name => ToSortNames (Proxy name) where
+      toSortNames name = DS.reflectSymbol name
+
+instance sortToSortNames :: IsSymbol name => ToSortNames (Sort name) where
+      toSortNames s = DS.reflectSymbol (Proxy :: Proxy name) <> case s of
+            Desc -> descKeyword
+            Asc -> ascKeyword
+
+instance tupleToSortNames :: (ToSortNames f, ToSortNames rest) => ToSortNames (Tuple f rest) where
+      toSortNames (Tuple f rest) = toSortNames f <> comma <> toSortNames rest
 
 
 toAsQuery :: forall name p s projection. IsSymbol name => ToQuery s p => Select s projection (As E name) -> State QueryState String
