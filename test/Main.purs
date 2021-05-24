@@ -3,14 +3,17 @@ module Test.Main where
 import Prelude
 
 import Effect (Effect)
+import Test.As as TA
 import Test.Delete as TD
+import Test.From as TF
 import Test.Insert as TI
+import Test.NakedSelect as TNS
 import Test.Returning as TR
-import Test.Select as TS
 import Test.Transaction as TST
 import Test.Unit.Main as TUM
 import Test.Unsafe as TUS
 import Test.Update as TU
+import Test.Where as TW
 
 main :: Effect Unit
 main = TUM.runTest do
@@ -19,5 +22,8 @@ main = TUM.runTest do
       TU.tests
       TD.tests
       TR.tests
-      TS.tests
+      TF.tests
+      TW.tests
+      TA.tests
+      TNS.tests
       TST.tests

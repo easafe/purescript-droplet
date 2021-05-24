@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Internal.Language.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), Order(..), By(..), class ToOrderBy, class ToOrderByFields, toOrderBy, order, by, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, from, insert, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
+module Droplet.Internal.Language.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), Order(..), By(..), class ToOrderBy, class ToOrderByFields, toOrderBy, order, by, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
 
 import Droplet.Internal.Language.Condition
 import Droplet.Internal.Language.Definition
@@ -258,17 +258,31 @@ newtype Order rest = Order rest
 
 data By (fields :: Row Type) f rest = By f rest
 
+data Sort (f :: Symbol) = Asc | Desc
+
 class ToOrderBy f q r | q -> r where
       toOrderBy :: f -> q -> r
 
--- instance fromToOrderBy :: ToOrderByFields f projection => ToOrderBy f (Select s projection (From fr fd E)) (Select s projection (From fr fd (OrderBy))) where
---       toOrderBy f (Insert (Into fieldNames (Values values E))) = Insert Into fieldNames (Values values (OrderBy f))
+instance fromToOrderBy :: ToOrderByFields f projection => ToOrderBy f (Select s projection (From fr fd E)) (Select s projection (From fr fd (Order (By fields f E)))) where
+      toOrderBy f (Select s (From fr E)) = Select s <<< From fr <<< Order $ By f E
+
+instance whereToOrderBy :: ToOrderByFields f projection => ToOrderBy f (Select s projection (From fr fd (Where E))) (Select s projection (From fr fd (Where (Order (By fields f E))))) where
+      toOrderBy f (Select s (From fr (Where fl E))) = Select s <<< From fr <<< Where fl <<< Order $ By f E
 
 class ToOrderByFields (f :: Type) (fields :: Row Type) | f -> fields
 
 instance fieldToOrderByFields :: Cons name t e fields => ToOrderByFields (Proxy name) fields
 
+instance sortToOrderByFields :: Cons name t e fields  => ToOrderByFields (Sort name) fields
+
 instance tupleToOrderByFields :: (ToOrderByFields a fields, ToOrderByFields b fields) => ToOrderByFields (Tuple a b) fields
+
+--works as long we dont support order by number
+asc :: forall name. Proxy name -> Sort name
+asc _ = Asc
+
+desc :: forall name. Proxy name -> Sort name
+desc _ = Desc
 
 order :: Order E
 order = Order E
