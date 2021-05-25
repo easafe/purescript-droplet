@@ -21,6 +21,7 @@ import Data.String (Pattern(..))
 import Data.String as DST
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
+import Data.Traversable as DT
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
 import Foreign (Foreign)
@@ -111,6 +112,9 @@ instance defaultFromValue :: FromValue v => FromValue (Default v) where
 
 instance autoFromValue :: FromValue v => FromValue (Auto v) where
       fromValue v = Auto <$> fromValue v
+
+instance arrayFromValue :: FromValue v => FromValue (Array v) where
+      fromValue = DT.traverse fromValue <=< DB.lmap show <<< CME.runExcept <<< F.readArray
 
 instance maybeFromValue :: FromValue v => FromValue (Maybe v) where
       fromValue v
