@@ -118,8 +118,7 @@ OPERATOR
       = | <> |
 
 ORDER BY
-      { field | number } { ASC | DESC } | [, ...]
-
+      field { ASC | DESC } | [, ...]
 
 -}
 

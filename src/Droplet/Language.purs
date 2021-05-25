@@ -5,5 +5,5 @@ import Droplet.Internal.Language.Syntax (As, Delete, E, From, Insert, Into, Orde
 
 import Droplet.Internal.Language.Definition (class FromValue, class ToParameters, class ToValue, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue) as Exported
 
-import Droplet.Internal.Language.Condition (and, equals, notEquals, or, (.&&.), (.<>.), (.=.), (.||.)) as Exported
+import Droplet.Internal.Language.Condition (and, equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.>.), (.<.), (.||.)) as Exported
 

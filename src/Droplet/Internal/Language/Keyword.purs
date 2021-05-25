@@ -38,6 +38,12 @@ equalsSymbol = " = "
 notEqualsSymbol :: String
 notEqualsSymbol = " <> "
 
+lesserThanSymbol :: String
+lesserThanSymbol = " < "
+
+greaterThanSymbol :: String
+greaterThanSymbol = " > "
+
 parameterToken :: String
 parameterToken = "$"
 

@@ -186,6 +186,8 @@ printOperator :: Operator -> String
 printOperator = case _ of
       Equals -> equalsSymbol
       NotEquals -> notEqualsSymbol
+      LesserThan -> lesserThanSymbol
+      GreaterThan -> greaterThanSymbol
 
 --insert
 instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v, ToQuery rest projection) => ToQuery (Insert (Into name fields fieldNames (Values v rest))) projection where

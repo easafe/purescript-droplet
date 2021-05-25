@@ -11,7 +11,6 @@ import Test.Unit (TestSuite)
 import Test.Unit as TU
 import Type.Proxy (Proxy(..))
 
---lets clean these test out of these meaningless suite categories
 tests :: TestSuite
 tests = do
       TU.suite "where" do
@@ -24,6 +23,10 @@ tests = do
                         let q = select sender # from messages # wher (recipient .<>. 2)
                         TM.parameterized "SELECT sender FROM messages WHERE recipient <> $1" $ Query.query q
                         TM.result q [{sender : 2}]
+                  TU.test "lesser than" do
+                        let q = select sender # from messages # wher (recipient .<. 2)
+                        TM.parameterized "SELECT sender FROM messages WHERE recipient < $1" $ Query.query q
+                        TM.result q [{sender : 2}]
 
             TU.suite "compared to field" do
                   TU.test "equals" do
@@ -34,6 +37,10 @@ tests = do
                         let q = select (34 # as n) # from users # wher (name .<>. surname)
                         TM.notParameterized "SELECT 34 AS n FROM users WHERE name <> surname" $ Query.query q
                         TM.result q [{n : 34}, {n: 34}]
+                  TU.test "greater than" do
+                        let q = select sender # from messages # wher (recipient .>. 2)
+                        TM.parameterized "SELECT sender FROM messages WHERE recipient > $1" $ Query.query q
+                        TM.result q []
 
             TU.suite "logical operands" do
                   TU.suite "and" do

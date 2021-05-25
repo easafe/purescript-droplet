@@ -1,7 +1,7 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Internal.Language.Condition (class ToCondition, Condition(..), Filtered(..), OperationFields(..), Operator(..), and, equals, notEquals, or, toCondition, (.&&.), (.<>.), (.=.), (.||.)) where
+module Droplet.Internal.Language.Condition (class ToCondition, Condition(..), Filtered(..), OperationFields(..), Operator(..), and, equals, notEquals, greaterThan, lesserThan, or, toCondition, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
 import Prelude
 
@@ -16,7 +16,9 @@ import Type.Proxy (Proxy)
 
 data Operator =
       Equals |
-      NotEquals
+      NotEquals |
+      GreaterThan |
+      LesserThan
 
 data Filtered =
       Operation OperationFields Operator |
@@ -60,10 +62,19 @@ else instance parameterParameterToCondition :: ToValue s => ToCondition s s fiel
       toCondition s t = OperationFields (Left $ DIED.toValue s) (Left $ DIED.toValue t)
 
 equals :: forall fields field compared. ToCondition field compared fields => field -> compared -> Condition fields
-equals field compared = Condition $ Operation (toCondition field compared) Equals
+equals = cond Equals
 
 notEquals :: forall compared fields field. ToCondition field compared fields => field -> compared -> Condition fields
-notEquals field compared = Condition $ Operation (toCondition field compared) NotEquals
+notEquals = cond NotEquals
+
+greaterThan :: forall compared fields field. ToCondition field compared fields => field -> compared -> Condition fields
+greaterThan = cond GreaterThan
+
+lesserThan :: forall compared fields field. ToCondition field compared fields => field -> compared -> Condition fields
+lesserThan = cond LesserThan
+
+cond :: forall compared fields field. ToCondition field compared fields => Operator -> field -> compared -> Condition fields
+cond op field compared = Condition $ Operation (toCondition field compared) op
 
 and :: forall fields. Condition fields -> Condition fields -> Condition fields
 and (Condition first) (Condition second) = Condition (And first second)
@@ -73,6 +84,9 @@ or (Condition first) (Condition second) = Condition (Or first second)
 
 infix 4 notEquals as .<>.
 infix 4 equals as .=.
+infix 4 greaterThan as .>.
+infix 4 lesserThan as .<.
 --left associativity is what sql uses
 infixl 3 and as .&&.
 infixl 2 or as .||.
+
