@@ -84,6 +84,9 @@ instance maybeToValue :: ToValue a => ToValue (Maybe a) where
 instance dateToValue :: ToValue Date where
       toValue = F.unsafeToForeign <<< formatDate
 
+instance arrayToValue :: ToValue a => ToValue (Array a) where
+      toValue = F.unsafeToForeign <<< map toValue
+
 instance dateTimeToValue :: ToValue DateTime where
       toValue (DateTime date (Time h m s ms)) = F.unsafeToForeign $ formatDate date <> "T" <> time <> "+0000"
             where time = show (DEN.fromEnum h) <> ":" <> show (DEN.fromEnum m) <> ":" <> show (DEN.fromEnum s) <> "." <> show (DEN.fromEnum ms)
