@@ -5,7 +5,7 @@ import Prelude
 import Test.Types
 
 import Data.Date (Date)
-import Data.Date as DD
+import Data.Date (canonicalDate) as DD
 import Data.DateTime (DateTime(..), Time(..))
 import Data.Either (Either(..))
 import Data.Enum (class BoundedEnum)
@@ -16,8 +16,8 @@ import Data.Maybe as DM
 import Data.Show (class ShowRecordFields)
 import Data.Tuple.Nested ((/\))
 import Droplet.Driver (class FromResult,  Configuration, Connection, PgError)
-import Droplet.Internal.Language.Query(class ToQuery, Query(..))
-import Droplet.Driver as DD
+import Droplet.Language.Internal.Query(class ToQuery, Query(..))
+import Droplet.Driver (defaultConfiguration, newPool, query, withConnection) as DD
 import Droplet.Driver.Unsafe as DDU
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)

@@ -6,6 +6,7 @@ import Effect (Effect)
 import Test.As as TA
 import Test.Delete as TD
 import Test.From as TF
+import Test.Function as TFC
 import Test.Insert as TI
 import Test.NakedSelect as TNS
 import Test.OrderBy as TO
@@ -27,5 +28,6 @@ main = TUM.runTest do
       TW.tests
       TA.tests
       TO.tests
+      TFC.tests
       TNS.tests
       TST.tests

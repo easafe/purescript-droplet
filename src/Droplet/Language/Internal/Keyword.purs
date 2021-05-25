@@ -1,5 +1,5 @@
 -- | SQL Keywords and tokens
-module Droplet.Internal.Language.Keyword where
+module Droplet.Language.Internal.Keyword where
 
 --magic strings
 selectKeyword :: String
@@ -20,8 +20,8 @@ orKeyword = " OR "
 asKeyword :: String
 asKeyword = " AS "
 
-starToken :: String
-starToken = "*"
+starSymbol :: String
+starSymbol = "*"
 
 comma :: String
 comma = ", "
@@ -44,8 +44,8 @@ lesserThanSymbol = " < "
 greaterThanSymbol :: String
 greaterThanSymbol = " > "
 
-parameterToken :: String
-parameterToken = "$"
+parameterSymbol :: String
+parameterSymbol = "$"
 
 insertKeyword :: String
 insertKeyword = "INSERT INTO "
@@ -62,8 +62,8 @@ setKeyword = " SET "
 deleteKeyword :: String
 deleteKeyword = "DELETE"
 
-atToken :: String
-atToken = "@"
+atSymbol :: String
+atSymbol = "@"
 
 returningKeyword :: String
 returningKeyword = " RETURNING "
@@ -79,3 +79,6 @@ orderKeyword = " ORDER "
 
 byKeyword :: String
 byKeyword = "BY "
+
+countFunctionName :: String
+countFunctionName = "COUNT"

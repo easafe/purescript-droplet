@@ -1,12 +1,12 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Internal.Language.Query (class ToColumnQuery, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, NakedSelect, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class ToColumnQuery, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, NakedSelect, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
 
-import Droplet.Internal.Language.Condition
-import Droplet.Internal.Language.Definition
-import Droplet.Internal.Language.Keyword
-import Droplet.Internal.Language.Syntax
+import Droplet.Language.Internal.Condition
+import Droplet.Language.Internal.Definition
+import Droplet.Language.Internal.Keyword
+import Droplet.Language.Internal.Syntax
 import Prelude
 
 import Control.Monad.State (State)
@@ -22,6 +22,7 @@ import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
+import Droplet.Language.Internal.Function (Aggregate(..))
 import Foreign (Foreign)
 import Prim.Row (class Nub)
 import Prim.RowList (class RowToList)
@@ -73,6 +74,9 @@ instance prepareToQuery :: (ToQuery s projection) => ToQuery (Prepare s) project
 instance intToQuery :: IsSymbol name => ToQuery (NakedSelect (As Int name)) projection where
       toQuery (NakedSelect (As n)) = pure $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
+else instance aggregateToQuery :: (IsSymbol alias, ToAggregateName inp) => ToQuery (NakedSelect (As (Aggregate inp field out) alias)) projection where
+      toQuery (NakedSelect (As agg)) = pure $ printAggregation agg <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
+
 else instance asNakedSelectToQuery :: (IsSymbol name, ToQuery s p) => ToQuery (NakedSelect (Select s ss (As E name))) pp where
       toQuery (NakedSelect a) = toAsQuery a
 
@@ -113,10 +117,13 @@ instance fieldToColumnQuery :: IsSymbol name => ToColumnQuery (Proxy name) where
       toColumnQuery name = pure $ DS.reflectSymbol name
 
 else instance tableToColumnQuery :: ToColumnQuery Star where
-      toColumnQuery _ = pure starToken
+      toColumnQuery _ = pure starSymbol
 
 else instance asIntToColumnQuery :: IsSymbol name => ToColumnQuery (As Int name) where
       toColumnQuery (As n) = pure $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
+
+else instance asAggregateToColumnQuery :: (IsSymbol name, ToAggregateName inp) => ToColumnQuery (As (Aggregate inp fields out) name) where
+      toColumnQuery (As agg) = pure $ printAggregation agg <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Proxy name) alias) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
@@ -291,6 +298,19 @@ toAsQuery (Select s (As _)) = do
       q <- toQuery s
       pure $ openBracket <> q <> closeBracket <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
+printAggregation :: forall inp fields out. ToAggregateName inp => Aggregate inp fields out -> String
+printAggregation = case _ of
+      Count f -> countFunctionName <> openBracket <> toAggregateName f <> closeBracket
+
+class ToAggregateName f where
+      toAggregateName :: f -> String
+
+instance fieldToAggregateName :: IsSymbol name => ToAggregateName (Proxy name) where
+      toAggregateName name = DS.reflectSymbol name
+
+instance starToAggregateName :: ToAggregateName Star where
+      toAggregateName _ = starSymbol
+
 query :: forall q projection. ToQuery q projection => q -> Query projection
 query qr = Query plan q parameters
       where Tuple q {plan, parameters} = CMS.runState (toQuery qr) { plan: Nothing, parameters: [] }
@@ -307,6 +327,6 @@ unsafeQuery plan q p = Query plan dollaredQ parameterValues
             parameterNames = DTP.fst <$> parameterPairs
             parameterValues = DTP.snd <$> parameterPairs
             --HACK
-            parameterIndexes = map (\i -> parameterToken <> show i) (1 .. DA.length parameterNames)
-            replace sql (Tuple name p) = DSR.replace (DSRU.unsafeRegex (atToken <> "\\b" <> name <> "\\b") global) p sql
+            parameterIndexes = map (\i -> parameterSymbol <> show i) (1 .. DA.length parameterNames)
+            replace sql (Tuple name p) = DSR.replace (DSRU.unsafeRegex (atSymbol <> "\\b" <> name <> "\\b") global) p sql
             dollaredQ = DA.foldl replace q $ DA.zip parameterNames parameterIndexes

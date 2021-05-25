@@ -5,7 +5,7 @@ import Prelude
 import Test.Types
 
 import Data.Tuple.Nested ((/\))
-import Droplet.Internal.Language.Query as Query
+import Droplet.Language.Internal.Query as Query
 import Test.Model as TM
 import Test.Unit (TestSuite)
 import Test.Unit as TU

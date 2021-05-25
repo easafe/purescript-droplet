@@ -1,14 +1,15 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Internal.Language.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
 
-import Droplet.Internal.Language.Condition
-import Droplet.Internal.Language.Definition
+import Droplet.Language.Internal.Condition
+import Droplet.Language.Internal.Definition
 import Prelude
 
 import Data.Maybe (Maybe)
 import Data.Tuple (Tuple(..))
+import Droplet.Language.Internal.Function (Aggregate)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
@@ -146,6 +147,9 @@ else instance asIntToSelect :: ToSelect (As Int alias) (As Int alias) projection
 else instance asFieldToSelect :: ToSelect (As (Proxy name) alias) (As (Proxy name) alias) projection where
       toSelect a = Select a E
 
+else instance asAggregateToSelect :: ToSelect (As (Aggregate inp fields out) alias) (As (Aggregate inp fields out) alias) projection where
+      toSelect a = Select a E
+
 else instance tupleToSelect :: (ToSelect r s projection, ToSelect t u projection) => ToSelect (Tuple r t) (Tuple (Select s projection E) (Select u projection E)) projection where
       toSelect (Tuple s t) = Select (Tuple (toSelect s) (toSelect t)) E
 
@@ -160,6 +164,8 @@ instance fromFieldToSubExpression :: ToSubExpression (Select (Proxy name) projec
 else instance fromIntToSubExpression :: ToSubExpression (Select (As Int name) projection rest)
 
 else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As (Proxy name) alias) projection rest)
+
+else instance asAggregateToSubExpression :: ToSubExpression (Select (As (Aggregate inp fields out) alias) projection rest)
 
 else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (Select (Tuple a b) projection rest)
 
@@ -242,6 +248,9 @@ instance intToAs :: ToAs Int (As Int name) name where
 instance fieldToAs :: ToAs (Proxy name) (As (Proxy name) alias) alias where
       toAs _ fd = As fd
 
+instance aggregateToAs :: ToAs (Aggregate inp fields out) (As (Aggregate inp fields out) alias) alias where
+      toAs _ fd = As fd
+
 instance subQueryFromToAs :: ToAs (Select s projection (From f fields rest)) (Select (Select s projection (From f fields rest)) projection (As E name)) name where
       toAs _ s = Select s (As E)
 
@@ -304,6 +313,8 @@ class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s
 instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields projection
 
 else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As Int alias) fields projection
+
+else instance aggregateToProjection :: (Cons alias t () projection) => ToProjection (As (Aggregate inp fields t) alias) fields projection
 
 else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As (Proxy name) alias) fields projection
 

@@ -3,7 +3,7 @@ module Test.Types where
 import Data.Date (Date)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
-import Droplet.Internal.Language.Definition (Auto, Default, Table(..))
+import Droplet.Language.Internal.Definition (Auto, Default, Table(..))
 import Type.Proxy (Proxy(..))
 
 type Users = (

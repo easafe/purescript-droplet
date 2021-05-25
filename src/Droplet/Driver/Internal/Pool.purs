@@ -1,4 +1,4 @@
-module Droplet.Internal.Driver.Pool (Configuration, Database, Pool, defaultConfiguration, newPool) where
+module Droplet.Driver.Internal.Pool (Configuration, Database, Pool, defaultConfiguration, newPool) where
 
 import Data.Maybe (Maybe(..))
 import Data.Nullable (Nullable, toNullable)

@@ -1,15 +1,15 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Internal.Language.Condition (class ToCondition, Condition(..), Filtered(..), OperationFields(..), Operator(..), and, equals, notEquals, greaterThan, lesserThan, or, toCondition, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, Condition(..), Filtered(..), OperationFields(..), Operator(..), and, equals, notEquals, greaterThan, lesserThan, or, toCondition, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
 import Prelude
 
 import Data.Either (Either(..))
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
-import Droplet.Internal.Language.Definition (class ToValue, class UnwrapDefinition)
-import Droplet.Internal.Language.Definition as DIED
+import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition)
+import Droplet.Language.Internal.Definition as DIED
 import Foreign (Foreign)
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy)

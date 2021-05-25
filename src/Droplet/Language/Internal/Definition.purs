@@ -1,18 +1,21 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Internal.Language.Definition (class FromValue, class InvalidField, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue) where
+module Droplet.Language.Internal.Definition (class FromValue, class InvalidField, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue) where
 
 import Prelude
 
 import Control.Monad.Except as CME
 import Data.Array ((:))
 import Data.Bifunctor as DB
+import Data.BigInt (BigInt)
+import Data.BigInt as DBT
 import Data.Date (Date)
 import Data.Date as DD
 import Data.DateTime (DateTime(..), Time(..))
 import Data.Either (Either(..))
 import Data.Either as DE
+import Data.Either as DET
 import Data.Enum as DEN
 import Data.Int as DI
 import Data.Maybe (Maybe(..))
@@ -118,6 +121,11 @@ instance autoFromValue :: FromValue v => FromValue (Auto v) where
 
 instance arrayFromValue :: FromValue v => FromValue (Array v) where
       fromValue = DT.traverse fromValue <=< DB.lmap show <<< CME.runExcept <<< F.readArray
+
+instance bigIntFromValue :: FromValue BigInt where
+      fromValue v = do
+            i <- DB.lmap show <<< CME.runExcept $ F.readString v
+            DET.note ("Could not parse big int from " <> i) $ DBT.fromString i
 
 instance maybeFromValue :: FromValue v => FromValue (Maybe v) where
       fromValue v
