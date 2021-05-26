@@ -297,6 +297,12 @@ instance sortToSortNames :: IsSymbol name => ToSortNames (Sort name) where
 instance tupleToSortNames :: (ToSortNames f, ToSortNames rest) => ToSortNames (Tuple f rest) where
       toSortNames (Tuple f rest) = toSortNames f <> comma <> toSortNames rest
 
+--limit
+instance limitToQuery :: ToQuery rest p => ToQuery (Limit rest) projection where
+      toQuery (Limit n rest) = do
+            q <- toQuery rest
+            pure $ limitKeyword <> show n <> q
+
 
 toAsQuery :: forall name p s projection. IsSymbol name => ToQuery s p => Select s projection (As E name) -> State QueryState String
 toAsQuery (Select s (As _)) = do

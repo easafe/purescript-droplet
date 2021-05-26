@@ -82,3 +82,6 @@ byKeyword = "BY "
 
 countFunctionName :: String
 countFunctionName = "COUNT"
+
+limitKeyword :: String
+limitKeyword = " LIMIT "

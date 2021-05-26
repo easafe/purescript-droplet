@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, toLimit, Limit(..), toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -16,6 +16,8 @@ import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
 import Unsafe.Coerce as UC
+
+--type families, i cry every time
 
 data E = E
 
@@ -105,6 +107,7 @@ SELECT
       [ FROM ]
       [ WHERE ]
       [ ORDER BY ]
+      [ LIMIT ]
 
 AS
       integer | FROM output_name | WHERE output_name
@@ -120,6 +123,8 @@ OPERATOR
 
 ORDER BY
       field { ASC | DESC } | [, ...]
+
+LIMIT
 
 -}
 
@@ -298,10 +303,26 @@ orderBy fields q = toOrderBy fields q
 
 
 
-
 ------------------------LIMIT---------------------------
 
+--we basically have to copy order by here :(
+data Limit rest = Limit Int rest
 
+
+class ToLimit q r | q -> r where
+      toLimit :: Int -> q -> r
+
+instance fromToLimit :: ToLimit (Select s projection (From fr fields (OrderBy f fields E))) (Select s projection (From fr fields (OrderBy f fields (Limit E)))) where
+      toLimit n (Select s (From fr (OrderBy f E))) = Select s <<< From fr <<< OrderBy f $ Limit n E
+
+else instance whereToLimit :: ToLimit (Select s projection (From fr fields (Where (OrderBy f fields E)))) (Select s projection (From fr fields (Where (OrderBy f fields (Limit E))))) where
+      toLimit n (Select s (From fr (Where fl (OrderBy f E)))) = Select s <<< From fr <<< Where fl <<< OrderBy f $ Limit n E
+
+else instance elseToLimit :: Fail (Text "LIMIT can only follow ORDER BY") => ToLimit q r where
+      toLimit _ _ = UC.unsafeCoerce 45
+
+limit :: forall q r. ToLimit q r => Int -> q -> r
+limit n q = toLimit n q
 
 
 ------------------------Projection machinery---------------------------

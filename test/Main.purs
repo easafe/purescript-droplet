@@ -8,6 +8,7 @@ import Test.Delete as TD
 import Test.From as TF
 import Test.Function as TFC
 import Test.Insert as TI
+import Test.Limit as TL
 import Test.NakedSelect as TNS
 import Test.OrderBy as TO
 import Test.Returning as TR
@@ -29,5 +30,6 @@ main = TUM.runTest do
       TA.tests
       TO.tests
       TFC.tests
+      TL.tests
       TNS.tests
       TST.tests
