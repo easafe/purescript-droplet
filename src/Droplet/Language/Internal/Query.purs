@@ -80,13 +80,18 @@ else instance aggregateToQuery :: (IsSymbol alias, ToAggregateName inp) => ToQue
 else instance asNakedSelectToQuery :: (IsSymbol name, ToQuery s p) => ToQuery (NakedSelect (Select s ss (As E name))) pp where
       toQuery (NakedSelect a) = toAsQuery a
 
+else instance selNakedSelectToQuery :: ToQuery (Select s ss (From f fields rest)) p => ToQuery (NakedSelect (Select s ss (From f fields rest))) pp where
+      toQuery (NakedSelect a) = do
+            q <- toQuery a
+            pure $ openBracket <> q <> closeBracket
+
 else instance tupleToQuery :: (ToQuery (NakedSelect s) p, ToQuery (NakedSelect t) pp) => ToQuery (NakedSelect (Tuple (Select s ss E) (Select t tt E))) ppp where
       toQuery (NakedSelect (Tuple (Select s _) (Select t _))) = do
             q <- toQuery $ NakedSelect s
             otherQ <- toQuery $ NakedSelect t
             pure $ q <> comma <> otherQ
 
-else instance failNakedToQuery :: Fail (Text "Naked select columns must be either scalar values or named subqueries") => ToQuery (NakedSelect s) projection where
+else instance failNakedToQuery :: Fail (Text "Naked select columns must be either scalar values or full subqueries") => ToQuery (NakedSelect s) projection where
       toQuery _ = pure "impossible"
 
 --this can be made a lot simpler
