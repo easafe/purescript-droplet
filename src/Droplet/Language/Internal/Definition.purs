@@ -73,6 +73,9 @@ instance intToValue :: ToValue Int where
 instance booleanToValue :: ToValue Boolean where
       toValue = F.unsafeToForeign
 
+instance numberToValue :: ToValue Number where
+      toValue = F.unsafeToForeign
+
 instance defaultToValue :: ToValue a => ToValue (Default a) where
       toValue (Default a) = toValue a
 
@@ -112,6 +115,9 @@ instance stringFromValue :: FromValue String where
 
 instance booleanFromValue :: FromValue Boolean where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readBoolean
+
+instance numberFromValue :: FromValue Number where
+      fromValue = DB.lmap show <<< CME.runExcept <<< F.readNumber
 
 instance defaultFromValue :: FromValue v => FromValue (Default v) where
       fromValue v = Default <$> fromValue v
@@ -179,7 +185,6 @@ class InvalidField (t :: Type)
 instance autoInvalidField :: Fail (Text "Auto columns cannot be inserted or updated") => InvalidField (Auto t)
 
 else instance elseInvalidField :: InvalidField t
-
 
 
 class ToParameters record (list :: RowList Type) where
