@@ -10,7 +10,6 @@ import Droplet.Language.Internal.Query as Query
 import Test.Model as TM
 import Test.Unit (TestSuite)
 import Test.Unit as TU
-import Type.Proxy (Proxy(..))
 
 tests :: TestSuite
 tests =

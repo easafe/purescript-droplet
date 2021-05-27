@@ -11,6 +11,7 @@ import Test.Insert as TI
 import Test.Limit as TL
 import Test.NakedSelect as TNS
 import Test.OrderBy as TO
+import Test.SubQuery as TS
 import Test.Returning as TR
 import Test.Transaction as TST
 import Test.Unit.Main as TUM
@@ -28,6 +29,7 @@ main = TUM.runTest do
       TF.tests
       TW.tests
       TA.tests
+      TS.tests
       TO.tests
       TFC.tests
       TL.tests
