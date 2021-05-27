@@ -39,9 +39,9 @@ tests = do
                         let q = select date # from (select (select date # from messages) # from users # as t)
                         --needs limit
                         TM.notParameterized "SELECT date FROM (SELECT (SELECT date FROM messages) FROM users) AS t" $ Query.query q
-                        TM.result q [{date: TM.makeDateTime 2000 3 4}, {date: TM.makeDateTime 2000 3 4}]
+                        TM.result q [{date: Just $ TM.makeDateTime 2000 3 4}, {date: Just $ TM.makeDateTime 2000 3 4}]
                   TU.testSkip "tuple" do
                         let q = select (id /\ date /\ (4 # as n) /\ sent) # from (select (id /\ date /\ (4 # as n) /\ (select sent # from messages)) # from messages # as t)
                         TM.notParameterized "SELECT id, date, 4 AS n, sent FROM (SELECT id, date, 4 AS n, (SELECT sent FROM messages) AS sent FROM messages) AS t" $ Query.query q
                         --needs limit
-                        TM.result q [{id: 1, date: TM.makeDateTime 2000 3 4, n: 4, sent: true}, {id: 1, date: TM.makeDateTime 2000 3 4, n: 4, sent: true}]
+                        TM.result q [{id: 1, date: TM.makeDateTime 2000 3 4, n: 4, sent: Just true}, {id: 1, date: TM.makeDateTime 2000 3 4, n: 4, sent: Just true}]

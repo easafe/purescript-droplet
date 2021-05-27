@@ -345,22 +345,28 @@ else instance tupleToProjection :: (ToProjection s fields some, ToProjection t f
 
 else instance tupleProxyToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple s t) fields extra
 
---subquery columns
-else instance selectFromRestToProjection :: ToProjection s fields projection => ToProjection (Select s p (From f fields rest)) fd projection
+--change projection to Maybe since subqueries may return null
+else instance selectFromRestToProjection :: (
+      ToProjection s fields extra,
+      RowToList extra list,
+      ToSingleColumn list name t,
+      Cons name (Maybe t) () single
+) => ToProjection (Select s p (From f fields rest)) fd single
 
+--rename projection to alias
 else instance asToProjection :: (
       ToProjection s fields extra,
       RowToList extra list,
-      ToSingleColumn list t,
+      ToSingleColumn list name t,
       Cons alias t () single
 ) => ToProjection (Select s p (As E alias)) fields single
 
 else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f p
 
+--not required but makes for clearer type errors
+class ToSingleColumn (fields :: RowList Type) (name :: Symbol) (t :: Type) | fields -> name t
 
-class ToSingleColumn (fields :: RowList Type) (t :: Type) | fields -> t
-
-instance singleToSingleColumn :: ToSingleColumn (RL.Cons name t RL.Nil) t
+instance singleToSingleColumn :: ToSingleColumn (RL.Cons name t RL.Nil) name t
 
 
 -- | Query projections should not repeat column names
@@ -444,7 +450,7 @@ class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fie
 
 instance fieldToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u) => ToInsertValues fields (Proxy name) u
 
-else instance tupleToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u, ToInsertValues fields some more) => ToInsertValues fields (Tuple (Proxy name) some) (Tuple u more)
+else instance tupleToInsertValues :: (ToInsertValues fields name value, ToInsertValues fields some more) => ToInsertValues fields (Tuple name some) (Tuple value more)
 
 
 insert :: Insert E

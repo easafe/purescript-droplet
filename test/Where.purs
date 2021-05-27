@@ -4,6 +4,7 @@ import Droplet.Language
 import Prelude
 import Test.Types
 
+import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Query as Query
 import Test.Model as TM
@@ -78,20 +79,20 @@ tests = do
                         let namep = "mary"
                         let q = select (select (4 # as n) # from users # wher (name .=. namep) # as b)
                         TM.parameterized "SELECT (SELECT 4 AS n FROM users WHERE name = $1) AS b" $ Query.query q
-                        TM.result q [{b: 4 }]
+                        TM.result q [{b: Just 4 }]
                   TU.test "field" do
                         let namep = "josh"
                         let q = select (select id # from users # wher (name .=. namep) # as b)
                         TM.parameterized "SELECT (SELECT id FROM users WHERE name = $1) AS b" $ Query.query q
-                        TM.result q [{b: 1 }]
+                        TM.result q [{b: Just 1 }]
                   TU.test "tuple" do
                         let parameters = { d : "mary", e : 2 }
                         let q = select ((3 # as (Proxy :: Proxy "e")) /\ (select id # from users # wher (name .=. parameters.d) # as b) /\ (select id # from messages # wher (id .=. parameters.e) # as n))
                         TM.parameterized "SELECT 3 AS e, (SELECT id FROM users WHERE name = $1) AS b, (SELECT id FROM messages WHERE id = $2) AS n" $ Query.query q
-                        TM.result q [{e: 3, b: 2, n: 2 }]
+                        TM.result q [{e: 3, b: Just 2, n: Just 2 }]
                   TU.test "where" do
                         let parameters = { d : "mary", e : 2 }
                         let q = select ((3 # as (Proxy :: Proxy "e")) /\ (select id # from users # wher (name .=. parameters.d) # as b) /\ (select id # from messages # wher (id .=. parameters.e) # as n)) # from users # wher (id .=. 1 .||. id .=. 2)
                         TM.parameterized "SELECT 3 AS e, (SELECT id FROM users WHERE name = $1) AS b, (SELECT id FROM messages WHERE id = $2) AS n FROM users WHERE (id = $3 OR id = $4)" $ Query.query q
-                        TM.result q [{e: 3, b: 2, n: 2 }, {e: 3, b: 2, n: 2 }]
+                        TM.result q [{e: 3, b: Just 2, n: Just 2 }, {e: 3, b: Just 2, n: Just 2 }]
 
