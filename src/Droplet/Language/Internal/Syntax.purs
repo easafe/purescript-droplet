@@ -8,14 +8,15 @@ import Droplet.Language.Internal.Definition
 import Prelude
 
 import Data.Maybe (Maybe)
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple)
+import Data.Tuple.Nested ((/\), type (/\))
 import Droplet.Language.Internal.Function (Aggregate)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
-import Type.Proxy (Proxy(..))
+import Type.Proxy (Proxy)
 import Unsafe.Coerce as UC
 
 --type families, i cry every time
@@ -129,38 +130,38 @@ LIMIT
 
 data Select s (projection :: Row Type) rest = Select s rest
 
-class ToSelect r s projection | r -> s projection where
-      toSelect :: r -> Select s projection E
+class ToSelect r projection | r -> projection where
+      toSelect :: r -> Select r projection E
 
 --needs more instance for scalars
 -- might be nice to able to project parameters too
 -- we also dont accept naked selects as subqueries/as/whatever
 
-instance fieldToSelect :: ToSelect (Proxy name) (Proxy name) projection where
+instance fieldToSelect :: ToSelect (Proxy name) projection where
       toSelect s = Select s E
 
-else instance starToSelect :: ToSelect Star Star projection where
+else instance starToSelect :: ToSelect Star projection where
       toSelect s = Select s E
 
-else instance dotToSelect :: ToSelect (Dot name) (Dot name) projection where
+else instance dotToSelect :: ToSelect (Dot name) projection where
       toSelect s = Select s E
 
-else instance asIntToSelect :: ToSelect (As Int alias) (As Int alias) projection where
+else instance asIntToSelect :: ToSelect (As Int alias) projection where
       toSelect a = Select a E
 
-else instance asFieldToSelect :: ToSelect (As (Proxy name) alias) (As (Proxy name) alias) projection where
+else instance asFieldToSelect :: ToSelect (As (Proxy name) alias) projection where
       toSelect a = Select a E
 
-else instance asDotToSelect :: ToSelect (As (Dot name) alias) (As (Dot name) alias) projection where
+else instance asDotToSelect :: ToSelect (As (Dot name) alias) projection where
       toSelect a = Select a E
 
-else instance asAggregateToSelect :: ToSelect (As (Aggregate inp fields out) alias) (As (Aggregate inp fields out) alias) projection where
+else instance asAggregateToSelect :: ToSelect (As (Aggregate inp fields out) alias) projection where
       toSelect a = Select a E
 
-else instance tupleToSelect :: (ToSelect r s projection, ToSelect t u projection) => ToSelect (Tuple r t) (Tuple (Select s projection E) (Select u projection E)) projection where
-      toSelect (Tuple s t) = Select (Tuple (toSelect s) (toSelect t)) E
+else instance tupleToSelect :: (ToSelect r projection, ToSelect t projection) => ToSelect (r /\ t) projection where
+      toSelect (s /\ t) = Select (s /\ t) E
 
-else instance fromFieldsToSelect :: ToSubExpression q => ToSelect q q projection where
+else instance fromFieldsToSelect :: ToSubExpression q => ToSelect q projection where
       toSelect q = Select q E
 
 class ToSubExpression (r :: Type)
@@ -182,7 +183,7 @@ else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a sin
 
 else instance asFieldToSubExpression :: ToSubExpression s => ToSubExpression (Select s projection (As E alias))
 
-select :: forall r s projection. ToSelect r s projection => r -> Select s projection  E
+select :: forall s projection. ToSelect s projection => s -> Select s projection  E
 select = toSelect
 
 
@@ -347,7 +348,6 @@ else instance elseToLimit :: Fail (Text "LIMIT can only follow ORDER BY") => ToL
 
 limit :: forall q r. ToLimit q r => Int -> q -> r
 limit n q = toLimit n q
-
 
 
 ------------------------COALESCE---------------------------
