@@ -8,14 +8,14 @@ import Droplet.Language.Internal.Definition
 import Prelude
 
 import Data.Maybe (Maybe)
-import Data.Tuple (Tuple(..))
+import Data.Tuple.Nested ((/\), type (/\))
 import Droplet.Language.Internal.Function (Aggregate)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
-import Type.Proxy (Proxy(..))
+import Type.Proxy (Proxy)
 import Unsafe.Coerce as UC
 
 --type families, i cry every time
@@ -129,38 +129,38 @@ LIMIT
 
 data Select s (projection :: Row Type) rest = Select s rest
 
-class ToSelect r s projection | r -> s projection where
-      toSelect :: r -> Select s projection E
+class ToSelect r  where
+      toSelect :: forall projection. r -> Select r projection E
 
 --needs more instance for scalars
 -- might be nice to able to project parameters too
 -- we also dont accept naked selects as subqueries/as/whatever
 
-instance fieldToSelect :: ToSelect (Proxy name) (Proxy name) projection where
+instance fieldToSelect :: ToSelect (Proxy name) where
       toSelect s = Select s E
 
-else instance starToSelect :: ToSelect Star Star projection where
+else instance starToSelect :: ToSelect Star where
       toSelect s = Select s E
 
-else instance dotToSelect :: ToSelect (Dot name) (Dot name) projection where
+else instance dotToSelect :: ToSelect (Dot name) where
       toSelect s = Select s E
 
-else instance asIntToSelect :: ToSelect (As Int alias) (As Int alias) projection where
+else instance asIntToSelect :: ToSelect (As Int alias) where
       toSelect a = Select a E
 
-else instance asFieldToSelect :: ToSelect (As (Proxy name) alias) (As (Proxy name) alias) projection where
+else instance asFieldToSelect :: ToSelect (As (Proxy name) alias) where
       toSelect a = Select a E
 
-else instance asDotToSelect :: ToSelect (As (Dot name) alias) (As (Dot name) alias) projection where
+else instance asDotToSelect :: ToSelect (As (Dot name) alias) where
       toSelect a = Select a E
 
-else instance asAggregateToSelect :: ToSelect (As (Aggregate inp fields out) alias) (As (Aggregate inp fields out) alias) projection where
+else instance asAggregateToSelect :: ToSelect (As (Aggregate inp fields out) alias) where
       toSelect a = Select a E
 
-else instance tupleToSelect :: (ToSelect r s projection, ToSelect t u projection) => ToSelect (Tuple r t) (Tuple (Select s projection E) (Select u projection E)) projection where
-      toSelect (Tuple s t) = Select (Tuple (toSelect s) (toSelect t)) E
+else instance tupleToSelect :: (ToSelect r, ToSelect t) => ToSelect (r /\ t) where
+      toSelect (s /\ t) = Select (s /\ t) E
 
-else instance fromFieldsToSelect :: ToSubExpression q => ToSelect q q projection where
+else instance fromFieldsToSelect :: ToSubExpression q => ToSelect q where
       toSelect q = Select q E
 
 class ToSubExpression (r :: Type)
@@ -178,11 +178,11 @@ else instance fromAsDotToSubExpression :: ToSubExpression (Select (As (Dot name)
 
 else instance asAggregateToSubExpression :: ToSubExpression (Select (As (Aggregate inp fields out) alias) projection rest)
 
-else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (Select (Tuple a b) projection rest)
+else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (Select (a /\ b) projection rest)
 
 else instance asFieldToSubExpression :: ToSubExpression s => ToSubExpression (Select s projection (As E alias))
 
-select :: forall r s projection. ToSelect r s projection => r -> Select s projection  E
+select :: forall s projection. ToSelect s => s -> Select s projection  E
 select = toSelect
 
 
@@ -313,7 +313,7 @@ instance fieldToOrderByFields :: Cons name t e fields => ToOrderByFields (Proxy 
 
 instance sortToOrderByFields :: Cons name t e fields  => ToOrderByFields (Sort name) fields
 
-instance tupleToOrderByFields :: (ToOrderByFields a fields, ToOrderByFields b fields) => ToOrderByFields (Tuple a b) fields
+instance tupleToOrderByFields :: (ToOrderByFields a fields, ToOrderByFields b fields) => ToOrderByFields (a /\ b) fields
 
 --works as long we dont support order by number
 asc :: forall name. Proxy name -> Sort name
@@ -347,7 +347,6 @@ else instance elseToLimit :: Fail (Text "LIMIT can only follow ORDER BY") => ToL
 
 limit :: forall q r. ToLimit q r => Int -> q -> r
 limit n q = toLimit n q
-
 
 
 ------------------------COALESCE---------------------------
@@ -388,9 +387,7 @@ else instance dotAsToProjection :: (Cons name t e extra, Cons alias t () project
 
 else instance starToProjection :: Union fields () projection => ToProjection Star fields extra projection
 
-else instance tupleToProjection :: (ToProjection s fields e some, ToProjection t fields e more, Union some more extra) => ToProjection (Tuple (Select s p sr) (Select t pp tr)) fields e extra
-
-else instance tupleProxyToProjection :: (ToProjection s fields e some, ToProjection t fields e more, Union some more extra) => ToProjection (Tuple s t) fields e extra
+else instance tupleToProjection :: (ToProjection s fields e some, ToProjection t fields e more, Union some more extra) => ToProjection (s /\ t) fields e extra
 
 --change projection to Maybe since subqueries may return null
 else instance selectFromRestToProjection :: (
@@ -485,7 +482,7 @@ instance tupleToInsertFields :: (
       ToInsertFields fields f head,
       ToInsertFields fields rest tail,
       Union head tail all
-) => ToInsertFields fields (Tuple f rest) all
+) => ToInsertFields fields  (f /\ rest) all
 
 
 class RequiredFields (fieldList :: RowList Type) (required :: Row Type) | fieldList -> required
@@ -505,7 +502,7 @@ class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fie
 
 instance fieldToInsertValues :: (UnwrapDefinition t u, Cons name t e fields, ToValue u) => ToInsertValues fields (Proxy name) u
 
-else instance tupleToInsertValues :: (ToInsertValues fields name value, ToInsertValues fields some more) => ToInsertValues fields (Tuple name some) (Tuple value more)
+else instance tupleToInsertValues :: (ToInsertValues fields name value, ToInsertValues fields some more) => ToInsertValues fields (name /\ some) (value /\ more)
 
 
 insert :: Insert E
@@ -564,12 +561,12 @@ instance tupleToUpdatePairs :: (
       UnwrapDefinition t u,
       ToValue u,
       Cons name t e fields
-) => ToUpdatePairs fields (Tuple (Proxy name) u)
+) => ToUpdatePairs fields (Proxy name /\ u)
 
 else instance tupleTuplesToUpdatePairs :: (
       ToUpdatePairs fields head,
       ToUpdatePairs fields tail
-) => ToUpdatePairs fields (Tuple head tail)
+) => ToUpdatePairs fields (head /\ tail)
 
 
 update :: forall name fields. Table name fields -> Update name fields E
@@ -645,7 +642,7 @@ class ToReturningFields (f :: Type) (fields :: Row Type) | f -> fields
 
 instance fieldToReturningFields :: Cons name t e fields => ToReturningFields (Proxy name) fields
 
-instance tupleToReturningFields :: (ToReturningFields a fields, ToReturningFields b fields) => ToReturningFields (Tuple a b) fields
+instance tupleToReturningFields :: (ToReturningFields a fields, ToReturningFields b fields) => ToReturningFields (a /\ b) fields
 
 returning :: forall fields q r. ToReturning fields q r => fields -> q -> r
 returning = toReturning
