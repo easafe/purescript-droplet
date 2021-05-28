@@ -5,6 +5,7 @@ import Prelude
 import Test.Types
 
 import Data.Maybe (Maybe(..))
+import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Query as Query
 import Test.Model as TM
 import Test.Unit (TestSuite)
@@ -22,3 +23,7 @@ tests = do
                   TM.notParameterized "SELECT (SELECT created FROM tags) FROM messages ORDER BY id LIMIT 1" $ Query.query q
                   --avoid (Maybe (Maybe t))
                   TM.result q [{created: Nothing}]
+            -- TU.test "references outer fields" do
+            --       let q = select (id /\ (select id # from users # wher (id .<>. (u ... id)) # as n)) # from users # as u
+            --       TM.notParameterized "SELECT id, (SELECT id FROM users WHERE id <> u.id) AS n FROM users u" $ Query.query q
+            --       TM.result q [{id : 1, n : Just 2}, {id : 2, n : Just 1}]

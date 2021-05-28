@@ -85,3 +85,6 @@ countFunctionName = "COUNT"
 
 limitKeyword :: String
 limitKeyword = " LIMIT "
+
+dotSymbol :: String
+dotSymbol = "."

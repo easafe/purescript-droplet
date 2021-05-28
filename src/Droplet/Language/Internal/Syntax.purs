@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class RequiredFields, class ToNullableSingleColumn, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, toLimit, Limit(..), toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toFrom, toPrepare, toSelect, toWhere, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class RequiredFields, class ToNullableSingleColumn, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, toLimit, Limit(..), toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toFrom, toSelect, toWhere, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -27,24 +27,19 @@ data Prepare q = Prepare q Plan
 
 newtype Plan = Plan String
 
-class ToPrepare q where
-      toPrepare :: Plan -> q -> Prepare q
+class ToPrepare q
 
 --to allow general selects/insert, ToQuery would need to check for invalid statements
-instance selectToPrepare :: ToPrepare (Select s p (From f fields rest)) where
-      toPrepare p q = Prepare q p
+instance selectToPrepare :: ToPrepare (Select s p (From f fields rest))
 
-instance insertToPrepare :: ToPrepare (Insert (Into name fields fieldNames (Values v rest))) where
-      toPrepare p q = Prepare q p
+instance insertToPrepare :: ToPrepare (Insert (Into name fields fieldNames (Values v rest)))
 
-instance updateToPrepare :: ToPrepare (Update name fields (Set v rest)) where
-      toPrepare p q = Prepare q p
+instance updateToPrepare :: ToPrepare (Update name fields (Set v rest))
 
-instance deleteToPrepare :: ToPrepare (Delete fields (From f fields rest)) where
-      toPrepare p q = Prepare q p
+instance deleteToPrepare :: ToPrepare (Delete fields (From f fields rest))
 
 prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
-prepare plan s = toPrepare plan s
+prepare plan s = Prepare s plan
 
 
 
@@ -324,6 +319,23 @@ else instance elseToLimit :: Fail (Text "LIMIT can only follow ORDER BY") => ToL
 limit :: forall q r. ToLimit q r => Int -> q -> r
 limit n q = toLimit n q
 
+
+
+------------------------COALESCE---------------------------
+
+--a (special) function, but we have to define it here
+-- data Coalesce q projection = Coalesce q
+
+-- class ToCoalesce t projection | t -> projection
+
+-- instance selToCoalesce :: ToProjection (Select s p (From f fields rest)) fields projection => ToCoalesce (Select s p (From f fields rest)) projection
+
+-- instance asIntToCoalesce :: => Cons alias Int () projection => ToCoalesce (As Int alias) projection
+
+-- instance tupleToCoalasce :: (ToCoalesce a projection, ToCoalesce b projection) => ToCoalesce (Tuple a b) projection
+
+-- coalesce :: forall q projection. ToCoalesce q projection => q -> Coalesce q projection
+-- coalesce t = Coalesce t
 
 ------------------------Projection machinery---------------------------
 

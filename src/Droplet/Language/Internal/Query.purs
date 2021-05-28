@@ -107,7 +107,9 @@ instance selectToQuery :: (
 
 --fully clothed selects
 else instance asSelectToQuery :: (ToColumnQuery s, ToQuery s pp, IsSymbol name) => ToQuery (Select s projection (As E name)) projection where
-      toQuery s = toAsQuery s
+      toQuery (Select s _) = do
+            q <- toQuery s
+            pure $ q <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery (Select s projection rest) projection where
       toQuery (Select s rest) = do
@@ -156,9 +158,9 @@ instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (T
             pure $ fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name) <> q
 
 --typing only s instead of (Select s p (As E name)) breaks purescript instance resolution
-else instance fromAsToQuery :: (ToQuery (Select s p (As E name)) p, ToQuery rest pp) => ToQuery (From (Select s p (As E name)) fields rest) projection where
+else instance fromAsToQuery :: (ToColumnQuery s, ToQuery s p, IsSymbol name, ToQuery rest pp) => ToQuery (From (Select s p (As E name)) fields rest) projection where
       toQuery (From s rest) = do
-            q <- toQuery s
+            q <- toColumnQuery s
             otherQ <- toQuery rest
             pure $ fromKeyword <> q <> otherQ
 
