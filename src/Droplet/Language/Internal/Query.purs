@@ -22,6 +22,7 @@ import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
+import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Function (Aggregate(..))
 import Foreign (Foreign)
 import Prim.Row (class Nub)
@@ -85,8 +86,8 @@ else instance selNakedSelectToQuery :: ToQuery (Select s ss (From f fields extra
             q <- toQuery a
             pure $ openBracket <> q <> closeBracket
 
-else instance tupleToQuery :: (ToQuery (NakedSelect s) p, ToQuery (NakedSelect t) pp) => ToQuery (NakedSelect (Tuple (Select s ss E) (Select t tt E))) ppp where
-      toQuery (NakedSelect (Tuple (Select s _) (Select t _))) = do
+else instance tupleToQuery :: (ToQuery (NakedSelect s) p, ToQuery (NakedSelect t) pp) => ToQuery (NakedSelect (Tuple s t)) ppp where
+      toQuery (NakedSelect (Tuple s t)) = do
             q <- toQuery $ NakedSelect s
             otherQ <- toQuery $ NakedSelect t
             pure $ q <> comma <> otherQ
@@ -142,13 +143,11 @@ else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColum
 else instance asDotToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Dot name) alias) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
-else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t, ToQuery rest p, ToQuery extra pp) => ToColumnQuery (Tuple (Select s some rest) (Select t more extra)) where
-      toColumnQuery (Tuple (Select s rest) (Select t extra)) = do
+else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t) => ToColumnQuery (Tuple s t) where
+      toColumnQuery (s /\ t) = do
             sQ <- toColumnQuery s
-            restQ <- toQuery rest
             tQ <- toColumnQuery t
-            extraQ <- toQuery extra
-            pure $ sQ <> restQ <> comma <> tQ <> extraQ
+            pure $ sQ <> comma <> tQ
 
 else instance asSelectToColumnQuery :: (ToQuery s projection, IsSymbol name) => ToColumnQuery (Select s projection (As E name)) where
       toColumnQuery s = toAsQuery s
