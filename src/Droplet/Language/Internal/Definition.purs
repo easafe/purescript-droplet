@@ -1,7 +1,7 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, class InvalidField, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue, dot, (...)) where
+module Droplet.Language.Internal.Definition (class FromValue, class InvalidField, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue, dot, (...), Dot) where
 
 import Prelude
 
@@ -48,8 +48,10 @@ newtype Default a = Default a
 
 data Table (name :: Symbol) (fields :: Row Type) = Table
 
-dot :: forall alias field path pathField . Append alias "." path => Append path field pathField => Proxy alias -> Proxy field -> Proxy pathField
-dot _ _ = Proxy
+data Dot (field :: Symbol) = Dot
+
+dot :: forall alias field path pathField . Append alias "." path => Append path field pathField => Proxy alias -> Proxy field -> Dot pathField
+dot _ _ = Dot
 
 infix 5 dot as ...
 

@@ -88,3 +88,6 @@ limitKeyword = " LIMIT "
 
 dotSymbol :: String
 dotSymbol = "."
+
+quoteSymbol :: String
+quoteSymbol = "\""

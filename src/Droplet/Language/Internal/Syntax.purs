@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class RequiredFields, class ToNullableSingleColumn, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, toLimit, Limit(..), toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toFrom, toSelect, toWhere, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class RequiredFields, class ToNullableSingleColumn, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, toLimit, Limit(..), toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toFrom, toSelect, toWhere, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -13,8 +13,9 @@ import Droplet.Language.Internal.Function (Aggregate)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
+import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
-import Type.Proxy (Proxy)
+import Type.Proxy (Proxy(..))
 import Unsafe.Coerce as UC
 
 --type families, i cry every time
@@ -27,16 +28,16 @@ data Prepare q = Prepare q Plan
 
 newtype Plan = Plan String
 
-class ToPrepare q
+class ToPrepare (q :: Type)
 
 --to allow general selects/insert, ToQuery would need to check for invalid statements
-instance selectToPrepare :: ToPrepare (Select s p (From f fields rest))
+instance selectToPrepare :: ToPrepare (Select s p (From f fields extra rest))
 
 instance insertToPrepare :: ToPrepare (Insert (Into name fields fieldNames (Values v rest)))
 
 instance updateToPrepare :: ToPrepare (Update name fields (Set v rest))
 
-instance deleteToPrepare :: ToPrepare (Delete fields (From f fields rest))
+instance deleteToPrepare :: ToPrepare (Delete fields (From f fields extra rest))
 
 prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
 prepare plan s = Prepare s plan
@@ -141,10 +142,16 @@ instance fieldToSelect :: ToSelect (Proxy name) (Proxy name) projection where
 else instance starToSelect :: ToSelect Star Star projection where
       toSelect s = Select s E
 
+else instance dotToSelect :: ToSelect (Dot name) (Dot name) projection where
+      toSelect s = Select s E
+
 else instance asIntToSelect :: ToSelect (As Int alias) (As Int alias) projection where
       toSelect a = Select a E
 
 else instance asFieldToSelect :: ToSelect (As (Proxy name) alias) (As (Proxy name) alias) projection where
+      toSelect a = Select a E
+
+else instance asDotToSelect :: ToSelect (As (Dot name) alias) (As (Dot name) alias) projection where
       toSelect a = Select a E
 
 else instance asAggregateToSelect :: ToSelect (As (Aggregate inp fields out) alias) (As (Aggregate inp fields out) alias) projection where
@@ -163,7 +170,11 @@ instance fromFieldToSubExpression :: ToSubExpression (Select (Proxy name) projec
 
 else instance fromIntToSubExpression :: ToSubExpression (Select (As Int name) projection rest)
 
+else instance dotToSubExpression :: ToSubExpression (Select (Dot name) projection rest)
+
 else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As (Proxy name) alias) projection rest)
+
+else instance fromAsDotToSubExpression :: ToSubExpression (Select (As (Dot name) alias) projection rest)
 
 else instance asAggregateToSubExpression :: ToSubExpression (Select (As (Aggregate inp fields out) alias) projection rest)
 
@@ -178,34 +189,34 @@ select = toSelect
 
 -------------------------------FROM----------------------------
 
-data From f (fields :: Row Type) rest = From f rest
+data From f (fields :: Row Type) (extra :: Row Type) rest = From f rest
 
-class ToFrom f q r | q -> r where
+class ToFrom f q r (extra :: Row Type) | q -> r, r -> extra where
       toFrom :: f -> q -> r
 
 instance tableToFrom :: (
-      ToProjection s fields selected,
+      ToProjection s fields extra selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Table name fields) (Select s p E) (Select s unique (From (Table name fields) fields E)) where
+) => ToFrom (Table name fields) (Select s p E) (Select s unique (From (Table name fields) fields extra E)) extra where
       toFrom table (Select s _) = Select s $ From table E
 
-else instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete f E) (Delete fields (From (Table name fields) fields E)) where
+else instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete f E) (Delete fields (From (Table name fields) fields () E)) () where
       toFrom table (Delete _) = Delete $ From table E
 
 else instance asToFrom :: (
-      ToProjection t fields selected,
-      ToProjection s selected projection,
+      ToProjection t fields extra selected,
+      ToProjection s selected () projection,
       Nub projection unique,
       UniqueColumnNames projection unique
-) => ToFrom (Select (Select t p (From f fields rest)) pp (As E a)) (Select s ppp E) (Select s unique (From (Select (Select t p (From f fields rest)) pp (As E a)) selected E)) where
+) => ToFrom (Select (Select t p (From f fields extra rest)) pp (As E a)) (Select s ppp E) (Select s unique (From (Select (Select t p (From f fields extra rest)) pp (As E a)) selected () E)) () where
       toFrom as (Select s _) = Select s $ From as E
 
 --not ideal!
-else instance elseToFrom :: Fail (Text "Projection source must be table or aliased subquery") => ToFrom f q r where
+else instance elseToFrom :: Fail (Text "Projection source must be table or aliased subquery") => ToFrom f q r extra where
       toFrom _ _ = UC.unsafeCoerce 23
 
-from :: forall f q r. ToFrom f q r => f -> q -> r
+from :: forall f q r extra. ToFrom f q r extra => f -> q -> r
 from = toFrom
 
 
@@ -218,13 +229,13 @@ class ToWhere q w fields | q -> w fields where
       toWhere :: Condition fields -> q -> w
 
 --are we missing AS here?
-instance selectToWhere :: ToWhere (Select s projection (From f fields E)) (Select s projection (From f fields (Where E))) fields where
+instance selectToWhere :: ToWhere (Select s projection (From f fields extra E)) (Select s projection (From f fields extra (Where E))) fields where
       toWhere (Condition filtered) (Select s (From f E)) = Select s <<< From f $ Where filtered E
 
 else instance updateToWhere :: ToWhere (Update name fields (Set v E)) (Update name fields (Set v (Where E))) fields where
       toWhere (Condition filtered) (Update (Set v E)) = Update <<< Set v $ Where filtered E
 
-else instance deleteToWhere :: ToWhere (Delete fields (From f fields E)) (Delete fields (From f fields (Where E))) fields where
+else instance deleteToWhere :: ToWhere (Delete fields (From f fields extra E)) (Delete fields (From f fields extra (Where E))) fields where
       toWhere (Condition filtered) (Delete (From f E)) = Delete <<< From f $ Where filtered E
 
 else instance elseToWhere :: Fail (Text "Only full SELECT, UPDATE and DELETE statements can use WHERE clauses") => ToWhere q w fields where
@@ -248,16 +259,34 @@ instance intToAs :: ToAs Int (As Int name) name where
 instance fieldToAs :: ToAs (Proxy name) (As (Proxy name) alias) alias where
       toAs _ fd = As fd
 
+instance dotToAs :: ToAs (Dot name) (As (Dot name) alias) alias where
+      toAs _ fd = As fd
+
 instance aggregateToAs :: ToAs (Aggregate inp fields out) (As (Aggregate inp fields out) alias) alias where
       toAs _ fd = As fd
 
-instance subQueryFromToAs :: ToAs (Select s projection (From f fields rest)) (Select (Select s projection (From f fields rest)) projection (As E name)) name where
-      toAs _ s = Select s (As E)
+--not ideal but saves work a lot of extra instances
+-- and puts As closer to where ToProjection needs it
+instance subQueryFromToAs :: (RowToList fields list, ToExtraFields list name extra, ToProjection s fields extra projection) => ToAs (Select s p (From f fields e rest)) (Select (Select s projection (From f fields extra rest)) projection (As E name)) name where
+      toAs _ (Select s (From f rest)) = Select (Select s (From f rest)) (As E)
 
 as :: forall q as name. ToAs q as name => Proxy name -> q -> as
 as a q = toAs a q
 
 
+class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type) | list alias -> extra
+
+instance nilToExtraFields :: ToExtraFields RL.Nil alias ()
+
+instance consToExtraFields :: (
+      Append alias "." path,
+      Append path name fullPath,
+      UnwrapDefinition t u,
+      Cons fullPath u () head,
+      ToExtraFields rest alias tail,
+      Lacks fullPath tail,
+      Union head tail all
+) => ToExtraFields (RL.Cons name t rest) alias all
 
 
 ---------------------------ORDER BY------------------------------------------
@@ -269,10 +298,10 @@ data Sort (name :: Symbol) = Asc | Desc
 class ToOrderBy f q r | q -> r where
       toOrderBy :: f -> q -> r
 
-instance fromToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields E)) (Select s projection (From fr fields (OrderBy f fields E))) where
+instance fromToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields extra E)) (Select s projection (From fr fields extra (OrderBy f fields E))) where
       toOrderBy f (Select s (From fr E)) = Select s <<< From fr $ OrderBy f E
 
-else instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where E))) (Select s projection (From fr fields (Where (OrderBy f fields E)))) where
+else instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields extra (Where E))) (Select s projection (From fr fields extra (Where (OrderBy f fields E)))) where
       toOrderBy f (Select s (From fr (Where fl E))) = Select s <<< From fr <<< Where fl $ OrderBy f E
 
 else instance elseToOrderBy :: Fail (Text "ORDER BY can only follow FROM, WHERE or GROUP BY") => ToOrderBy f q r where
@@ -307,10 +336,10 @@ data Limit rest = Limit Int rest
 class ToLimit q r | q -> r where
       toLimit :: Int -> q -> r
 
-instance fromToLimit :: ToLimit (Select s projection (From fr fields (OrderBy f fields E))) (Select s projection (From fr fields (OrderBy f fields (Limit E)))) where
+instance fromToLimit :: ToLimit (Select s projection (From fr fields extra (OrderBy f fields E))) (Select s projection (From fr fields extra (OrderBy f fields (Limit E)))) where
       toLimit n (Select s (From fr (OrderBy f E))) = Select s <<< From fr <<< OrderBy f $ Limit n E
 
-else instance whereToLimit :: ToLimit (Select s projection (From fr fields (Where (OrderBy f fields E)))) (Select s projection (From fr fields (Where (OrderBy f fields (Limit E))))) where
+else instance whereToLimit :: ToLimit (Select s projection (From fr fields extra (Where (OrderBy f fields E)))) (Select s projection (From fr fields extra (Where (OrderBy f fields (Limit E))))) where
       toLimit n (Select s (From fr (Where fl (OrderBy f E)))) = Select s <<< From fr <<< Where fl <<< OrderBy f $ Limit n E
 
 else instance elseToLimit :: Fail (Text "LIMIT can only follow ORDER BY") => ToLimit q r where
@@ -340,41 +369,47 @@ limit n q = toLimit n q
 ------------------------Projection machinery---------------------------
 
 -- | Row Type of columns projected by the query
-class ToProjection (s :: Type) (fields :: Row Type) (projection :: Row Type) | s -> fields projection
+class ToProjection (s :: Type) (fields :: Row Type) (extra :: Row Type) (projection :: Row Type) | s -> fields projection
 
 --simple columns
-instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields projection
+instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields extra projection
 
-else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As Int alias) fields projection
+-- else instance dotToProjection :: (UnwrapDefinition t u, Cons name t e extra, Cons name u () projection) => ToProjection (Dot name) fields extra projection
 
-else instance aggregateToProjection :: (Cons alias t () projection) => ToProjection (As (Aggregate inp fields t) alias) fields projection
+else instance dotToProjection :: (Cons name t e extra, Cons name t () projection) => ToProjection (Dot name) fields extra projection
 
-else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As (Proxy name) alias) fields projection
+else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As Int alias) fields extra projection
 
-else instance starToProjection :: Union fields () projection => ToProjection Star fields projection
+else instance aggregateToProjection :: (Cons alias t () projection) => ToProjection (As (Aggregate inp fields t) alias) fields extra projection
 
-else instance tupleToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple (Select s p sr) (Select t pp tr)) fields extra
+else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As (Proxy name) alias) fields extra projection
 
-else instance tupleProxyToProjection :: (ToProjection s fields some, ToProjection t fields more, Union some more extra) => ToProjection (Tuple s t) fields extra
+else instance dotAsToProjection :: (Cons name t e extra, Cons alias t () projection) => ToProjection (As (Dot name) alias) fields extra projection
+
+else instance starToProjection :: Union fields () projection => ToProjection Star fields extra projection
+
+else instance tupleToProjection :: (ToProjection s fields e some, ToProjection t fields e more, Union some more extra) => ToProjection (Tuple (Select s p sr) (Select t pp tr)) fields e extra
+
+else instance tupleProxyToProjection :: (ToProjection s fields e some, ToProjection t fields e more, Union some more extra) => ToProjection (Tuple s t) fields e extra
 
 --change projection to Maybe since subqueries may return null
 else instance selectFromRestToProjection :: (
-      ToProjection s fields extra,
+      ToProjection s fields ex extra,
       RowToList extra list,
       ToSingleColumn list name t,
       ToNullableSingleColumn t u,
       Cons name u () single
-) => ToProjection (Select s p (From f fields rest)) fd single
+) => ToProjection (Select s p (From f fields e rest)) fd ex single
 
 --rename projection to alias
 else instance asToProjection :: (
-      ToProjection s fields extra,
+      ToProjection s fields ex extra,
       RowToList extra list,
       ToSingleColumn list name t,
       Cons alias t () single
-) => ToProjection (Select s p (As E alias)) fields single
+) => ToProjection (Select s p (As E alias)) fields e single
 
-else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f p
+else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f e p
 
 --not required but makes for clearer type errors
 class ToSingleColumn (fields :: RowList Type) (name :: Symbol) (t :: Type) | fields -> name t

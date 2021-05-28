@@ -80,7 +80,7 @@ else instance aggregateToQuery :: (IsSymbol alias, ToAggregateName inp) => ToQue
 else instance asNakedSelectToQuery :: (IsSymbol name, ToQuery s p) => ToQuery (NakedSelect (Select s ss (As E name))) pp where
       toQuery (NakedSelect a) = toAsQuery a
 
-else instance selNakedSelectToQuery :: ToQuery (Select s ss (From f fields rest)) p => ToQuery (NakedSelect (Select s ss (From f fields rest))) pp where
+else instance selNakedSelectToQuery :: ToQuery (Select s ss (From f fields extra rest)) p => ToQuery (NakedSelect (Select s ss (From f fields extra rest))) pp where
       toQuery (NakedSelect a) = do
             q <- toQuery a
             pure $ openBracket <> q <> closeBracket
@@ -97,7 +97,7 @@ else instance failNakedToQuery :: Fail (Text "Naked select columns must be eithe
 --this can be made a lot simpler
 instance selectToQuery :: (
       ToQuery (NakedSelect s) p,
-      ToProjection s () projection,
+      ToProjection s () () projection,
       Nub projection unique,
       UniqueColumnNames projection unique
 ) => ToQuery (Select s pp E) unique where
@@ -123,6 +123,10 @@ class ToColumnQuery q where
 instance fieldToColumnQuery :: IsSymbol name => ToColumnQuery (Proxy name) where
       toColumnQuery name = pure $ DS.reflectSymbol name
 
+else instance dotToColumnQuery :: IsSymbol name => ToColumnQuery (Dot name) where
+      toColumnQuery name = pure $ ref <> asKeyword <> quoteSymbol <> ref <> quoteSymbol
+            where ref = DS.reflectSymbol name
+
 else instance tableToColumnQuery :: ToColumnQuery Star where
       toColumnQuery _ = pure starSymbol
 
@@ -133,6 +137,9 @@ else instance asAggregateToColumnQuery :: (IsSymbol name, ToAggregateName inp) =
       toColumnQuery (As agg) = pure $ printAggregation agg <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Proxy name) alias) where
+      toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
+
+else instance asDotToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Dot name) alias) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
 else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t, ToQuery rest p, ToQuery extra pp) => ToColumnQuery (Tuple (Select s some rest) (Select t more extra)) where
@@ -152,13 +159,13 @@ else instance elseToColumnQuery :: ToQuery q projection => ToColumnQuery q where
             pure $ openBracket <> q <> closeBracket
 
 --from
-instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (Table name fields) fields rest) projection where
+instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (Table name fields) fields extra rest) projection where
       toQuery (From _ rest) = do
             q <- toQuery rest
             pure $ fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name) <> q
 
 --typing only s instead of (Select s p (As E name)) breaks purescript instance resolution
-else instance fromAsToQuery :: (ToColumnQuery s, ToQuery s p, IsSymbol name, ToQuery rest pp) => ToQuery (From (Select s p (As E name)) fields rest) projection where
+else instance fromAsToQuery :: (ToColumnQuery s, ToQuery s p, IsSymbol name, ToQuery rest pp) => ToQuery (From (Select s p (As E name)) fields extra rest) projection where
       toQuery (From s rest) = do
             q <- toColumnQuery s
             otherQ <- toQuery rest
@@ -269,13 +276,13 @@ else instance tupleTupleToFieldValuePairs :: (ToFieldValuePairs p, ToFieldValueP
             pure $ q <> comma <> otherQ
 
 --delete
-instance deleteToQuery :: ToQuery (From f fields rest) p => ToQuery (Delete fields (From f fields rest)) () where
+instance deleteToQuery :: ToQuery (From f fields extra rest) p => ToQuery (Delete fields (From f fields extra rest)) () where
       toQuery (Delete fr) = do
             q <- toQuery fr
             pure $ deleteKeyword <> q
 
 --returning
-instance returningToQuery :: (ToFieldNames fieldNames, ToProjection fieldNames fields projection) => ToQuery (Returning fields fieldNames) projection where
+instance returningToQuery :: (ToFieldNames fieldNames, ToProjection fieldNames fields () projection) => ToQuery (Returning fields fieldNames) projection where
       toQuery (Returning fieldNames) = pure $ returningKeyword <> toFieldNames fieldNames
 
 --order by
