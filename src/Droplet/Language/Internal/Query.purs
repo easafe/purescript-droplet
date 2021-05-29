@@ -72,14 +72,14 @@ instance prepareToQuery :: (ToQuery s projection) => ToQuery (Prepare s) project
             toQuery s
 
 --naked selects
-instance intToQuery :: IsSymbol name => ToQuery (NakedSelect (As Int name)) projection where
+instance intToQuery :: IsSymbol name => ToQuery (NakedSelect (As name Int)) projection where
       toQuery (NakedSelect (As n)) = pure $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-else instance aggregateToQuery :: (IsSymbol alias, ToAggregateName inp) => ToQuery (NakedSelect (As (Aggregate inp field out) alias)) projection where
+else instance aggregateToQuery :: (IsSymbol alias, ToAggregateName inp) => ToQuery (NakedSelect (As alias (Aggregate inp field out))) projection where
       toQuery (NakedSelect (As agg)) = pure $ printAggregation agg <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
-else instance asNakedSelectToQuery :: (IsSymbol name, ToQuery s p) => ToQuery (NakedSelect (Select s ss (As E name))) pp where
-      toQuery (NakedSelect a) = toAsQuery a
+else instance asNakedSelectToQuery :: (IsSymbol name, ToQuery s p) => ToQuery (NakedSelect (As name E)) pp where
+      toQuery _ = pure $ asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 else instance selNakedSelectToQuery :: ToQuery (Select s ss (From f fields extra rest)) p => ToQuery (NakedSelect (Select s ss (From f fields extra rest))) pp where
       toQuery (NakedSelect a) = do
@@ -107,11 +107,6 @@ instance selectToQuery :: (
             pure $ selectKeyword <> q
 
 --fully clothed selects
-else instance asSelectToQuery :: (ToColumnQuery s, ToQuery s pp, IsSymbol name) => ToQuery (Select s projection (As E name)) projection where
-      toQuery (Select s _) = do
-            q <- toQuery s
-            pure $ q <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
-
 else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery (Select s projection rest) projection where
       toQuery (Select s rest) = do
             q <-  toColumnQuery s
@@ -131,16 +126,16 @@ else instance dotToColumnQuery :: IsSymbol name => ToColumnQuery (Dot name) wher
 else instance tableToColumnQuery :: ToColumnQuery Star where
       toColumnQuery _ = pure starSymbol
 
-else instance asIntToColumnQuery :: IsSymbol name => ToColumnQuery (As Int name) where
+else instance asIntToColumnQuery :: IsSymbol name => ToColumnQuery (As name Int) where
       toColumnQuery (As n) = pure $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-else instance asAggregateToColumnQuery :: (IsSymbol name, ToAggregateName inp) => ToColumnQuery (As (Aggregate inp fields out) name) where
+else instance asAggregateToColumnQuery :: (IsSymbol name, ToAggregateName inp) => ToColumnQuery (As name (Aggregate inp fields out)) where
       toColumnQuery (As agg) = pure $ printAggregation agg <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Proxy name) alias) where
+else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias (Proxy name)) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
-else instance asDotToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Dot name) alias) where
+else instance asDotToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias (Dot name)) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
 else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t) => ToColumnQuery (Tuple s t) where
@@ -149,8 +144,8 @@ else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t) => ToColu
             tQ <- toColumnQuery t
             pure $ sQ <> comma <> tQ
 
-else instance asSelectToColumnQuery :: (ToQuery s projection, IsSymbol name) => ToColumnQuery (Select s projection (As E name)) where
-      toColumnQuery s = toAsQuery s
+else instance asSelectToColumnQuery :: IsSymbol name => ToColumnQuery (As name E) where
+      toColumnQuery _ = pure $ asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 else instance elseToColumnQuery :: ToQuery q projection => ToColumnQuery q where
       toColumnQuery q = do
@@ -158,17 +153,17 @@ else instance elseToColumnQuery :: ToQuery q projection => ToColumnQuery q where
             pure $ openBracket <> q <> closeBracket
 
 --from
-instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (Table name fields) fields extra rest) projection where
+--typing s instead of (Select s ppp rest) breaks ps chain instance resolution
+instance fromAsToQuery :: (ToQuery (Select s ppp rest) p, IsSymbol name, ToQuery rest pp) => ToQuery (From (Select s ppp rest) fields extra rest) projection where
+      toQuery (From s rest) = do
+            q <- toQuery s
+            otherQ <- toQuery rest
+            pure $ fromKeyword <> q <> otherQ
+
+else instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (Table name fields) fields extra rest) projection where
       toQuery (From _ rest) = do
             q <- toQuery rest
             pure $ fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name) <> q
-
---typing only s instead of (Select s p (As E name)) breaks purescript instance resolution
-else instance fromAsToQuery :: (ToColumnQuery s, ToQuery s p, IsSymbol name, ToQuery rest pp) => ToQuery (From (Select s p (As E name)) fields extra rest) projection where
-      toQuery (From s rest) = do
-            q <- toColumnQuery s
-            otherQ <- toQuery rest
-            pure $ fromKeyword <> q <> otherQ
 
 --where
 instance whereToQuery :: ToQuery rest p => ToQuery (Where rest) projection where
@@ -311,11 +306,6 @@ instance limitToQuery :: ToQuery rest p => ToQuery (Limit rest) projection where
             q <- toQuery rest
             pure $ limitKeyword <> show n <> q
 
-
-toAsQuery :: forall name p s projection. IsSymbol name => ToQuery s p => Select s projection (As E name) -> State QueryState String
-toAsQuery (Select s (As _)) = do
-      q <- toQuery s
-      pure $ openBracket <> q <> closeBracket <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 printAggregation :: forall inp fields out. ToAggregateName inp => Aggregate inp fields out -> String
 printAggregation = case _ of
