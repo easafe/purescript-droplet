@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class IsNamedQuery, toRest, class RequiredFields, class ToNullableSingleColumn, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toSelect, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class IsNamedQuery, class IsNamedSubQuery, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toSelect, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -597,8 +597,8 @@ else instance selectFromRestToProjection :: (
       ToProjection s fields ex extra,
       RowToList extra list,
       ToSingleColumn list name t,
-      ToNullableSingleColumn t u,
-      Cons name u () single
+      IsNamedSubQuery rest name alias,
+      Cons alias t () single
 ) => ToProjection (Select s p (From f fields e rest)) fd ex single
 
 -- --rename projection to alias
@@ -614,14 +614,9 @@ else instance failToProjection :: Fail (Text "Cannot recognize projection") => T
 --not required but makes for clearer type errors
 class ToSingleColumn (fields :: RowList Type) (name :: Symbol) (t :: Type) | fields -> name t
 
-instance singleToSingleColumn :: ToSingleColumn (RL.Cons name t RL.Nil) name t
+instance singleToSingleColumn :: ToSingleColumn (RL.Cons name (Maybe t) RL.Nil) name (Maybe t)
 
-
-class ToNullableSingleColumn (t :: Type) (u :: Type) | t -> u
-
-instance maybeToNullableSingleColumn :: ToNullableSingleColumn (Maybe t) (Maybe t)
-
-else instance elseToNullableSingleColumn :: ToNullableSingleColumn t (Maybe t)
+else instance singleMaybeToSingleColumn :: ToSingleColumn (RL.Cons name t RL.Nil) name (Maybe t)
 
 
 -- | Query projections should not repeat column names
@@ -641,6 +636,19 @@ instance limitIsNamedQuery :: IsNamedQuery rest => IsNamedQuery (Limit rest)
 instance eIsNamedQuery :: Fail (Text "Query in FROM clause must be named") => IsNamedQuery E
 
 instance asIsNamedQuery :: IsNamedQuery (As alias E)
+
+
+class IsNamedSubQuery (q :: Type) (name :: Symbol) (alias :: Symbol) | q -> name alias
+
+instance whereIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQuery (Where rest) name alias
+
+instance orderByIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQuery (OrderBy f rest) name alias
+
+instance limitIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQuery (Limit rest) name alias
+
+instance eIsNamedSubQuery :: IsNamedSubQuery E name name
+
+instance asIsNamedSubQuery :: IsNamedSubQuery (As alias E) name alias
 
 
 

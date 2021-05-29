@@ -1,7 +1,7 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class ToColumnQuery, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, NakedSelect, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class ToColumnQuery, class ToNakedColumnQuery, toNakedColumnQuery, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -30,7 +30,6 @@ import Prim.RowList (class RowToList)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy(..))
 
-data NakedSelect s = NakedSelect s
 
 data Query (projection :: Row Type) = Query (Maybe Plan) String (Array Foreign)
 
@@ -73,37 +72,34 @@ instance prepareToQuery :: (ToQuery s projection) => ToQuery (Prepare s) project
             toQuery s
 
 --naked selects
-instance intToQuery :: IsSymbol name => ToQuery (NakedSelect (As name Int)) projection where
-      toQuery (NakedSelect (As n)) = pure $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
+class ToNakedColumnQuery q where
+      toNakedColumnQuery :: q -> State QueryState String
 
-else instance aggregateToQuery :: (IsSymbol alias, ToAggregateName inp) => ToQuery (NakedSelect (As alias (Aggregate inp field out))) projection where
-      toQuery (NakedSelect (As agg)) = pure $ printAggregation agg <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
+instance intToNakedColumnQuery :: IsSymbol name => ToNakedColumnQuery (As name Int) where
+      toNakedColumnQuery (As n) = pure $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-else instance asNakedSelectToQuery :: (IsSymbol name, ToQuery s p) => ToQuery (NakedSelect (As name E)) pp where
-      toQuery _ = pure $ asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
+instance aggregateToNakedColumnQuery :: (IsSymbol alias, ToAggregateName inp) => ToNakedColumnQuery (As alias (Aggregate inp field out)) where
+      toNakedColumnQuery (As agg) = pure $ printAggregation agg <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
-else instance selNakedSelectToQuery :: ToQuery (Select s ss (From f fields extra rest)) p => ToQuery (NakedSelect (Select s ss (From f fields extra rest))) pp where
-      toQuery (NakedSelect a) = do
+instance tupleToNakedColumnQuery :: (ToNakedColumnQuery s, ToNakedColumnQuery t) => ToNakedColumnQuery (Tuple s t) where
+      toNakedColumnQuery (Tuple s t) = do
+            q <- toNakedColumnQuery s
+            otherQ <- toNakedColumnQuery t
+            pure $ q <> comma <> otherQ
+
+instance selNakedSelectToNakedColumnQuery :: ToQuery (Select s ss (From f fields extra rest)) p => ToNakedColumnQuery (Select s ss (From f fields extra rest)) where
+      toNakedColumnQuery ( a) = do
             q <- toQuery a
             pure $ openBracket <> q <> closeBracket
 
-else instance tupleToQuery :: (ToQuery (NakedSelect s) p, ToQuery (NakedSelect t) pp) => ToQuery (NakedSelect (Tuple s t)) ppp where
-      toQuery (NakedSelect (Tuple s t)) = do
-            q <- toQuery $ NakedSelect s
-            otherQ <- toQuery $ NakedSelect t
-            pure $ q <> comma <> otherQ
-
-else instance failNakedToQuery :: Fail (Text "Naked select columns must be either scalar values or full subqueries") => ToQuery (NakedSelect s) projection where
-      toQuery _ = pure "impossible"
-
 instance selectToQuery :: (
-      ToQuery (NakedSelect s) p,
+      ToNakedColumnQuery s,
       ToProjection s () () projection,
       Nub projection unique,
       UniqueColumnNames projection unique
 ) => ToQuery (Select s pp E) unique where
       toQuery (Select s _) = do
-            q <- toQuery $ NakedSelect s
+            q <- toNakedColumnQuery s
             pure $ selectKeyword <> q
 
 --fully clothed selects
