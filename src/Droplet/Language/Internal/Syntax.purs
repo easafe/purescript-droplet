@@ -35,7 +35,7 @@ instance insertToPrepare :: ToPrepare (Insert (Into name fields fieldNames (Valu
 
 instance updateToPrepare :: ToPrepare (Update name fields (Set v rest))
 
-instance deleteToPrepare :: ToPrepare (Delete fields (From f fields extra rest))
+instance deleteToPrepare :: ToPrepare (Delete (From f fields extra rest))
 
 prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
 prepare plan s = Prepare s plan
@@ -189,15 +189,15 @@ data From f (fields :: Row Type) (extra :: Row Type) rest = From f rest
 
 --from needs to check if columns referenced by Select are valid
 -- extra refers to any aliased fields (coming from As)
-class ToFrom (f :: Type) (q :: Type) (extra :: Row Type) (fields :: Row Type) | f q -> extra fields
+class ToFrom (f :: Type) (q :: Type) (extra :: Row Type) (fields :: Row Type) | q -> extra, f -> fields
 
 instance tableToFrom :: (
       ToProjection s fields extra selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Table name fields) (Select s p E) extra fields
+) => ToFrom (Table name fields) (Select s unique E) extra fields
 
-instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete f E) extra fields
+instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete E) () fields
 
 --As should do the work for the inner query
 instance asToFrom :: (
@@ -205,7 +205,7 @@ instance asToFrom :: (
       ToProjection t projection extra selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Select s projection (From f fields extra rest)) (Select t p E) extra projection
+) => ToFrom (Select s projection (From f fields extra rest)) (Select t unique E) extra projection
 
 
 from :: forall f q extra fields sql. ToFrom f q extra fields => ToRest q (From f fields extra E) sql => f -> q -> sql
@@ -224,7 +224,7 @@ instance selectToWhere :: ToWhere (Select s projection (From f fields extra E)) 
 
 instance updateToWhere :: ToWhere (Update name fields (Set v E)) fields
 
-instance deleteToWhere :: ToWhere (Delete fields (From f fields extra E)) fields
+instance deleteToWhere :: ToWhere (Delete (From f fields extra E)) fields
 
 
 wher :: forall q fields sql. ToWhere q fields => ToRest q (Where E) sql => Condition fields -> q -> sql
@@ -347,80 +347,6 @@ limit n q = toRest q $ Limit n E
 -- coalesce :: forall q projection. ToCoalesce q projection => q -> Coalesce q projection
 -- coalesce t = Coalesce t
 
-------------------------Projection machinery---------------------------
-
--- | Row Type of columns projected by the query
-class ToProjection (s :: Type) (fields :: Row Type) (extra :: Row Type) (projection :: Row Type) | s -> fields projection
-
---simple columns
-instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields extra projection
-
--- else instance dotToProjection :: (UnwrapDefinition t u, Cons name t e extra, Cons name u () projection) => ToProjection (Dot name) fields extra projection
-
-else instance dotToProjection :: (Cons name t e extra, Cons name t () projection) => ToProjection (Dot name) fields extra projection
-
-else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields extra projection
-
-else instance aggregateToProjection :: (Cons alias t () projection) => ToProjection (As alias (Aggregate inp fields t)) fields extra projection
-
-else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Proxy name)) fields extra projection
-
-else instance dotAsToProjection :: (Cons name t e extra, Cons alias t () projection) => ToProjection (As alias (Dot name)) fields extra projection
-
-else instance starToProjection :: Union fields () projection => ToProjection Star fields extra projection
-
-else instance tupleToProjection :: (ToProjection s fields e some, ToProjection t fields e more, Union some more extra) => ToProjection (s /\ t) fields e extra
-
---change projection to Maybe since subqueries may return null
-else instance selectFromRestToProjection :: (
-      ToProjection s fields ex extra,
-      RowToList extra list,
-      ToSingleColumn list name t,
-      ToNullableSingleColumn t u,
-      Cons name u () single
-) => ToProjection (Select s p (From f fields e rest)) fd ex single
-
--- --rename projection to alias
--- else instance asToProjection :: (
---       ToProjection s fields ex extra,
---       RowToList extra list,
---       ToSingleColumn list name t,
---       Cons alias t () single
--- ) => ToProjection (Select s p (As alias E)) fields e single
-
-else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f e p
-
---not required but makes for clearer type errors
-class ToSingleColumn (fields :: RowList Type) (name :: Symbol) (t :: Type) | fields -> name t
-
-instance singleToSingleColumn :: ToSingleColumn (RL.Cons name t RL.Nil) name t
-
-
-class ToNullableSingleColumn (t :: Type) (u :: Type) | t -> u
-
-instance maybeToNullableSingleColumn :: ToNullableSingleColumn (Maybe t) (Maybe t)
-
-else instance elseToNullableSingleColumn :: ToNullableSingleColumn t (Maybe t)
-
-
--- | Query projections should not repeat column names
-class UniqueColumnNames (some :: Row Type) (more :: Row Type)
-
-instance sameUniqueColumnNames :: UniqueColumnNames fields fields
-
-
-class IsNamedQuery (q :: Type)
-
-instance whereIsNamedQuery :: IsNamedQuery rest => IsNamedQuery (Where rest)
-
-instance orderByIsNamedQuery :: IsNamedQuery rest => IsNamedQuery (OrderBy f rest)
-
-instance limitIsNamedQuery :: IsNamedQuery rest => IsNamedQuery (Limit rest)
-
-instance eIsNamedQuery :: Fail (Text "Query in FROM clause must be named") => IsNamedQuery E
-
-instance asIsNamedQuery :: IsNamedQuery (As alias E)
-
 
 
 ---------------------------INSERT------------------------------------------
@@ -517,6 +443,8 @@ values fieldValues (Insert (Into fieldNames _)) = Insert <<< Into fieldNames $ V
 
 
 
+---------------------------UPDATE------------------------------------------
+
 {-
 
 full update syntax supported by postgresql https://www.postgresql.org/docs/current/sql-update.html
@@ -541,8 +469,6 @@ UPDATE table name
       SET field = value | [, ...]
       [WHERE conditions]
 -}
-
----------------------------UPDATE------------------------------------------
 
 newtype Update (name :: Symbol) (fields :: Row Type) rest = Update rest
 
@@ -572,6 +498,8 @@ set pairs (Update _) = Update $ Set pairs E
 
 
 
+---------------------------DELETE------------------------------------------
+
 {-
 
 full delete syntax supported by postgresql https://www.postgresql.org/docs/current/sql-insert.html
@@ -592,15 +520,16 @@ DELETE FROM table name
       [WHERE condition]
 -}
 
----------------------------DELETE------------------------------------------
-
 --real work is done in from and wher
-newtype Delete (fields :: Row Type) rest = Delete rest
+newtype Delete rest = Delete rest
 
-delete :: forall fields. Delete fields E
+delete :: Delete E
 delete = Delete E
 
 
+
+
+---------------------------RETURNING------------------------------------------
 
 {-
 
@@ -620,8 +549,6 @@ full RETURNING syntax supported by droplet
 -}
 
 
----------------------------RETURNING------------------------------------------
-
 newtype Returning (fields :: Row Type) f = Returning f
 
 
@@ -639,6 +566,82 @@ instance tupleToReturningFields :: (ToReturningFields a fields, ToReturningField
 
 returning :: forall f fields q sql. ToReturning f fields q => ToRest q (Returning fields f) sql => f -> q -> sql
 returning f q = toRest q $ Returning f
+
+
+
+
+------------------------Projection machinery---------------------------
+
+-- | Row Type of columns projected by the query
+class ToProjection (s :: Type) (fields :: Row Type) (extra :: Row Type) (projection :: Row Type) | s -> fields projection
+
+--simple columns
+instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields extra projection
+
+else instance dotToProjection :: (Cons name t e extra, Cons name t () projection) => ToProjection (Dot name) fields extra projection
+
+else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields extra projection
+
+else instance aggregateToProjection :: (Cons alias t () projection) => ToProjection (As alias (Aggregate inp fields t)) fields extra projection
+
+else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Proxy name)) fields extra projection
+
+else instance dotAsToProjection :: (Cons name t e extra, Cons alias t () projection) => ToProjection (As alias (Dot name)) fields extra projection
+
+else instance starToProjection :: Union fields () projection => ToProjection Star fields extra projection
+
+else instance tupleToProjection :: (ToProjection s fields e some, ToProjection t fields e more, Union some more extra) => ToProjection (s /\ t) fields e extra
+
+--change projection to Maybe since subqueries may return null
+else instance selectFromRestToProjection :: (
+      ToProjection s fields ex extra,
+      RowToList extra list,
+      ToSingleColumn list name t,
+      ToNullableSingleColumn t u,
+      Cons name u () single
+) => ToProjection (Select s p (From f fields e rest)) fd ex single
+
+-- --rename projection to alias
+-- else instance asToProjection :: (
+--       ToProjection s fields ex extra,
+--       RowToList extra list,
+--       ToSingleColumn list name t,
+--       Cons alias t () single
+-- ) => ToProjection (Select s p (As alias E)) fields e single
+
+else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f e p
+
+--not required but makes for clearer type errors
+class ToSingleColumn (fields :: RowList Type) (name :: Symbol) (t :: Type) | fields -> name t
+
+instance singleToSingleColumn :: ToSingleColumn (RL.Cons name t RL.Nil) name t
+
+
+class ToNullableSingleColumn (t :: Type) (u :: Type) | t -> u
+
+instance maybeToNullableSingleColumn :: ToNullableSingleColumn (Maybe t) (Maybe t)
+
+else instance elseToNullableSingleColumn :: ToNullableSingleColumn t (Maybe t)
+
+
+-- | Query projections should not repeat column names
+class UniqueColumnNames (some :: Row Type) (more :: Row Type)
+
+instance sameUniqueColumnNames :: UniqueColumnNames fields fields
+
+
+class IsNamedQuery (q :: Type)
+
+instance whereIsNamedQuery :: IsNamedQuery rest => IsNamedQuery (Where rest)
+
+instance orderByIsNamedQuery :: IsNamedQuery rest => IsNamedQuery (OrderBy f rest)
+
+instance limitIsNamedQuery :: IsNamedQuery rest => IsNamedQuery (Limit rest)
+
+instance eIsNamedQuery :: Fail (Text "Query in FROM clause must be named") => IsNamedQuery E
+
+instance asIsNamedQuery :: IsNamedQuery (As alias E)
+
 
 
 
@@ -680,7 +683,7 @@ instance valuesToRest :: ToRest rest b c => ToRest (Values v rest) b (Values v c
 instance setToRest :: ToRest rest b c => ToRest (Set p rest) b (Set p c) where
       toRest (Set p rest) b = Set p $ toRest rest b
 
-instance deleteToRest :: ToRest rest b c => ToRest (Delete f rest) b (Delete f c) where
+instance deleteToRest :: ToRest rest b c => ToRest (Delete rest) b (Delete c) where
       toRest (Delete rest) b = Delete $ toRest rest b
 
 instance eToRest :: ToRest E b b where

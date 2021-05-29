@@ -39,6 +39,7 @@ type QueryState = { plan :: Maybe Plan, parameters :: Array Foreign}
 instance queryShow :: Show (Query projection) where
       show (Query _ q _) = q
 
+--lets clean up projection
 class ToQuery q (projection :: Row Type) | q -> projection where
       toQuery :: q -> State QueryState String
 
@@ -95,7 +96,6 @@ else instance tupleToQuery :: (ToQuery (NakedSelect s) p, ToQuery (NakedSelect t
 else instance failNakedToQuery :: Fail (Text "Naked select columns must be either scalar values or full subqueries") => ToQuery (NakedSelect s) projection where
       toQuery _ = pure "impossible"
 
---this can be made a lot simpler
 instance selectToQuery :: (
       ToQuery (NakedSelect s) p,
       ToProjection s () () projection,
@@ -154,7 +154,7 @@ else instance elseToColumnQuery :: ToQuery q projection => ToColumnQuery q where
 
 --from
 --typing s instead of (Select s ppp rest) breaks ps chain instance resolution
-instance fromAsToQuery :: (ToQuery (Select s ppp rest) p, IsSymbol name, ToQuery rest pp) => ToQuery (From (Select s ppp rest) fields extra rest) projection where
+instance fromAsToQuery :: (ToQuery (Select s ppp more) p, ToQuery rest pp) => ToQuery (From (Select s ppp more) fields extra rest) projection where
       toQuery (From s rest) = do
             q <- toQuery s
             otherQ <- toQuery rest
@@ -164,6 +164,11 @@ else instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (Fr
       toQuery (From _ rest) = do
             q <- toQuery rest
             pure $ fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name) <> q
+
+--as
+--only when coming renaming a query
+instance asToQuery :: IsSymbol name => ToQuery (As name E) p where
+      toQuery _ = pure $ asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
 --where
 instance whereToQuery :: ToQuery rest p => ToQuery (Where rest) projection where
@@ -270,7 +275,7 @@ else instance tupleTupleToFieldValuePairs :: (ToFieldValuePairs p, ToFieldValueP
             pure $ q <> comma <> otherQ
 
 --delete
-instance deleteToQuery :: ToQuery (From f fields extra rest) p => ToQuery (Delete fields (From f fields extra rest)) () where
+instance deleteToQuery :: ToQuery (From f fields extra rest) p => ToQuery (Delete (From f fields extra rest)) () where
       toQuery (Delete fr) = do
             q <- toQuery fr
             pure $ deleteKeyword <> q
