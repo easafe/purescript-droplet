@@ -1,7 +1,7 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class ToColumnQuery, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, NakedSelect, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class ToColumnQuery, class ToNakedColumnQuery, toNakedColumnQuery, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -27,18 +27,17 @@ import Droplet.Language.Internal.Function (Aggregate(..))
 import Foreign (Foreign)
 import Prim.Row (class Nub)
 import Prim.RowList (class RowToList)
-import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy(..))
 
-data NakedSelect s = NakedSelect s
 
 data Query (projection :: Row Type) = Query (Maybe Plan) String (Array Foreign)
 
-type QueryState = { plan :: Maybe Plan, parameters :: Array Foreign}
+type QueryState = { plan :: Maybe Plan, parameters :: Array Foreign, bracketed :: Boolean }
 
 instance queryShow :: Show (Query projection) where
       show (Query _ q _) = q
 
+--lets clean up projection
 class ToQuery q (projection :: Row Type) | q -> projection where
       toQuery :: q -> State QueryState String
 
@@ -62,7 +61,7 @@ instance eToQuery :: ToQuery E () where
 
 instance queryToQuery :: ToQuery (Query projection) projection where
       toQuery (Query p q parameters) = do
-            CMS.put { plan: p, parameters }
+            CMS.put { plan: p, parameters, bracketed: false }
             pure q
 
 --prepare
@@ -72,51 +71,50 @@ instance prepareToQuery :: (ToQuery s projection) => ToQuery (Prepare s) project
             toQuery s
 
 --naked selects
-instance intToQuery :: IsSymbol name => ToQuery (NakedSelect (As Int name)) projection where
-      toQuery (NakedSelect (As n)) = pure $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
+class ToNakedColumnQuery q where
+      toNakedColumnQuery :: q -> State QueryState String
 
-else instance aggregateToQuery :: (IsSymbol alias, ToAggregateName inp) => ToQuery (NakedSelect (As (Aggregate inp field out) alias)) projection where
-      toQuery (NakedSelect (As agg)) = pure $ printAggregation agg <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
+instance intToNakedColumnQuery :: IsSymbol name => ToNakedColumnQuery (As name Int) where
+      toNakedColumnQuery (As n) = pure $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-else instance asNakedSelectToQuery :: (IsSymbol name, ToQuery s p) => ToQuery (NakedSelect (Select s ss (As E name))) pp where
-      toQuery (NakedSelect a) = toAsQuery a
-
-else instance selNakedSelectToQuery :: ToQuery (Select s ss (From f fields extra rest)) p => ToQuery (NakedSelect (Select s ss (From f fields extra rest))) pp where
-      toQuery (NakedSelect a) = do
-            q <- toQuery a
-            pure $ openBracket <> q <> closeBracket
-
-else instance tupleToQuery :: (ToQuery (NakedSelect s) p, ToQuery (NakedSelect t) pp) => ToQuery (NakedSelect (Tuple s t)) ppp where
-      toQuery (NakedSelect (Tuple s t)) = do
-            q <- toQuery $ NakedSelect s
-            otherQ <- toQuery $ NakedSelect t
+instance tupleToNakedColumnQuery :: (ToNakedColumnQuery s, ToNakedColumnQuery t) => ToNakedColumnQuery (Tuple s t) where
+      toNakedColumnQuery (Tuple s t) = do
+            q <- toNakedColumnQuery s
+            otherQ <- toNakedColumnQuery t
             pure $ q <> comma <> otherQ
 
-else instance failNakedToQuery :: Fail (Text "Naked select columns must be either scalar values or full subqueries") => ToQuery (NakedSelect s) projection where
-      toQuery _ = pure "impossible"
+instance selNakedSelectToNakedColumnQuery :: ToQuery (Select s ss (From f fields extra rest)) p => ToNakedColumnQuery (Select s ss (From f fields extra rest)) where
+      toNakedColumnQuery s = do
+            CMS.modify_ (_ { bracketed = true })
+            toQuery s
 
---this can be made a lot simpler
 instance selectToQuery :: (
-      ToQuery (NakedSelect s) p,
+      ToNakedColumnQuery s,
       ToProjection s () () projection,
       Nub projection unique,
       UniqueColumnNames projection unique
 ) => ToQuery (Select s pp E) unique where
       toQuery (Select s _) = do
-            q <- toQuery $ NakedSelect s
+            q <- toNakedColumnQuery s
             pure $ selectKeyword <> q
 
 --fully clothed selects
-else instance asSelectToQuery :: (ToColumnQuery s, ToQuery s pp, IsSymbol name) => ToQuery (Select s projection (As E name)) projection where
-      toQuery (Select s _) = do
-            q <- toQuery s
-            pure $ q <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
-
 else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery (Select s projection rest) projection where
       toQuery (Select s rest) = do
-            q <-  toColumnQuery s
+            --hack
+            { bracketed: needsOpenBracket } <- CMS.get
+            q <- toColumnQuery s
             otherQ <- toQuery rest
-            pure $ selectKeyword <> q <> otherQ
+            { bracketed: needsCloseBracket } <- CMS.get
+            let sel = selectKeyword <> q <> otherQ
+            let opened
+                  | needsOpenBracket = openBracket <> sel
+                  | otherwise = sel
+            let closed
+                  | needsCloseBracket = opened <> closeBracket
+                  | otherwise = opened
+            CMS.modify_ $ _ { bracketed = false }
+            pure closed
 
 class ToColumnQuery q where
       toColumnQuery :: q -> State QueryState String
@@ -131,16 +129,16 @@ else instance dotToColumnQuery :: IsSymbol name => ToColumnQuery (Dot name) wher
 else instance tableToColumnQuery :: ToColumnQuery Star where
       toColumnQuery _ = pure starSymbol
 
-else instance asIntToColumnQuery :: IsSymbol name => ToColumnQuery (As Int name) where
+else instance asIntToColumnQuery :: IsSymbol name => ToColumnQuery (As name Int) where
       toColumnQuery (As n) = pure $ show n <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-else instance asAggregateToColumnQuery :: (IsSymbol name, ToAggregateName inp) => ToColumnQuery (As (Aggregate inp fields out) name) where
+else instance asAggregateToColumnQuery :: (IsSymbol name, ToAggregateName inp) => ToColumnQuery (As name (Aggregate inp fields out)) where
       toColumnQuery (As agg) = pure $ printAggregation agg <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
 
-else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Proxy name) alias) where
+else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias (Proxy name)) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
-else instance asDotToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As (Dot name) alias) where
+else instance asDotToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias (Dot name)) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
 else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t) => ToColumnQuery (Tuple s t) where
@@ -149,26 +147,37 @@ else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t) => ToColu
             tQ <- toColumnQuery t
             pure $ sQ <> comma <> tQ
 
-else instance asSelectToColumnQuery :: (ToQuery s projection, IsSymbol name) => ToColumnQuery (Select s projection (As E name)) where
-      toColumnQuery s = toAsQuery s
-
 else instance elseToColumnQuery :: ToQuery q projection => ToColumnQuery q where
-      toColumnQuery q = do
-            q <- toQuery q
-            pure $ openBracket <> q <> closeBracket
+      toColumnQuery s = do
+            CMS.modify_ (_ { bracketed = true })
+            toQuery s
 
 --from
-instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (Table name fields) fields extra rest) projection where
+--typing s instead of (Select s ppp rest) breaks ps chain instance resolution
+instance fromAsToQuery :: (ToQuery (Select s ppp more) p, ToQuery rest pp) => ToQuery (From (Select s ppp more) fields extra rest) projection where
+      toQuery (From s rest) = do
+            CMS.modify_ (_ { bracketed = true })
+            q <- toQuery s
+            otherQ <- toQuery rest
+            pure $ fromKeyword <>  q <> otherQ
+
+else instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (Table name fields) fields extra rest) projection where
       toQuery (From _ rest) = do
             q <- toQuery rest
             pure $ fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name) <> q
 
---typing only s instead of (Select s p (As E name)) breaks purescript instance resolution
-else instance fromAsToQuery :: (ToColumnQuery s, ToQuery s p, IsSymbol name, ToQuery rest pp) => ToQuery (From (Select s p (As E name)) fields extra rest) projection where
-      toQuery (From s rest) = do
-            q <- toColumnQuery s
-            otherQ <- toQuery rest
-            pure $ fromKeyword <> q <> otherQ
+--as
+--only when renaming a query
+instance asToQuery :: IsSymbol name => ToQuery (As name E) p where
+      toQuery _ = do
+            --as has to come outside brackets
+            { bracketed } <- CMS.get
+            let as = asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
+            if bracketed then do
+                  CMS.modify_ (_ { bracketed = false })
+                  pure $ closeBracket <> as
+             else
+                  pure as
 
 --where
 instance whereToQuery :: ToQuery rest p => ToQuery (Where rest) projection where
@@ -275,7 +284,7 @@ else instance tupleTupleToFieldValuePairs :: (ToFieldValuePairs p, ToFieldValueP
             pure $ q <> comma <> otherQ
 
 --delete
-instance deleteToQuery :: ToQuery (From f fields extra rest) p => ToQuery (Delete fields (From f fields extra rest)) () where
+instance deleteToQuery :: ToQuery (From f fields extra rest) p => ToQuery (Delete (From f fields extra rest)) () where
       toQuery (Delete fr) = do
             q <- toQuery fr
             pure $ deleteKeyword <> q
@@ -285,7 +294,7 @@ instance returningToQuery :: (ToFieldNames fieldNames, ToProjection fieldNames f
       toQuery (Returning fieldNames) = pure $ returningKeyword <> toFieldNames fieldNames
 
 --order by
-instance orderByToQuery :: (ToSortNames f, ToQuery rest p) => ToQuery (OrderBy f fields rest) projection where
+instance orderByToQuery :: (ToSortNames f, ToQuery rest p) => ToQuery (OrderBy f rest) projection where
       toQuery (OrderBy f rest) = do
             q <- toQuery rest
             pure $ orderKeyword <> byKeyword <> toSortNames f <> q
@@ -312,11 +321,6 @@ instance limitToQuery :: ToQuery rest p => ToQuery (Limit rest) projection where
             pure $ limitKeyword <> show n <> q
 
 
-toAsQuery :: forall name p s projection. IsSymbol name => ToQuery s p => Select s projection (As E name) -> State QueryState String
-toAsQuery (Select s (As _)) = do
-      q <- toQuery s
-      pure $ openBracket <> q <> closeBracket <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy name)
-
 printAggregation :: forall inp fields out. ToAggregateName inp => Aggregate inp fields out -> String
 printAggregation = case _ of
       Count f -> countFunctionName <> openBracket <> toAggregateName f <> closeBracket
@@ -330,9 +334,10 @@ instance fieldToAggregateName :: IsSymbol name => ToAggregateName (Proxy name) w
 instance starToAggregateName :: ToAggregateName Star where
       toAggregateName _ = starSymbol
 
+
 query :: forall q projection. ToQuery q projection => q -> Query projection
 query qr = Query plan q parameters
-      where Tuple q {plan, parameters} = CMS.runState (toQuery qr) { plan: Nothing, parameters: [] }
+      where Tuple q {plan, parameters} = CMS.runState (toQuery qr) { plan: Nothing, parameters: [], bracketed: false }
 
 unsafeQuery :: forall projection parameters pra.
       RowToList parameters pra =>
