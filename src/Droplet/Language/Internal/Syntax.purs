@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class RequiredFields, class ToNullableSingleColumn, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, toLimit, Limit(..), toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toFrom, toSelect, toWhere, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, toRest, class RequiredFields, class ToNullableSingleColumn, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, toLimit, Limit(..), toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toFrom, toSelect, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -18,7 +18,6 @@ import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
 import Unsafe.Coerce as UC
 
---type families, i cry every time
 
 data E = E
 
@@ -124,17 +123,12 @@ LIMIT
 
 -}
 
-
 ----------------------SELECT----------------------------
 
 data Select s (projection :: Row Type) rest = Select s rest
 
 class ToSelect r  where
       toSelect :: forall projection. r -> Select r projection E
-
---needs more instance for scalars
--- might be nice to able to project parameters too
--- we also dont accept naked selects as subqueries/as/whatever
 
 instance fieldToSelect :: ToSelect (Proxy name) where
       toSelect s = Select s E
@@ -182,7 +176,7 @@ else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a sin
 
 else instance asFieldToSubExpression :: ToSubExpression s => ToSubExpression (Select s projection (As E alias))
 
-select :: forall s projection. ToSelect s => s -> Select s projection  E
+select :: forall s projection. ToSelect s => s -> Select s projection E
 select = toSelect
 
 
@@ -225,24 +219,16 @@ from = toFrom
 
 data Where rest = Where Filtered rest
 
-class ToWhere q w fields | q -> w fields where
-      toWhere :: Condition fields -> q -> w
+class ToWhere (q :: Type) (fields :: Row Type) | q -> fields
 
---are we missing AS here?
-instance selectToWhere :: ToWhere (Select s projection (From f fields extra E)) (Select s projection (From f fields extra (Where E))) fields where
-      toWhere (Condition filtered) (Select s (From f E)) = Select s <<< From f $ Where filtered E
+instance selectToWhere :: ToWhere (Select s projection (From f fields extra E)) fields
 
-else instance updateToWhere :: ToWhere (Update name fields (Set v E)) (Update name fields (Set v (Where E))) fields where
-      toWhere (Condition filtered) (Update (Set v E)) = Update <<< Set v $ Where filtered E
+instance updateToWhere :: ToWhere (Update name fields (Set v E)) fields
 
-else instance deleteToWhere :: ToWhere (Delete fields (From f fields extra E)) (Delete fields (From f fields extra (Where E))) fields where
-      toWhere (Condition filtered) (Delete (From f E)) = Delete <<< From f $ Where filtered E
+instance deleteToWhere :: ToWhere (Delete fields (From f fields extra E)) fields
 
-else instance elseToWhere :: Fail (Text "Only full SELECT, UPDATE and DELETE statements can use WHERE clauses") => ToWhere q w fields where
-      toWhere _ _ = UC.unsafeCoerce 23
-
-wher :: forall q w fields. ToWhere q w fields => Condition fields -> q -> w
-wher conditions q = toWhere conditions q
+wher :: forall q fields sql. ToWhere q fields => ToRest q (Where E) sql => Condition fields -> q -> sql
+wher (Condition filtered) q = toRest q (Where filtered E)
 
 
 
@@ -646,4 +632,40 @@ instance tupleToReturningFields :: (ToReturningFields a fields, ToReturningField
 
 returning :: forall fields q r. ToReturning fields q r => fields -> q -> r
 returning = toReturning
+
+
+---------------------------Rest machinery------------------------------------------
+
+--this trick does the actual replacement of E for next statement
+-- we could use a alternative encode for queries (e.g. tuples),
+-- but I think this one looks clearer (for the end user) when looking at the types
+class ToRest a b c | a -> b, a b -> c where
+      toRest :: a -> b -> c
+
+instance selectToRest :: ToRest rest b c => ToRest (Select s p rest) b (Select s p c) where
+      toRest (Select s rest) b = Select s $ toRest rest b
+
+instance fromToRest :: ToRest rest b c => ToRest (From f fd ex rest) b (From f fd ex c) where
+      toRest (From f rest) b = From f $ toRest rest b
+
+instance whereToRest :: ToRest rest b c => ToRest (Where rest) b (Where c) where
+      toRest (Where f rest) b = Where f $ toRest rest b
+
+instance orderByToRest :: ToRest rest b c => ToRest (OrderBy f fd rest) b (OrderBy f fd c) where
+      toRest (OrderBy f rest) b = OrderBy f $ toRest rest b
+
+instance limitByToRest :: ToRest rest b c => ToRest (Limit rest) b (Limit c) where
+      toRest (Limit n rest) b = Limit n $ toRest rest b
+
+instance updateToRest :: ToRest rest b c => ToRest (Update n f rest) b (Update n f c) where
+      toRest (Update rest) b = Update $ toRest rest b
+
+instance setToRest :: ToRest rest b c => ToRest (Set p rest) b (Set p c) where
+      toRest (Set p rest) b = Set p $ toRest rest b
+
+instance deleteToRest :: ToRest rest b c => ToRest (Delete f rest) b (Delete f c) where
+      toRest (Delete rest) b = Delete $ toRest rest b
+
+instance eToRest :: ToRest E b b where
+      toRest E b = b
 
