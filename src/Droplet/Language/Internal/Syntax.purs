@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, toRest, class RequiredFields, class ToNullableSingleColumn, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, toReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, toLimit, Limit(..), toOrderBy, orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toFrom, toSelect, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, toRest, class RequiredFields, class ToNullableSingleColumn, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toFrom, toSelect, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -228,7 +228,7 @@ instance updateToWhere :: ToWhere (Update name fields (Set v E)) fields
 instance deleteToWhere :: ToWhere (Delete fields (From f fields extra E)) fields
 
 wher :: forall q fields sql. ToWhere q fields => ToRest q (Where E) sql => Condition fields -> q -> sql
-wher (Condition filtered) q = toRest q (Where filtered E)
+wher (Condition filtered) q = toRest q $ Where filtered E
 
 
 
@@ -277,21 +277,17 @@ instance consToExtraFields :: (
 
 ---------------------------ORDER BY------------------------------------------
 
-data OrderBy f (fields :: Row Type) rest = OrderBy f rest
+data OrderBy f rest = OrderBy f rest
 
 data Sort (name :: Symbol) = Asc | Desc
 
-class ToOrderBy f q r | q -> r where
-      toOrderBy :: f -> q -> r
 
-instance fromToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields extra E)) (Select s projection (From fr fields extra (OrderBy f fields E))) where
-      toOrderBy f (Select s (From fr E)) = Select s <<< From fr $ OrderBy f E
+class ToOrderBy (f :: Type) (q :: Type)
 
-else instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields extra (Where E))) (Select s projection (From fr fields extra (Where (OrderBy f fields E)))) where
-      toOrderBy f (Select s (From fr (Where fl E))) = Select s <<< From fr <<< Where fl $ OrderBy f E
+instance fromToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields extra E))
 
-else instance elseToOrderBy :: Fail (Text "ORDER BY can only follow FROM, WHERE or GROUP BY") => ToOrderBy f q r where
-      toOrderBy _ _ = UC.unsafeCoerce 44
+instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields extra (Where E)))
+
 
 class ToOrderByFields (f :: Type) (fields :: Row Type) | f -> fields
 
@@ -301,6 +297,7 @@ instance sortToOrderByFields :: Cons name t e fields  => ToOrderByFields (Sort n
 
 instance tupleToOrderByFields :: (ToOrderByFields a fields, ToOrderByFields b fields) => ToOrderByFields (a /\ b) fields
 
+
 --works as long we dont support order by number
 asc :: forall name. Proxy name -> Sort name
 asc _ = Asc
@@ -308,8 +305,8 @@ asc _ = Asc
 desc :: forall name. Proxy name -> Sort name
 desc _ = Desc
 
-orderBy :: forall fields q r. ToOrderBy fields q r => fields -> q -> r
-orderBy fields q = toOrderBy fields q
+orderBy :: forall f q sql. ToOrderBy f q => ToRest q (OrderBy f E) sql => f -> q -> sql
+orderBy f q = toRest q $ OrderBy f E
 
 
 
@@ -319,20 +316,14 @@ orderBy fields q = toOrderBy fields q
 data Limit rest = Limit Int rest
 
 
-class ToLimit q r | q -> r where
-      toLimit :: Int -> q -> r
+class ToLimit (q :: Type)
 
-instance fromToLimit :: ToLimit (Select s projection (From fr fields extra (OrderBy f fields E))) (Select s projection (From fr fields extra (OrderBy f fields (Limit E)))) where
-      toLimit n (Select s (From fr (OrderBy f E))) = Select s <<< From fr <<< OrderBy f $ Limit n E
+instance fromToLimit :: ToLimit (Select s projection (From fr fields extra (OrderBy f E)))
 
-else instance whereToLimit :: ToLimit (Select s projection (From fr fields extra (Where (OrderBy f fields E)))) (Select s projection (From fr fields extra (Where (OrderBy f fields (Limit E))))) where
-      toLimit n (Select s (From fr (Where fl (OrderBy f E)))) = Select s <<< From fr <<< Where fl <<< OrderBy f $ Limit n E
+instance whereToLimit :: ToLimit (Select s projection (From fr fields extra (Where (OrderBy f E))))
 
-else instance elseToLimit :: Fail (Text "LIMIT can only follow ORDER BY") => ToLimit q r where
-      toLimit _ _ = UC.unsafeCoerce 45
-
-limit :: forall q r. ToLimit q r => Int -> q -> r
-limit n q = toLimit n q
+limit :: forall q sql. ToLimit q => ToRest q (Limit E) sql => Int -> q -> sql
+limit n q = toRest q $ Limit n E
 
 
 ------------------------COALESCE---------------------------
@@ -615,14 +606,11 @@ full RETURNING syntax supported by droplet
 
 newtype Returning (fields :: Row Type) f = Returning f
 
-class ToReturning f q r | q -> r where
-      toReturning :: f -> q -> r
 
-instance insertToReturning :: ToReturningFields f fields => ToReturning f (Insert (Into tn fields fn (Values fv E))) (Insert (Into tn fields fn (Values fv (Returning fields f)))) where
-      toReturning f (Insert (Into fieldNames (Values values E))) = Insert (Into fieldNames (Values values (Returning f)))
+class ToReturning (f :: Type) (fields :: Row Type) (q :: Type) | q -> fields
 
-else instance elseToReturning :: Fail (Text "RETURNING can only follow INSERT, UPDATE or DELETE") => ToReturning f q r where
-      toReturning _ _ = UC.unsafeCoerce 3
+instance insertToReturning :: ToReturningFields f fields => ToReturning f fields (Insert (Into tn fields fn (Values fv E)))
+
 
 class ToReturningFields (f :: Type) (fields :: Row Type) | f -> fields
 
@@ -630,8 +618,10 @@ instance fieldToReturningFields :: Cons name t e fields => ToReturningFields (Pr
 
 instance tupleToReturningFields :: (ToReturningFields a fields, ToReturningFields b fields) => ToReturningFields (a /\ b) fields
 
-returning :: forall fields q r. ToReturning fields q r => fields -> q -> r
-returning = toReturning
+
+returning :: forall f fields q sql. ToReturning f fields q => ToRest q (Returning fields f) sql => f -> q -> sql
+returning f q = toRest q $ Returning f
+
 
 
 ---------------------------Rest machinery------------------------------------------
@@ -651,7 +641,7 @@ instance fromToRest :: ToRest rest b c => ToRest (From f fd ex rest) b (From f f
 instance whereToRest :: ToRest rest b c => ToRest (Where rest) b (Where c) where
       toRest (Where f rest) b = Where f $ toRest rest b
 
-instance orderByToRest :: ToRest rest b c => ToRest (OrderBy f fd rest) b (OrderBy f fd c) where
+instance orderByToRest :: ToRest rest b c => ToRest (OrderBy f rest) b (OrderBy f c) where
       toRest (OrderBy f rest) b = OrderBy f $ toRest rest b
 
 instance limitByToRest :: ToRest rest b c => ToRest (Limit rest) b (Limit c) where
@@ -659,6 +649,15 @@ instance limitByToRest :: ToRest rest b c => ToRest (Limit rest) b (Limit c) whe
 
 instance updateToRest :: ToRest rest b c => ToRest (Update n f rest) b (Update n f c) where
       toRest (Update rest) b = Update $ toRest rest b
+
+instance insertToRest :: ToRest rest b c => ToRest (Insert rest) b (Insert c) where
+      toRest (Insert rest) b = Insert $ toRest rest b
+
+instance intoToRest :: ToRest rest b c => ToRest (Into n f fd rest) b (Into n f fd c) where
+      toRest (Into f rest) b = Into f $ toRest rest b
+
+instance valuesToRest :: ToRest rest b c => ToRest (Values v rest) b (Values v c) where
+      toRest (Values v rest) b = Values v $ toRest rest b
 
 instance setToRest :: ToRest rest b c => ToRest (Set p rest) b (Set p c) where
       toRest (Set p rest) b = Set p $ toRest rest b

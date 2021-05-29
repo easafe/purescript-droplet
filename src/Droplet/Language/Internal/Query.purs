@@ -285,7 +285,7 @@ instance returningToQuery :: (ToFieldNames fieldNames, ToProjection fieldNames f
       toQuery (Returning fieldNames) = pure $ returningKeyword <> toFieldNames fieldNames
 
 --order by
-instance orderByToQuery :: (ToSortNames f, ToQuery rest p) => ToQuery (OrderBy f fields rest) projection where
+instance orderByToQuery :: (ToSortNames f, ToQuery rest p) => ToQuery (OrderBy f rest) projection where
       toQuery (OrderBy f rest) = do
             q <- toQuery rest
             pure $ orderKeyword <> byKeyword <> toSortNames f <> q
