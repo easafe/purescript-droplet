@@ -122,7 +122,7 @@ class ToColumnQuery q where
 instance fieldToColumnQuery :: IsSymbol name => ToColumnQuery (Proxy name) where
       toColumnQuery name = pure $ DS.reflectSymbol name
 
-else instance dotToColumnQuery :: IsSymbol name => ToColumnQuery (Dot name) where
+else instance dotToColumnQuery :: IsSymbol name => ToColumnQuery (Path name) where
       toColumnQuery name = pure $ ref <> asKeyword <> quoteSymbol <> ref <> quoteSymbol
             where ref = DS.reflectSymbol name
 
@@ -138,7 +138,7 @@ else instance asAggregateToColumnQuery :: (IsSymbol name, ToAggregateName inp) =
 else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias (Proxy name)) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
-else instance asDotToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias (Dot name)) where
+else instance asDotToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias (Path name)) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> DS.reflectSymbol (Proxy :: Proxy alias)
 
 else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t) => ToColumnQuery (Tuple s t) where

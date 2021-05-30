@@ -1,14 +1,14 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class IsNamedQuery, class IsNamedSubQuery, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, toSelect, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class IsNamedQuery, class IsNamedSubQuery, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, toAs, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
 import Prelude
 
 import Data.Maybe (Maybe)
-import Data.Tuple.Nested ((/\), type (/\))
+import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Function (Aggregate)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
@@ -127,49 +127,39 @@ LIMIT
 data Select s (projection :: Row Type) rest = Select s rest
 
 
-class ToSelect r  where
-      toSelect :: forall projection. r -> Select r projection E
+class ToSelect (s :: Type)
 
-instance fieldToSelect :: ToSelect (Proxy name) where
-      toSelect s = Select s E
+instance fieldToSelect :: ToSelect (Proxy name)
 
-else instance starToSelect :: ToSelect Star where
-      toSelect s = Select s E
+else instance starToSelect :: ToSelect Star
 
-else instance dotToSelect :: ToSelect (Dot name) where
-      toSelect s = Select s E
+else instance dotToSelect :: ToSelect (Path name)
 
-else instance asIntToSelect :: ToSelect (As alias Int) where
-      toSelect a = Select a E
+else instance asIntToSelect :: ToSelect (As alias Int)
 
-else instance asFieldToSelect :: ToSelect (As alias (Proxy name)) where
-      toSelect a = Select a E
+else instance asFieldToSelect :: ToSelect (As alias (Proxy name))
 
-else instance asDotToSelect :: ToSelect (As alias (Dot name)) where
-      toSelect a = Select a E
+else instance asDotToSelect :: ToSelect (As alias (Path name))
 
-else instance asAggregateToSelect :: ToSelect (As alias (Aggregate inp fields out)) where
-      toSelect a = Select a E
+else instance asAggregateToSelect :: ToSelect (As alias (Aggregate inp fields out))
 
-else instance tupleToSelect :: (ToSelect r, ToSelect t) => ToSelect (r /\ t) where
-      toSelect (s /\ t) = Select (s /\ t) E
+else instance tupleToSelect :: (ToSelect r, ToSelect t) => ToSelect (r /\ t)
 
-else instance fromFieldsToSelect :: ToSubExpression q => ToSelect q where
-      toSelect q = Select q E
+else instance fromFieldsToSelect :: ToSubExpression q => ToSelect q
 
 
-class ToSubExpression (r :: Type)
+class ToSubExpression (s :: Type)
 
 --for sub queries only a single column can be returned
 instance fromFieldToSubExpression :: ToSubExpression (Select (Proxy name) projection rest)
 
 else instance fromIntToSubExpression :: ToSubExpression (Select (As name Int) rojection rest)
 
-else instance dotToSubExpression :: ToSubExpression (Select (Dot name) projection rest)
+else instance dotToSubExpression :: ToSubExpression (Select (Path name) projection rest)
 
 else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As alias (Proxy name)) projection rest)
 
-else instance fromAsDotToSubExpression :: ToSubExpression (Select (As alias (Dot name)) projection rest)
+else instance fromAsDotToSubExpression :: ToSubExpression (Select (As alias (Path name)) projection rest)
 
 else instance asAggregateToSubExpression :: ToSubExpression (Select (As alias (Aggregate inp fields out)) projection rest)
 
@@ -179,7 +169,7 @@ else instance asFieldToSubExpression :: (ToSubExpression s, IsNamedQuery rest) =
 
 
 select :: forall s projection. ToSelect s => s -> Select s projection E
-select = toSelect
+select s = Select s E
 
 
 
@@ -188,7 +178,6 @@ select = toSelect
 data From f (fields :: Row Type) (extra :: Row Type) rest = From f rest
 
 --from needs to check if columns referenced by Select are valid
--- extra refers to any aliased fields (coming from As)
 class ToFrom (f :: Type) (q :: Type) (extra :: Row Type) (fields :: Row Type) | q -> extra, f -> fields
 
 instance tableToFrom :: (
@@ -246,7 +235,7 @@ instance intToAs :: ToAs Int name (As name Int) where
 instance fieldToAs :: ToAs (Proxy name) alias (As alias (Proxy name)) where
       toAs _ fd = As fd
 
-instance dotToAs :: ToAs (Dot name) alias (As alias (Dot name)) where
+instance dotToAs :: ToAs (Path name) alias (As alias (Path name)) where
       toAs _ fd = As fd
 
 instance aggregateToAs :: ToAs (Aggregate inp fields out) alias (As alias (Aggregate inp fields out)) where
@@ -257,7 +246,7 @@ instance subQueryFromToAs :: (
       ToExtraFields list name extra,
       ToProjection s fields extra projection,
       ToRest rest (As name E) sql
-) => ToAs (Select s p (From f fields e rest)) name (Select s projection (From f fields extra sql))  where
+) => ToAs (Select s p (From f fields e rest)) name (Select s projection (From f fields extra sql)) where
       toAs _ (Select s (From f rest)) = Select s <<< From f $ toRest rest $ As E
 
 
@@ -578,7 +567,7 @@ class ToProjection (s :: Type) (fields :: Row Type) (extra :: Row Type) (project
 --simple columns
 instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields extra projection
 
-else instance dotToProjection :: (Cons name t e extra, Cons name t () projection) => ToProjection (Dot name) fields extra projection
+else instance dotToProjection :: (Cons name t e extra, Cons name t () projection) => ToProjection (Path name) fields extra projection
 
 else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields extra projection
 
@@ -586,28 +575,20 @@ else instance aggregateToProjection :: (Cons alias t () projection) => ToProject
 
 else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Proxy name)) fields extra projection
 
-else instance dotAsToProjection :: (Cons name t e extra, Cons alias t () projection) => ToProjection (As alias (Dot name)) fields extra projection
+else instance dotAsToProjection :: (Cons name t e extra, Cons alias t () projection) => ToProjection (As alias (Path name)) fields extra projection
 
 else instance starToProjection :: Union fields () projection => ToProjection Star fields extra projection
 
-else instance tupleToProjection :: (ToProjection s fields e some, ToProjection t fields e more, Union some more extra) => ToProjection (s /\ t) fields e extra
+else instance tupleToProjection :: (ToProjection s fields extra some, ToProjection t fields extra more, Union some more projection) => ToProjection (s /\ t) fields extra projection
 
 --change projection to Maybe since subqueries may return null
 else instance selectFromRestToProjection :: (
-      ToProjection s fields ex extra,
-      RowToList extra list,
+      ToProjection s fields extra projection,
+      RowToList projection list,
       ToSingleColumn list name t,
       IsNamedSubQuery rest name alias,
       Cons alias t () single
-) => ToProjection (Select s p (From f fields e rest)) fd ex single
-
--- --rename projection to alias
--- else instance asToProjection :: (
---       ToProjection s fields ex extra,
---       RowToList extra list,
---       ToSingleColumn list name t,
---       Cons alias t () single
--- ) => ToProjection (Select s p (As alias E)) fields e single
+) => ToProjection (Select s p (From f fields e rest)) fd extra single
 
 else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f e p
 
