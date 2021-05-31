@@ -10,17 +10,23 @@ import Droplet.Language.Internal.Query as Query
 import Test.Model as TM
 import Test.Unit (TestSuite)
 import Test.Unit as TU
+import Type.Proxy (Proxy(..))
 
 tests :: TestSuite
 tests =
       TU.suite "as" do
+            TU.suite "named field" do
+                  TU.test "casing" do
+                        let q = select (id # as (Proxy :: Proxy "AbCd")) # from users
+                        TM.notParameterized """SELECT id as "AbCd" FROM users AS u""" $ Query.query q
+                        TM.result q [{"AbCd": 1}, {"AbCd": 2}]
             TU.suite "named table" do
                   TU.test "field" do
-                        let q = select id # from users # as u
+                        let q = select id # from (users # as u)
                         TM.notParameterized "SELECT id FROM users AS u" $ Query.query q
                         TM.result q [{id: 1}, {id: 2}]
                   TU.test "named aliased field" do
-                        let q = select (u ... id # as id) # from users # as u
+                        let q = select (u ... id # as id) # from (users # as u)
                         TM.notParameterized "SELECT u.id AS id FROM users AS u" $ Query.query q
                         TM.result q [{id : 1}, {id: 2}]
             TU.suite "named queries" do

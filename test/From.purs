@@ -23,7 +23,7 @@ tests = do
                   TM.notParameterized "SELECT created, by FROM tags" $ Query.query q
                   TM.result q [{created : Nothing, by: Just 1 }]
             TU.test "named table" do
-                  let q = select (u ... id) # from users # as u
+                  let q = select (u ... id) # from (users # as u)
                   TM.notParameterized """SELECT u.id AS "u.id" FROM users AS u""" $ Query.query q
                   TM.result q [{"u.id": 1}, {"u.id": 2}]
             TU.suite "named queries" do

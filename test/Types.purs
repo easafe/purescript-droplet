@@ -18,7 +18,7 @@ type Messages = (
     sender :: Int,
     recipient :: Int,
     date :: Default DateTime,
-    second_date :: Default DateTime,
+    secondDate :: Default DateTime,
     sent :: Boolean
 )
 type Tags = (
@@ -64,7 +64,7 @@ sender = Proxy
 recipient :: Proxy "recipient"
 recipient = Proxy
 
-secondDate :: Proxy "second_date"
+secondDate :: Proxy "secondDate"
 secondDate = Proxy
 
 created :: Proxy "created"

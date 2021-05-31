@@ -48,7 +48,7 @@ newtype Default a = Default a
 
 data Table (name :: Symbol) (fields :: Row Type) = Table
 
-data Path (field :: Symbol) = Path
+data Path (name :: Symbol) = Path
 
 path :: forall alias field path pathField . Append alias "." path => Append path field pathField => Proxy alias -> Proxy field -> Path pathField
 path _ _ = Path
