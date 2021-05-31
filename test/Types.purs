@@ -64,8 +64,8 @@ sender = Proxy
 recipient :: Proxy "recipient"
 recipient = Proxy
 
-secondDate :: Proxy "second_date"
-secondDate = Proxy
+second_date :: Proxy "second_date"
+second_date = Proxy
 
 created :: Proxy "created"
 created = Proxy
