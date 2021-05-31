@@ -133,15 +133,15 @@ instance fieldToSelect :: ToSelect (Proxy name)
 
 else instance starToSelect :: ToSelect Star
 
-else instance asIntToSelect :: ToSelect (As alias extra Int)
+else instance asIntToSelect :: ToSelect (As alias Int)
 
-else instance asFieldToSelect :: ToSelect (As alias extra (Proxy name))
+else instance asFieldToSelect :: ToSelect (As alias (Proxy name))
 
 else instance pathToSelect :: ToSelect (Path name)
 
-else instance asPathToSelect :: ToSelect (As alias extra (Path name))
+else instance asPathToSelect :: ToSelect (As alias (Path name))
 
-else instance asAggregateToSelect :: ToSelect (As alias extra (Aggregate inp fields out))
+else instance asAggregateToSelect :: ToSelect (As alias (Aggregate inp fields out))
 
 else instance tupleToSelect :: (ToSelect r, ToSelect t) => ToSelect (r /\ t)
 
@@ -153,15 +153,15 @@ class ToSubExpression (s :: Type)
 --for sub queries only a single column can be returned
 instance fromFieldToSubExpression :: ToSubExpression (Select (Proxy name) projection rest)
 
-else instance fromIntToSubExpression :: ToSubExpression (Select (As alias extra Int) rojection rest)
+else instance fromIntToSubExpression :: ToSubExpression (Select (As alias Int) rojection rest)
 
-else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As alias extra (Proxy name)) projection rest)
+else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As alias (Proxy name)) projection rest)
 
-else instance pathAsToSubExpression :: ToSubExpression (Select (As alias extra (Path name)) projection rest)
+else instance pathAsToSubExpression :: ToSubExpression (Select (As alias (Path name)) projection rest)
 
 else instance pathToSubExpression :: ToSubExpression (Select (Path name) projection rest)
 
-else instance asAggregateToSubExpression :: ToSubExpression (Select (As alias extra (Aggregate inp fields out)) projection rest)
+else instance asAggregateToSubExpression :: ToSubExpression (Select (As alias (Aggregate inp fields out)) projection rest)
 
 else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (Select (a /\ b) projection rest)
 
@@ -194,7 +194,7 @@ instance tableAsToFrom :: (
       ToProjection s all outer selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (As alias ex (Table name fields)) (Select s unique E) outer all
+) => ToFrom (As alias (Table name fields)) (Select s unique E) outer all
 
 instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete E) () fields
 
@@ -234,24 +234,24 @@ wher (Condition filtered) q = toRest q $ Where filtered E
 ----------------------------AS----------------------------
 
 --beware of brackets
-newtype As (alias :: Symbol) (extra :: Row Type) rest = As rest
+newtype As (alias :: Symbol) rest = As rest
 
 
-class ToAs (q :: Type) (alias :: Symbol) (extra :: Row Type) | q -> alias extra
+class ToAs (q :: Type) (alias :: Symbol) | q -> alias
 
-instance intToAs :: ToAs Int alias ()
+instance intToAs :: ToAs Int alias
 
-instance tableToAs :: ToAs (Table name fields) alias ()
+instance tableToAs :: ToAs (Table name fields) alias
 
-instance fieldToAs :: ToAs (Proxy name) alias ()
+instance fieldToAs :: ToAs (Proxy name) alias
 
-instance pathToAs :: ToAs (Path name) alias ()
+instance pathToAs :: ToAs (Path name) alias
 
-instance aggregateToAs :: ToAs (Aggregate inp fields out) alias ()
+instance aggregateToAs :: ToAs (Aggregate inp fields out) alias
 
-instance subQueryFromToAs :: (RowToList fields list, ToExtraFields list alias extra) => ToAs (Select s p (From f fields e rest)) alias extra
+instance subQueryFromToAs :: ToAs (Select s p (From f fields e rest)) alias
 
-as :: forall q extra alias sql. ToAs q alias extra => ToRest q (As alias extra E) sql => Proxy alias -> q -> sql
+as :: forall q alias sql. ToAs q alias => ToRest q (As alias E) sql => Proxy alias -> q -> sql
 as _ q = toRest q $ As E
 
 
@@ -315,7 +315,7 @@ limit n q = toRest q $ Limit n E
 
 -- instance selToCoalesce :: ToProjection (Select s p (From f fields rest)) fields projection => ToCoalesce (Select s p (From f fields rest)) projection
 
--- instance asIntToCoalesce :: => Cons alias Int () projection => ToCoalesce (As alias extra Int) projection
+-- instance asIntToCoalesce :: => Cons alias Int () projection => ToCoalesce (As alias Int) projection
 
 -- instance tupleToCoalasce :: (ToCoalesce a projection, ToCoalesce b projection) => ToCoalesce (Tuple a b) projection
 
@@ -553,15 +553,17 @@ class ToProjection (s :: Type) (fields :: Row Type) (extra :: Row Type) (project
 --simple columns
 instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields extra projection
 
+-- else instance pathToProjection :: (Cons name t e extra, Cons name t () projection) => ToProjection (Path name) fields extra projection
+
 else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Path name) fields extra projection
 
-else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias ex Int) fields extra projection
+else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields extra projection
 
-else instance aggregateToProjection :: (Cons alias t () projection) => ToProjection (As alias ex (Aggregate inp fields t)) fields extra projection
+else instance aggregateToProjection :: (Cons alias t () projection) => ToProjection (As alias (Aggregate inp fields t)) fields extra projection
 
-else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias ex (Proxy name)) fields extra projection
+else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Proxy name)) fields extra projection
 
-else instance pathAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias ex (Path name)) fields extra projection
+else instance pathAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Path name)) fields extra projection
 
 else instance starToProjection :: Union fields () projection => ToProjection Star fields extra projection
 
@@ -602,7 +604,7 @@ instance limitIsNamedQuery :: IsNamedQuery rest => IsNamedQuery (Limit rest)
 
 instance eIsNamedQuery :: Fail (Text "Query in FROM clause must be named") => IsNamedQuery E
 
-instance asIsNamedQuery :: IsNamedQuery (As alias extra E)
+instance asIsNamedQuery :: IsNamedQuery (As alias E)
 
 
 class IsNamedSubQuery (q :: Type) (name :: Symbol) (alias :: Symbol) | q -> name alias
@@ -615,7 +617,7 @@ instance limitIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQu
 
 instance eIsNamedSubQuery :: IsNamedSubQuery E name name
 
-instance asIsNamedSubQuery :: IsNamedSubQuery (As alias extra E) name alias
+instance asIsNamedSubQuery :: IsNamedSubQuery (As alias E) name alias
 
 
 class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type) | list alias -> extra
@@ -675,7 +677,7 @@ else instance setToRest :: ToRest rest b c => ToRest (Set p rest) b (Set p c) wh
 else instance deleteToRest :: ToRest rest b c => ToRest (Delete rest) b (Delete c) where
       toRest (Delete rest) b = Delete $ toRest rest b
 
-else instance asIntToRest :: ToRest (As alias ex E) b (As alias ex b) where
+else instance asIntToRest :: ToRest (As alias E) b (As alias b) where
       toRest (As _) b = As b
 
 else instance eToRest :: ToRest E b b where
