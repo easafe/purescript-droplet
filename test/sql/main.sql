@@ -11,8 +11,7 @@ create table messages (
       sender integer not null,
       recipient integer not null,
       date timestamp without time zone default (now() at time zone 'utc'),
-      --camel case to test field aliasing
-      secondDate timestamp with time zone default (now() at time zone 'utc'),
+      second_date timestamp with time zone default (now() at time zone 'utc'),
       sent bool not null,
 
       constraint sender_user foreign key (sender) references users(id),

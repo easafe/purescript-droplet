@@ -120,7 +120,10 @@ class ToColumnQuery q where
       toColumnQuery :: q -> State QueryState String
 
 instance fieldToColumnQuery :: IsSymbol name => ToColumnQuery (Proxy name) where
-      toColumnQuery name = pure $ quoteColumn name
+      toColumnQuery name = pure $ DS.reflectSymbol name
+
+else instance pathToColumnQuery :: IsSymbol name => ToColumnQuery (Path name) where
+      toColumnQuery _ = pure $ quoteColumn (Proxy :: Proxy name)
 
 else instance tableToColumnQuery :: ToColumnQuery Star where
       toColumnQuery _ = pure starSymbol
@@ -132,6 +135,9 @@ else instance asAggregateToColumnQuery :: (IsSymbol name, ToAggregateName inp) =
       toColumnQuery (As agg) = pure $ printAggregation agg <> asKeyword <> quote (Proxy :: Proxy name)
 
 else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias extra (Proxy name)) where
+      toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
+
+else instance asPathToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias extra (Path name)) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
 
 else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t) => ToColumnQuery (Tuple s t) where

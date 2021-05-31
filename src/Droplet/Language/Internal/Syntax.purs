@@ -137,6 +137,10 @@ else instance asIntToSelect :: ToSelect (As alias extra Int)
 
 else instance asFieldToSelect :: ToSelect (As alias extra (Proxy name))
 
+else instance pathToSelect :: ToSelect (Path name)
+
+else instance asPathToSelect :: ToSelect (As alias extra (Path name))
+
 else instance asAggregateToSelect :: ToSelect (As alias extra (Aggregate inp fields out))
 
 else instance tupleToSelect :: (ToSelect r, ToSelect t) => ToSelect (r /\ t)
@@ -152,6 +156,10 @@ instance fromFieldToSubExpression :: ToSubExpression (Select (Proxy name) projec
 else instance fromIntToSubExpression :: ToSubExpression (Select (As alias extra Int) rojection rest)
 
 else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As alias extra (Proxy name)) projection rest)
+
+else instance pathAsToSubExpression :: ToSubExpression (Select (As alias extra (Path name)) projection rest)
+
+else instance pathToSubExpression :: ToSubExpression (Select (Path name) projection rest)
 
 else instance asAggregateToSubExpression :: ToSubExpression (Select (As alias extra (Aggregate inp fields out)) projection rest)
 
@@ -236,6 +244,8 @@ instance intToAs :: ToAs Int alias ()
 instance tableToAs :: ToAs (Table name fields) alias ()
 
 instance fieldToAs :: ToAs (Proxy name) alias ()
+
+instance pathToAs :: ToAs (Path name) alias ()
 
 instance aggregateToAs :: ToAs (Aggregate inp fields out) alias ()
 
@@ -543,11 +553,15 @@ class ToProjection (s :: Type) (fields :: Row Type) (extra :: Row Type) (project
 --simple columns
 instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields extra projection
 
+else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Path name) fields extra projection
+
 else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias ex Int) fields extra projection
 
 else instance aggregateToProjection :: (Cons alias t () projection) => ToProjection (As alias ex (Aggregate inp fields t)) fields extra projection
 
 else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias ex (Proxy name)) fields extra projection
+
+else instance pathAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias ex (Path name)) fields extra projection
 
 else instance starToProjection :: Union fields () projection => ToProjection Star fields extra projection
 

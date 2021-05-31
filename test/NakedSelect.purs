@@ -24,11 +24,15 @@ tests =
                   let q = select (select (34 # as n) # from users # wher (name .=. name))
                   TM.notParameterized """SELECT (SELECT 34 AS "n" FROM users WHERE name = name)""" $ Query.query q
                  -- TM.result q [{n : 34}, {n: 34}]
+            TU.test "aliases" do
+                  let q = select (select (u ... id) # from (users # as u))
+                  TM.notParameterized """SELECT (SELECT u.id "u.id" FROM users AS "u")""" $ Query.query q
+                 -- TM.result q [{n : 34}, {n: 34}]
             TU.test "named sub query" do
                   let q = select (select (34 # as n) # from users # wher (name .=. name) # as t)
                   TM.notParameterized """SELECT (SELECT 34 AS "n" FROM users WHERE name = name) AS "t"""" $ Query.query q
                   --TM.result q [{t : 34}, {t: 34}]
             TU.test "tuple" do
                   let q = select ((3 # as b) /\ (select (34 # as n) # from users # wher (name .=. surname) # as t) /\ (4 # as (Proxy :: Proxy "a")) /\ (select name # from users))
-                  TM.notParameterized """SELECT 3 AS b, (SELECT 34 AS "n" FROM users WHERE name = surname) AS "t", 4 AS a, (SELECT name FROM users)""" $ Query.query q
+                  TM.notParameterized """SELECT 3 AS "b", (SELECT 34 AS "n" FROM users WHERE name = surname) AS "t", 4 AS "a", (SELECT name FROM users)""" $ Query.query q
                  -- TM.result q [{b: 3, n: 34, a : 4, name: "mary"}, {b: 3, n: 34, a : 4, name: "mary"}]

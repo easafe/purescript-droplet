@@ -15,10 +15,10 @@ tests =
       TU.suite "count" do
             TU.test "star" do
                   let q = select (count star # as u) # from users
-                  TM.notParameterized "SELECT COUNT(*) AS u FROM users" $ Query.query q
+                  TM.notParameterized """SELECT COUNT(*) AS "u" FROM users""" $ Query.query q
                   TM.result q [{ u : DB.fromInt 2 }]
             TU.test "field" do
                   let q = select (count id # as u) # from users
-                  TM.notParameterized "SELECT COUNT(id) AS u FROM users" $ Query.query q
+                  TM.notParameterized """SELECT COUNT(id) AS "u" FROM users""" $ Query.query q
                   TM.result q [{ u : DB.fromInt 2}]
 
