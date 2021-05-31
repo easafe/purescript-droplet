@@ -553,8 +553,6 @@ class ToProjection (s :: Type) (fields :: Row Type) (extra :: Row Type) (project
 --simple columns
 instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields extra projection
 
--- else instance pathToProjection :: (Cons name t e extra, Cons name t () projection) => ToProjection (Path name) fields extra projection
-
 else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Path name) fields extra projection
 
 else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields extra projection
