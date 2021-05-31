@@ -146,7 +146,7 @@ select :: forall r s projection. ToSelect r s projection => r -> Select s projec
 ```purescript
 forall inner.
   Select
-    (Tuple (Select (Proxy "id") inner E) (Select (Proxy "name") inner E)) -- columns
+    (Tuple (Proxy "id") (Proxy "name")) -- columns
     ( id :: Int, name :: String) -- output row
     (From
        (Table "users" Users)
