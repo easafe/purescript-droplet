@@ -29,7 +29,7 @@ newtype Plan = Plan String
 class ToPrepare (q :: Type)
 
 --to allow general selects/insert, ToQuery would need to check for invalid statements
-instance selectToPrepare :: ToPrepare (Select s p (From f fields extra rest))
+instance selectToPrepare :: ToPrepare (Select s p o (From f fields extra rest))
 
 instance insertToPrepare :: ToPrepare (Insert (Into name fields fieldNames (Values v rest)))
 
@@ -124,51 +124,51 @@ LIMIT
 
 -}
 
-data Select s (projection :: Row Type) rest = Select s rest
+data Select s (projection :: Row Type) (o :: Row Type) rest = Select s rest
 
 
-class ToSelect (s :: Type)
+class ToSelect (s :: Type) (outer :: Row Type) | s -> outer
 
-instance fieldToSelect :: ToSelect (Proxy name)
+instance fieldToSelect :: ToSelect (Proxy name) outer
 
-else instance starToSelect :: ToSelect Star
+else instance starToSelect :: ToSelect Star outer
 
-else instance asIntToSelect :: ToSelect (As alias Int)
+else instance asIntToSelect :: ToSelect (As alias Int) outer
 
-else instance asFieldToSelect :: ToSelect (As alias (Proxy name))
+else instance asFieldToSelect :: ToSelect (As alias (Proxy name)) outer
 
-else instance pathToSelect :: ToSelect (Path name)
+else instance pathToSelect :: ToSelect (Path name) outer
 
-else instance asPathToSelect :: ToSelect (As alias (Path name))
+else instance asPathToSelect :: ToSelect (As alias (Path name)) outer
 
-else instance asAggregateToSelect :: ToSelect (As alias (Aggregate inp fields out))
+else instance asAggregateToSelect :: ToSelect (As alias (Aggregate inp fields out)) outer
 
-else instance tupleToSelect :: (ToSelect r, ToSelect t) => ToSelect (r /\ t)
+else instance tupleToSelect :: (ToSelect r outer, ToSelect t outer) => ToSelect (r /\ t)  outer
 
-else instance fromFieldsToSelect :: ToSubExpression q => ToSelect q
+else instance fromFieldsToSelect :: ToSubExpression q  outer => ToSelect q outer
 
 
-class ToSubExpression (s :: Type)
+class ToSubExpression (s :: Type) (outer :: Row Type) | s -> outer
 
 --for sub queries only a single column can be returned
-instance fromFieldToSubExpression :: ToSubExpression (Select (Proxy name) projection rest)
+instance fromFieldToSubExpression :: ToSubExpression (Select (Proxy name) projection  outer rest)  outer
 
-else instance fromIntToSubExpression :: ToSubExpression (Select (As alias Int) rojection rest)
+else instance fromIntToSubExpression :: ToSubExpression (Select (As alias Int) rojection outer rest) outer
 
-else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As alias (Proxy name)) projection rest)
+else instance fromAsFieldToSubExpression :: ToSubExpression (Select (As alias (Proxy name)) projection outer rest) outer
 
-else instance pathAsToSubExpression :: ToSubExpression (Select (As alias (Path name)) projection rest)
+else instance pathAsToSubExpression :: ToSubExpression (Select (As alias (Path name)) projection outer rest) outer
 
-else instance pathToSubExpression :: ToSubExpression (Select (Path name) projection rest)
+else instance pathToSubExpression :: ToSubExpression (Select (Path name) projection outer rest) outer
 
-else instance asAggregateToSubExpression :: ToSubExpression (Select (As alias (Aggregate inp fields out)) projection rest)
+else instance asAggregateToSubExpression :: ToSubExpression (Select (As alias (Aggregate inp fields out)) projection outer rest) outer
 
-else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (Select (a /\ b) projection rest)
+else instance fromTupleToSubExpression :: Fail (Text "Subquery must return a single column") => ToSubExpression (Select (a /\ b) projection outer rest) outer
 
-else instance asFieldToSubExpression :: (ToSubExpression s, IsNamedQuery rest) => ToSubExpression (Select s projection (From f fd ex rest))
+else instance asFieldToSubExpression :: (ToSubExpression s outer, IsNamedQuery rest) => ToSubExpression (Select s projection outer (From f fd outer rest)) outer
 
 
-select :: forall s projection. ToSelect s => s -> Select s projection E
+select :: forall s  outer projection. ToSelect s  outer => s -> Select s projection outer E
 select s = Select s E
 
 
@@ -184,17 +184,16 @@ instance tableToFrom :: (
       ToProjection s fields outer selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Table name fields) (Select s unique E) outer fields
+) => ToFrom (Table name fields) (Select s unique outer E) outer fields
 
 --named tables like select ... from table as alias
 instance tableAsToFrom :: (
       RowToList fields list,
       ToExtraFields list alias extra,
-      Union extra fields all,
-      ToProjection s all outer selected,
+      ToProjection s fields extra selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (As alias (Table name fields)) (Select s unique E) outer all
+) => ToFrom (As alias (Table name fields)) (Select s unique extra E) outer all
 
 instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete E) () fields
 
@@ -204,7 +203,7 @@ instance asToFrom :: (
       ToProjection t projection outer selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Select s projection (From f fd o rest)) (Select t unique E) outer projection
+) => ToFrom (Select s projection ee (From f fd o rest)) (Select t unique e E) outer projection
 
 
 from :: forall f q outer fields sql. ToFrom f q outer fields => ToRest q (From f fields outer E) sql => f -> q -> sql
@@ -219,7 +218,7 @@ data Where rest = Where Filtered rest
 
 class ToWhere (q :: Type) (fields :: Row Type) | q -> fields
 
-instance selectToWhere :: ToWhere (Select s projection (From f fields extra E)) fields
+instance selectToWhere :: ToWhere (Select s projection outer (From f fields extra E)) fields
 
 instance updateToWhere :: ToWhere (Update name fields (Set v E)) fields
 
@@ -249,7 +248,7 @@ instance pathToAs :: ToAs (Path name) alias
 
 instance aggregateToAs :: ToAs (Aggregate inp fields out) alias
 
-instance subQueryFromToAs :: ToAs (Select s p (From f fields e rest)) alias
+instance subQueryFromToAs :: ToAs (Select s p outer (From f fields e rest)) alias
 
 as :: forall q alias sql. ToAs q alias => ToRest q (As alias E) sql => Proxy alias -> q -> sql
 as _ q = toRest q $ As E
@@ -265,9 +264,9 @@ data Sort (name :: Symbol) = Asc | Desc
 
 class ToOrderBy (f :: Type) (q :: Type)
 
-instance fromToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields extra E))
+instance fromToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection outer (From fr fields extra E))
 
-instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields extra (Where E)))
+instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection  outer (From fr fields extra (Where E)))
 
 
 class ToOrderByFields (f :: Type) (fields :: Row Type) | f -> fields
@@ -298,9 +297,9 @@ data Limit rest = Limit Int rest
 
 class ToLimit (q :: Type)
 
-instance fromToLimit :: ToLimit (Select s projection (From fr fields extra (OrderBy f E)))
+instance fromToLimit :: ToLimit (Select s projection  outer (From fr fields extra (OrderBy f E)))
 
-instance whereToLimit :: ToLimit (Select s projection (From fr fields extra (Where (OrderBy f E))))
+instance whereToLimit :: ToLimit (Select s projection outer (From fr fields extra (Where (OrderBy f E))))
 
 limit :: forall q sql. ToLimit q => ToRest q (Limit E) sql => Int -> q -> sql
 limit n q = toRest q $ Limit n E
@@ -553,7 +552,7 @@ class ToProjection (s :: Type) (fields :: Row Type) (extra :: Row Type) (project
 --simple columns
 instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields extra projection
 
-else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Path name) fields extra projection
+else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e extra, Cons name u () projection) => ToProjection (Path name) fields extra projection
 
 else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields extra projection
 
@@ -561,7 +560,7 @@ else instance aggregateToProjection :: (Cons alias t () projection) => ToProject
 
 else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Proxy name)) fields extra projection
 
-else instance pathAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Path name)) fields extra projection
+else instance pathAsToProjection :: (UnwrapDefinition t u, Cons name t e extra, Cons alias u () projection) => ToProjection (As alias (Path name)) fields extra projection
 
 else instance starToProjection :: Union fields () projection => ToProjection Star fields extra projection
 
@@ -574,7 +573,7 @@ else instance selectFromRestToProjection :: (
       ToSingleColumn list name t,
       IsNamedSubQuery rest name alias,
       Cons alias t () single
-) => ToProjection (Select s p (From f fields e rest)) fd extra single
+) => ToProjection (Select s p  outer (From f fields e rest)) fd extra single
 
 else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f e p
 
@@ -625,8 +624,7 @@ instance nilToExtraFields :: ToExtraFields RL.Nil alias ()
 instance consToExtraFields :: (
       Append alias "." path,
       Append path name fullPath,
-      UnwrapDefinition t u,
-      Cons fullPath u () head,
+      Cons fullPath t () head,
       ToExtraFields rest alias tail,
       Lacks fullPath tail,
       Union head tail all
@@ -642,7 +640,7 @@ instance consToExtraFields :: (
 class ToRest a b c | a -> b, a b -> c where
       toRest :: a -> b -> c
 
-instance selectToRest :: ToRest rest b c => ToRest (Select s p rest) b (Select s p c) where
+instance selectToRest :: ToRest rest b c => ToRest (Select s p outer rest) b (Select s p outer c) where
       toRest (Select s rest) b = Select s $ toRest rest b
 
 else instance fromToRest :: ToRest rest b c => ToRest (From f fd ex rest) b (From f fd ex c) where

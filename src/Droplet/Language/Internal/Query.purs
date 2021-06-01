@@ -83,7 +83,7 @@ instance tupleToNakedColumnQuery :: (ToNakedColumnQuery s, ToNakedColumnQuery t)
             otherQ <- toNakedColumnQuery t
             pure $ q <> comma <> otherQ
 
-instance selNakedSelectToNakedColumnQuery :: ToQuery (Select s ss (From f fields extra rest)) p => ToNakedColumnQuery (Select s ss (From f fields extra rest)) where
+instance selNakedSelectToNakedColumnQuery :: ToQuery (Select s ss o (From f fields extra rest)) p => ToNakedColumnQuery (Select s ss o (From f fields extra rest)) where
       toNakedColumnQuery s = do
             CMS.modify_ (_ { bracketed = true })
             toQuery s
@@ -93,13 +93,13 @@ instance selectToQuery :: (
       ToProjection s () () projection,
       Nub projection unique,
       UniqueColumnNames projection unique
-) => ToQuery (Select s pp E) unique where
+) => ToQuery (Select s pp o E) unique where
       toQuery (Select s _) = do
             q <- toNakedColumnQuery s
             pure $ selectKeyword <> q
 
 --fully clothed selects
-else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery (Select s projection rest) projection where
+else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery (Select s projection o rest) projection where
       toQuery (Select s rest) = do
             --hack
             { bracketed: needsOpenBracket } <- CMS.get
@@ -153,7 +153,7 @@ else instance elseToColumnQuery :: ToQuery q projection => ToColumnQuery q where
 
 --from
 --typing s instead of (Select s ppp rest) breaks ps chain instance resolution
-instance fromAsToQuery :: (ToQuery (Select s ppp more) p, ToQuery rest pp) => ToQuery (From (Select s ppp more) fields extra rest) projection where
+instance fromAsToQuery :: (ToQuery (Select s ppp o more) p, ToQuery rest pp) => ToQuery (From (Select s ppp o more) fields extra rest) projection where
       toQuery (From s rest) = do
             CMS.modify_ (_ { bracketed = true })
             q <- toQuery s
