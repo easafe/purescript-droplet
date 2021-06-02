@@ -27,6 +27,7 @@ import Droplet.Language.Internal.Function (Aggregate(..))
 import Foreign (Foreign)
 import Prim.Row (class Nub)
 import Prim.RowList (class RowToList)
+import Prim.Symbol (class Append)
 import Type.Proxy (Proxy(..))
 
 
@@ -83,23 +84,23 @@ instance tupleToNakedColumnQuery :: (ToNakedColumnQuery s, ToNakedColumnQuery t)
             otherQ <- toNakedColumnQuery t
             pure $ q <> comma <> otherQ
 
-instance selNakedSelectToNakedColumnQuery :: ToQuery (Select s ss o (From f fields extra rest)) p => ToNakedColumnQuery (Select s ss o (From f fields extra rest)) where
+instance selNakedSelectToNakedColumnQuery :: ToQuery (Select s ss (From f fields rest)) p => ToNakedColumnQuery (Select s ss (From f fields rest)) where
       toNakedColumnQuery s = do
             CMS.modify_ (_ { bracketed = true })
             toQuery s
 
 instance selectToQuery :: (
       ToNakedColumnQuery s,
-      ToProjection s () () projection,
+      ToProjection s () "" () projection,
       Nub projection unique,
       UniqueColumnNames projection unique
-) => ToQuery (Select s pp o E) unique where
+) => ToQuery (Select s pp E) unique where
       toQuery (Select s _) = do
             q <- toNakedColumnQuery s
             pure $ selectKeyword <> q
 
 --fully clothed selects
-else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery (Select s projection o rest) projection where
+else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery (Select s projection rest) projection where
       toQuery (Select s rest) = do
             --hack
             { bracketed: needsOpenBracket } <- CMS.get
@@ -122,8 +123,8 @@ class ToColumnQuery q where
 instance fieldToColumnQuery :: IsSymbol name => ToColumnQuery (Proxy name) where
       toColumnQuery name = pure $ DS.reflectSymbol name
 
-else instance pathToColumnQuery :: IsSymbol name => ToColumnQuery (Path name) where
-      toColumnQuery _ = pure $ quoteColumn (Proxy :: Proxy name)
+else instance pathToColumnQuery :: (IsSymbol fullPath, Append table "." path, Append path name fullPath) => ToColumnQuery (Path table name) where
+      toColumnQuery _ = pure $ quoteColumn (Proxy :: Proxy fullPath)
 
 else instance tableToColumnQuery :: ToColumnQuery Star where
       toColumnQuery _ = pure starSymbol
@@ -137,8 +138,8 @@ else instance asAggregateToColumnQuery :: (IsSymbol name, ToAggregateName inp) =
 else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias (Proxy name)) where
       toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
 
-else instance asPathToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias (Path name)) where
-      toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
+else instance asPathToColumnQuery :: (IsSymbol fullPath, IsSymbol alias, Append table "." path, Append path name fullPath) => ToColumnQuery (As alias (Path table name)) where
+      toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy fullPath) <> asKeyword <> quote (Proxy :: Proxy alias)
 
 else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t) => ToColumnQuery (Tuple s t) where
       toColumnQuery (s /\ t) = do
@@ -153,19 +154,19 @@ else instance elseToColumnQuery :: ToQuery q projection => ToColumnQuery q where
 
 --from
 --typing s instead of (Select s ppp rest) breaks ps chain instance resolution
-instance fromAsToQuery :: (ToQuery (Select s ppp o more) p, ToQuery rest pp) => ToQuery (From (Select s ppp o more) fields extra rest) projection where
+instance fromAsToQuery :: (ToQuery (Select s ppp more) p, ToQuery rest pp) => ToQuery (From (Select s ppp more) fields rest) projection where
       toQuery (From s rest) = do
             CMS.modify_ (_ { bracketed = true })
             q <- toQuery s
             otherQ <- toQuery rest
             pure $ fromKeyword <> q <> otherQ
 
-else instance fromAsTableToQuery :: (IsSymbol name, IsSymbol alias, ToQuery rest p) => ToQuery (From (As alias (Table name fd)) fields extra rest) projection where
+else instance fromAsTableToQuery :: (IsSymbol name, IsSymbol alias, ToQuery rest p) => ToQuery (From (As alias (Table name fd)) fields rest) projection where
       toQuery (From _ rest) = do
             q <- toQuery rest
             pure $ fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias) <> q
 
-else instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (Table name fields) fields extra rest) projection where
+else instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (Table name fields) fields rest) projection where
       toQuery (From _ rest) = do
             q <- toQuery rest
             pure $ fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name) <> q
@@ -288,13 +289,13 @@ else instance tupleTupleToFieldValuePairs :: (ToFieldValuePairs p, ToFieldValueP
             pure $ q <> comma <> otherQ
 
 --delete
-instance deleteToQuery :: ToQuery (From f fields extra rest) p => ToQuery (Delete (From f fields extra rest)) () where
+instance deleteToQuery :: ToQuery (From f fields rest) p => ToQuery (Delete (From f fields rest)) () where
       toQuery (Delete fr) = do
             q <- toQuery fr
             pure $ deleteKeyword <> q
 
 --returning
-instance returningToQuery :: (ToFieldNames fieldNames, ToProjection fieldNames fields () projection) => ToQuery (Returning fields fieldNames) projection where
+instance returningToQuery :: (ToFieldNames fieldNames, ToProjection fieldNames fields "" () projection) => ToQuery (Returning fields fieldNames) projection where
       toQuery (Returning fieldNames) = pure $ returningKeyword <> toFieldNames fieldNames
 
 --order by

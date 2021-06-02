@@ -5,7 +5,6 @@ import Prelude
 import Test.Types
 
 import Data.Maybe (Maybe(..))
-import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Query as Query
 import Test.Model as TM
 import Test.Unit (TestSuite)
@@ -23,7 +22,30 @@ tests = do
                   TM.notParameterized """SELECT (SELECT created FROM tags) FROM messages ORDER BY id LIMIT 1""" $ Query.query q
                   --avoid (Maybe (Maybe t))
                   TM.result q [{created: Nothing}]
-            -- TU.test "references outer fields" do
-            --       let q = select (id /\ (select id # from users # wher (id .<>. (u ... id)) # as n)) # from users # as u
-            --       TM.notParameterized """SELECT id, (SELECT id FROM users WHERE id <> u.id) AS "n" FROM users u""" $ Query.query q
-            --       TM.result q [{id : 1, n : Just 2}, {id : 2, n : Just 1}]
+            TU.suite "outer references" do
+                  TU.suiteOnly "projection from table" do
+                        TU.test "field" do
+                              let q = select (select (u ... id) # from users # orderBy id # limit 1) # from (users # as u) # orderBy id # limit 1
+                              TM.notParameterized """SELECT (SELECT u.id "u.id" FROM users ORDER BY id LIMIT 1) FROM users AS "u" ORDER BY id LIMIT 1""" $ Query.query q
+                              TM.result q [{"u.id": Just 1}]
+                        TU.test "alias" do
+                              let q = select (select (u ... id # as n) # from users # orderBy id # limit 1) # from (users # as u) # orderBy id # limit 1
+                              TM.notParameterized """SELECT (SELECT u.id AS "n" FROM users ORDER BY id LIMIT 1) FROM users AS "u" ORDER BY id LIMIT 1""" $ Query.query q
+                              TM.result q [{n: Just 1}]
+                        TU.test "same table different alias" do
+                              let q = select (select (n ... name) # from (users # as n) # orderBy id # limit 1) # from (users # as u)
+                              TM.notParameterized """SELECT (SELECT n.name "n.name" FROM users AS "n" ORDER BY id LIMIT 1) FROM users AS "u"""" $ Query.query q
+                              TM.result q [{"n.name": Just "josh"}, {"n.name": Just "josh"}]
+                        TU.test "same table alias" do
+                              let q = select (select (u ... sent) # from (messages # as u) # orderBy id # limit 1) # from (users # as u)
+                              TM.notParameterized """SELECT (SELECT u.sent "u.sent" FROM messages AS "u" ORDER BY id LIMIT 1) FROM users AS "u"""" $ Query.query q
+                              TM.result q [{"u.sent": Just true}, {"u.sent": Just true}]
+                  TU.suiteOnly "projection from named query" do
+                        TU.test "field" do
+                              let q = select (select (u ... id) # from users # orderBy id # limit 1) # from (select id # from users # as u)
+                              TM.notParameterized """SELECT (SELECT u.id "u.id" FROM users ORDER BY id LIMIT 1) FROM (SELECT id FROM users) AS "u"""" $ Query.query q
+                              TM.result q [{"u.id": Just 1}, {"u.id": Just 2}]
+                        TU.test "alias" do
+                              let q = select (select (u ... id # as n) # from users # orderBy id # limit 1) # from (select id # from users # as u)
+                              TM.notParameterized """SELECT (SELECT u.id AS "n" FROM users ORDER BY id LIMIT 1) FROM (SELECT id FROM users) AS "u"""" $ Query.query q
+                              TM.result q [{n: Just 1}, {n: Just 2}]

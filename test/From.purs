@@ -22,10 +22,15 @@ tests = do
                   let q = select (created /\ _by) # from tags
                   TM.notParameterized "SELECT created, by FROM tags" $ Query.query q
                   TM.result q [{created : Nothing, by: Just 1 }]
-            TU.test "named table" do
-                  let q = select (u ... id) # from (users # as u)
-                  TM.notParameterized """SELECT u.id "u.id" FROM users AS "u"""" $ Query.query q
-                  TM.result q [{"u.id": 1}, {"u.id": 2}]
+            TU.suite "named table" do
+                  TU.test "path" do
+                        let q = select (u ... id) # from (users # as u)
+                        TM.notParameterized """SELECT u.id "u.id" FROM users AS "u"""" $ Query.query q
+                        TM.result q [{"u.id": 1}, {"u.id": 2}]
+                  TU.test "aliased path" do
+                        let q = select (u ... id # as id) # from (users # as u)
+                        TM.notParameterized """SELECT u.id AS "id" FROM users AS "u"""" $ Query.query q
+                        TM.result q [{id: 1}, {id: 2}]
             TU.suite "named queries" do
                   TU.test "star" do
                         let q = select star # from (select (4 # as n) # from messages # as n)
