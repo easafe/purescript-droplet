@@ -23,7 +23,7 @@ tests = do
                   --avoid (Maybe (Maybe t))
                   TM.result q [{created: Nothing}]
             TU.suite "outer references" do
-                  TU.suiteOnly "projection from table" do
+                  TU.suite "projection from table" do
                         TU.test "field" do
                               let q = select (select (u ... id) # from users # orderBy id # limit 1) # from (users # as u) # orderBy id # limit 1
                               TM.notParameterized """SELECT (SELECT u.id "u.id" FROM users ORDER BY id LIMIT 1) FROM users AS "u" ORDER BY id LIMIT 1""" $ Query.query q
@@ -40,7 +40,7 @@ tests = do
                               let q = select (select (u ... sent) # from (messages # as u) # orderBy id # limit 1) # from (users # as u)
                               TM.notParameterized """SELECT (SELECT u.sent "u.sent" FROM messages AS "u" ORDER BY id LIMIT 1) FROM users AS "u"""" $ Query.query q
                               TM.result q [{"u.sent": Just true}, {"u.sent": Just true}]
-                  TU.suiteOnly "projection from named query" do
+                  TU.suite "projection from named query" do
                         TU.test "field" do
                               let q = select (select (u ... id) # from users # orderBy id # limit 1) # from (select id # from users # as u)
                               TM.notParameterized """SELECT (SELECT u.id "u.id" FROM users ORDER BY id LIMIT 1) FROM (SELECT id FROM users) AS "u"""" $ Query.query q

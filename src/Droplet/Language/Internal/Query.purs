@@ -1,7 +1,7 @@
--- | `ToQuery`, a type class to generate parameterized SQL statement strings
+-- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class ToColumnQuery, class ToNakedColumnQuery, toNakedColumnQuery, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class ToQuery, Query(..), QueryState, toColumnQuery, toFieldNames, toFieldValuePairs, toFieldValues, toQuery, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -28,8 +28,10 @@ import Foreign (Foreign)
 import Prim.Row (class Nub)
 import Prim.RowList (class RowToList)
 import Prim.Symbol (class Append)
+import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy(..))
 
+--this is all really ugly right now
 
 data Query (projection :: Row Type) = Query (Maybe Plan) String (Array Foreign)
 
@@ -38,13 +40,52 @@ type QueryState = { plan :: Maybe Plan, parameters :: Array Foreign, bracketed :
 instance queryShow :: Show (Query projection) where
       show (Query _ q _) = q
 
---lets clean up projection
-class ToQuery q (projection :: Row Type) | q -> projection where
+
+class ToQuery (q :: Type) (projection :: Row Type) | q -> projection where
       toQuery :: q -> State QueryState String
+
+instance selToQuery :: (IsValidTopLevel rest, Translate (Select s projection (From f fields rest))) => ToQuery (Select s projection (From f fields rest)) projection where
+      toQuery q = translate q
+
+else instance nselToQuery :: (
+      ToProjection s () "" () projection,
+      Nub projection unique,
+      UniqueColumnNames projection unique,
+      Translate (Select s p E)
+) => ToQuery (Select s p E) unique where
+      toQuery q = translate q
+
+else instance returningToQuery :: (ToProjection f fields "" () projection, Translate (Insert (Into name fields fieldNames (Values v (Returning fields f))))) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning fields f)))) projection where
+      toQuery q = translate q
+
+else instance queryToQuery :: ToQuery (Query projection) projection where
+      toQuery (Query p q parameters) = do
+            CMS.put { plan: p, parameters, bracketed: false }
+            pure q
+
+else instance elseToQuery :: Translate s => ToQuery s () where
+      toQuery q = translate q
+
+
+class IsValidTopLevel (q :: Type)
+
+instance whereIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (Where rest)
+
+instance orderByIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (OrderBy f rest)
+
+instance limitIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (Limit rest)
+
+--can be improved but the gist is that select ... from ... as name translates to (select ... from ... ) as t wich is not a valid top level
+instance asIsValidTopLevel :: Fail (Text "AS statement cannot be top level") => IsValidTopLevel (As alias E)
+
+instance eIsValidTopLevel :: IsValidTopLevel E
+
+instance qIsValidTopLevel :: IsValidTopLevel (Query projection)
+
 
 {-
 
-ToQuery should print valid sql strings but reject queries that can't be executed, with the following considerations
+Translate should print valid sql strings but reject queries that can't be executed, with the following considerations
 
 1. naked selects (i.e. not projecting from a source) can be potentially invalid (e.g. SELECT id) so only a limited sub set of SELECT is accepted as top level
 
@@ -56,56 +97,50 @@ ToQuery should print valid sql strings but reject queries that can't be executed
 
 -}
 
---trash
-instance eToQuery :: ToQuery E () where
-      toQuery _ = pure ""
+class Translate q where
+      translate :: q -> State QueryState String
 
-instance queryToQuery :: ToQuery (Query projection) projection where
-      toQuery (Query p q parameters) = do
-            CMS.put { plan: p, parameters, bracketed: false }
-            pure q
+--trash
+instance eTranslate :: Translate E where
+      translate _ = pure ""
+
 
 --prepare
-instance prepareToQuery :: (ToQuery s projection) => ToQuery (Prepare s) projection where
-      toQuery (Prepare s plan) = do
+instance prepareTranslate :: Translate s => Translate (Prepare s) where
+      translate (Prepare s plan) = do
             CMS.modify_ (_ { plan = Just plan })
-            toQuery s
+            translate s
 
 --naked selects
-class ToNakedColumnQuery q where
-      toNakedColumnQuery :: q -> State QueryState String
+class TranslateNakedColumn q where
+      translateNakedColumn :: q -> State QueryState String
 
-instance intToNakedColumnQuery :: IsSymbol name => ToNakedColumnQuery (As name Int) where
-      toNakedColumnQuery (As n) = pure $ show n <> asKeyword <> quote (Proxy :: Proxy name)
+instance intTranslateNakedColumn :: IsSymbol name => TranslateNakedColumn (As name Int) where
+      translateNakedColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy :: Proxy name)
 
-instance tupleToNakedColumnQuery :: (ToNakedColumnQuery s, ToNakedColumnQuery t) => ToNakedColumnQuery (Tuple s t) where
-      toNakedColumnQuery (Tuple s t) = do
-            q <- toNakedColumnQuery s
-            otherQ <- toNakedColumnQuery t
+instance tupleTranslateNakedColumn :: (TranslateNakedColumn s, TranslateNakedColumn t) => TranslateNakedColumn (Tuple s t) where
+      translateNakedColumn (Tuple s t) = do
+            q <- translateNakedColumn s
+            otherQ <- translateNakedColumn t
             pure $ q <> comma <> otherQ
 
-instance selNakedSelectToNakedColumnQuery :: ToQuery (Select s ss (From f fields rest)) p => ToNakedColumnQuery (Select s ss (From f fields rest)) where
-      toNakedColumnQuery s = do
+instance selNakedSelectTranslateNakedColumn :: Translate (Select s ss (From f fields rest)) => TranslateNakedColumn (Select s ss (From f fields rest)) where
+      translateNakedColumn s = do
             CMS.modify_ (_ { bracketed = true })
-            toQuery s
+            translate s
 
-instance selectToQuery :: (
-      ToNakedColumnQuery s,
-      ToProjection s () "" () projection,
-      Nub projection unique,
-      UniqueColumnNames projection unique
-) => ToQuery (Select s pp E) unique where
-      toQuery (Select s _) = do
-            q <- toNakedColumnQuery s
+instance selectTranslate :: TranslateNakedColumn s => Translate (Select s pp E) where
+      translate (Select s _) = do
+            q <- translateNakedColumn s
             pure $ selectKeyword <> q
 
 --fully clothed selects
-else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery (Select s projection rest) projection where
-      toQuery (Select s rest) = do
+else instance fullSelectTranslate :: (TranslateColumn s, Translate rest) => Translate (Select s projection rest) where
+      translate (Select s rest) = do
             --hack
             { bracketed: needsOpenBracket } <- CMS.get
-            q <- toColumnQuery s
-            otherQ <- toQuery rest
+            q <- translateColumn s
+            otherQ <- translate rest
             { bracketed: needsCloseBracket } <- CMS.get
             let sel = selectKeyword <> q <> otherQ
             let opened
@@ -117,64 +152,64 @@ else instance fullSelectToQuery :: (ToColumnQuery s, ToQuery rest p) => ToQuery 
             CMS.modify_ $ _ { bracketed = false }
             pure closed
 
-class ToColumnQuery q where
-      toColumnQuery :: q -> State QueryState String
+class TranslateColumn q where
+      translateColumn :: q -> State QueryState String
 
-instance fieldToColumnQuery :: IsSymbol name => ToColumnQuery (Proxy name) where
-      toColumnQuery name = pure $ DS.reflectSymbol name
+instance fieldTranslateColumn :: IsSymbol name => TranslateColumn (Proxy name) where
+      translateColumn name = pure $ DS.reflectSymbol name
 
-else instance pathToColumnQuery :: (IsSymbol fullPath, Append table "." path, Append path name fullPath) => ToColumnQuery (Path table name) where
-      toColumnQuery _ = pure $ quoteColumn (Proxy :: Proxy fullPath)
+else instance pathTranslateColumn :: (IsSymbol fullPath, Append table "." path, Append path name fullPath) => TranslateColumn (Path table name) where
+      translateColumn _ = pure $ quoteColumn (Proxy :: Proxy fullPath)
 
-else instance tableToColumnQuery :: ToColumnQuery Star where
-      toColumnQuery _ = pure starSymbol
+else instance tableTranslateColumn :: TranslateColumn Star where
+      translateColumn _ = pure starSymbol
 
-else instance asIntToColumnQuery :: IsSymbol name => ToColumnQuery (As name Int) where
-      toColumnQuery (As n) = pure $ show n <> asKeyword <> quote (Proxy :: Proxy name)
+else instance asIntTranslateColumn :: IsSymbol name => TranslateColumn (As name Int) where
+      translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy :: Proxy name)
 
-else instance asAggregateToColumnQuery :: (IsSymbol name, ToAggregateName inp) => ToColumnQuery (As name (Aggregate inp fields out)) where
-      toColumnQuery (As agg) = pure $ printAggregation agg <> asKeyword <> quote (Proxy :: Proxy name)
+else instance asAggregateTranslateColumn :: (IsSymbol name, ToAggregateName inp) => TranslateColumn (As name (Aggregate inp fields out)) where
+      translateColumn (As agg) = pure $ printAggregation agg <> asKeyword <> quote (Proxy :: Proxy name)
 
-else instance asFieldToColumnQuery :: (IsSymbol name, IsSymbol alias) => ToColumnQuery (As alias (Proxy name)) where
-      toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
+else instance asFieldTranslateColumn :: (IsSymbol name, IsSymbol alias) => TranslateColumn (As alias (Proxy name)) where
+      translateColumn _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
 
-else instance asPathToColumnQuery :: (IsSymbol fullPath, IsSymbol alias, Append table "." path, Append path name fullPath) => ToColumnQuery (As alias (Path table name)) where
-      toColumnQuery _ = pure $ DS.reflectSymbol (Proxy :: Proxy fullPath) <> asKeyword <> quote (Proxy :: Proxy alias)
+else instance asPathTranslateColumn :: (IsSymbol fullPath, IsSymbol alias, Append table "." path, Append path name fullPath) => TranslateColumn (As alias (Path table name)) where
+      translateColumn _ = pure $ DS.reflectSymbol (Proxy :: Proxy fullPath) <> asKeyword <> quote (Proxy :: Proxy alias)
 
-else instance tupleToColumnQuery :: (ToColumnQuery s, ToColumnQuery t) => ToColumnQuery (Tuple s t) where
-      toColumnQuery (s /\ t) = do
-            sQ <- toColumnQuery s
-            tQ <- toColumnQuery t
+else instance tupleTranslateColumn :: (TranslateColumn s, TranslateColumn t) => TranslateColumn (Tuple s t) where
+      translateColumn (s /\ t) = do
+            sQ <- translateColumn s
+            tQ <- translateColumn t
             pure $ sQ <> comma <> tQ
 
-else instance elseToColumnQuery :: ToQuery q projection => ToColumnQuery q where
-      toColumnQuery s = do
+else instance elseTranslateColumn :: Translate q => TranslateColumn q where
+      translateColumn s = do
             CMS.modify_ (_ { bracketed = true })
-            toQuery s
+            translate s
 
 --from
 --typing s instead of (Select s ppp rest) breaks ps chain instance resolution
-instance fromAsToQuery :: (ToQuery (Select s ppp more) p, ToQuery rest pp) => ToQuery (From (Select s ppp more) fields rest) projection where
-      toQuery (From s rest) = do
+instance fromAsTranslate :: (Translate (Select s ppp more), Translate rest) => Translate (From (Select s ppp more) fields rest) where
+      translate (From s rest) = do
             CMS.modify_ (_ { bracketed = true })
-            q <- toQuery s
-            otherQ <- toQuery rest
+            q <- translate s
+            otherQ <- translate rest
             pure $ fromKeyword <> q <> otherQ
 
-else instance fromAsTableToQuery :: (IsSymbol name, IsSymbol alias, ToQuery rest p) => ToQuery (From (As alias (Table name fd)) fields rest) projection where
-      toQuery (From _ rest) = do
-            q <- toQuery rest
+else instance fromAsTableTranslate :: (IsSymbol name, IsSymbol alias, Translate rest) => Translate (From (As alias (Table name fd)) fields rest) where
+      translate (From _ rest) = do
+            q <- translate rest
             pure $ fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias) <> q
 
-else instance fromTableToQuery :: (IsSymbol name, ToQuery rest p) => ToQuery (From (Table name fields) fields rest) projection where
-      toQuery (From _ rest) = do
-            q <- toQuery rest
+else instance fromTableTranslate :: (IsSymbol name, Translate rest) => Translate (From (Table name fields) fields rest) where
+      translate (From _ rest) = do
+            q <- translate rest
             pure $ fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name) <> q
 
 --as
 --only when renaming a query
-instance asToQuery :: IsSymbol name => ToQuery (As name E) p where
-      toQuery _ = do
+instance asTranslate :: IsSymbol name => Translate (As name E) where
+      translate _ = do
             --as has to come outside brackets
             { bracketed } <- CMS.get
             let as = asKeyword <> quote (Proxy :: Proxy name)
@@ -185,10 +220,10 @@ instance asToQuery :: IsSymbol name => ToQuery (As name E) p where
                   pure as
 
 --where
-instance whereToQuery :: ToQuery rest p => ToQuery (Where rest) projection where
-      toQuery (Where filtered rest) = do
+instance whereTranslate :: Translate rest => Translate (Where rest) where
+      translate (Where filtered rest) = do
             q <- printFilters filtered
-            otherQ <- toQuery rest
+            otherQ <- translate rest
             pure $ whereKeyword <> q <> otherQ
 
 printFilters :: Filtered -> State QueryState String
@@ -224,10 +259,10 @@ printOperator = case _ of
       GreaterThan -> greaterThanSymbol
 
 --insert
-instance insertToQuery :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v, ToQuery rest projection) => ToQuery (Insert (Into name fields fieldNames (Values v rest))) projection where
-      toQuery (Insert (Into fieldNames (Values v rest))) = do
+instance insertTranslate :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v, Translate rest) => Translate (Insert (Into name fields fieldNames (Values v rest))) where
+      translate (Insert (Into fieldNames (Values v rest))) = do
             q <- toFieldValues v
-            otherQ <- toQuery rest
+            otherQ <- translate rest
             pure $ insertKeyword <>
                   DS.reflectSymbol (Proxy :: Proxy name) <>
                   openBracket <>
@@ -264,10 +299,10 @@ else instance fieldToFieldValues :: ToValue p => ToFieldValues p where
             pure $ "$" <> show (DA.length parameters)
 
 --update
-instance updateToQuery :: (IsSymbol name, ToFieldValuePairs pairs, ToQuery rest p) => ToQuery (Update name fields (Set pairs rest)) () where
-      toQuery (Update (Set pairs rest)) = do
+instance updateTranslate :: (IsSymbol name, ToFieldValuePairs pairs, Translate rest) => Translate (Update name fields (Set pairs rest)) where
+      translate (Update (Set pairs rest)) = do
             q <- toFieldValuePairs pairs
-            otherQ <- toQuery rest
+            otherQ <- translate rest
             pure $ updateKeyword <>
                   DS.reflectSymbol (Proxy :: Proxy name) <>
                   setKeyword <>
@@ -289,19 +324,19 @@ else instance tupleTupleToFieldValuePairs :: (ToFieldValuePairs p, ToFieldValueP
             pure $ q <> comma <> otherQ
 
 --delete
-instance deleteToQuery :: ToQuery (From f fields rest) p => ToQuery (Delete (From f fields rest)) () where
-      toQuery (Delete fr) = do
-            q <- toQuery fr
+instance deleteTranslate :: Translate (From f fields rest) => Translate (Delete (From f fields rest)) where
+      translate (Delete fr) = do
+            q <- translate fr
             pure $ deleteKeyword <> q
 
 --returning
-instance returningToQuery :: (ToFieldNames fieldNames, ToProjection fieldNames fields "" () projection) => ToQuery (Returning fields fieldNames) projection where
-      toQuery (Returning fieldNames) = pure $ returningKeyword <> toFieldNames fieldNames
+instance returningTranslate :: (ToFieldNames fieldNames) => Translate (Returning fields fieldNames) where
+      translate (Returning fieldNames) = pure $ returningKeyword <> toFieldNames fieldNames
 
 --order by
-instance orderByToQuery :: (ToSortNames f, ToQuery rest p) => ToQuery (OrderBy f rest) projection where
-      toQuery (OrderBy f rest) = do
-            q <- toQuery rest
+instance orderByTranslate :: (ToSortNames f, Translate rest) => Translate (OrderBy f rest) where
+      translate (OrderBy f rest) = do
+            q <- translate rest
             pure $ orderKeyword <> byKeyword <> toSortNames f <> q
 
 
@@ -320,9 +355,9 @@ instance tupleToSortNames :: (ToSortNames f, ToSortNames rest) => ToSortNames (T
       toSortNames (Tuple f rest) = toSortNames f <> comma <> toSortNames rest
 
 --limit
-instance limitToQuery :: ToQuery rest p => ToQuery (Limit rest) projection where
-      toQuery (Limit n rest) = do
-            q <- toQuery rest
+instance limitTranslate :: Translate rest => Translate (Limit rest) where
+      translate (Limit n rest) = do
+            q <- translate rest
             pure $ limitKeyword <> show n <> q
 
 

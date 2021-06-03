@@ -527,7 +527,7 @@ full RETURNING syntax supported by droplet
       field | [, ...]
 -}
 
-
+--can we get rid of fields here?
 newtype Returning (fields :: Row Type) f = Returning f
 
 
