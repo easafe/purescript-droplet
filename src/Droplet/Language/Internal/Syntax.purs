@@ -179,39 +179,33 @@ select s = Select s E
 data From f (fields :: Row Type) rest = From f rest
 
 --from needs to check if columns referenced by Select are valid
-class ToFrom (f :: Type) (q :: Type) (fields :: Row Type) (outer :: Row Type) | q -> outer, f -> fields
+class ToFrom (f :: Type) (q :: Type) (fields :: Row Type) | q f -> fields
 
 instance tableToFrom :: (
-      ToProjection s fields "" outer selected,
+      ToProjection s fields "" selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Table name fields) (Select s unique E) fields outer
+) => ToFrom (Table name fields) (Select s unique E) fields
 
 --named tables like select ... from table as alias
 instance tableAsToFrom :: (
-      RowToList fields list,
-      ToExtraFields list alias extra,
-      Union fields extra all,
-      ToProjection s fields alias extra selected,
+      ToProjection s fields alias selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (As alias (Table name fields)) (Select s unique E) all outer
+) => ToFrom (As alias (Table name fields)) (Select s unique E) fields
 
-instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete E) fields ()
+instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete E) fields
 
 --named queries like (select ... from ... ) as alias
 instance asToFrom :: (
-      RowToList projection list,
       IsNamedQuery rest alias,
-      ToExtraFields list alias extra,
-      Union projection extra all,
-      ToProjection t projection alias extra selected,
+      ToProjection t projection alias selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Select s projection (From f fd rest)) (Select t unique E) all outer
+) => ToFrom (Select s projection (From f fd rest)) (Select t unique E) fields
 
 
-from :: forall f q fields outer sql. ToFrom f q fields outer => ToRest q (From f fields E) sql => f -> q -> sql
+from :: forall f q fields sql. ToFrom f q fields => ToRest q (From f fields E) sql => f -> q -> sql
 from f q = toRest q $ From f E
 
 
@@ -552,41 +546,41 @@ returning f q = toRest q $ Returning f
 ------------------------Projection machinery---------------------------
 
 -- | Row Type of columns projected by the query
-class ToProjection (s :: Type) (fields :: Row Type) (alias :: Symbol) (outer :: Row Type) (projection :: Row Type) | s -> fields projection
+class ToProjection (s :: Type) (fields :: Row Type) (alias :: Symbol) (projection :: Row Type) | s -> fields projection
 
 --simple columns
-instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields alias outer projection
+instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields alias projection
 
 --alias same scope
-else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e fields, Append alias "." path, Append path name fullPath, Cons fullPath u () projection) => ToProjection (Path alias name) fields alias outer projection
+else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e fields, Append alias "." path, Append path name fullPath, Cons fullPath u () projection) => ToProjection (Path alias name) fields alias projection
 --alias outer scope
-else instance pathAToProjection :: (Append table "." path, Append path name fullPath, Cons fullPath t e outer, Cons fullPath t () projection) => ToProjection (Path table name) fields alias outer projection
+else instance pathAToProjection :: (Append table "." path, Append path name fullPath, Cons fullPath (Path table name) () projection) => ToProjection (Path table name) fields alias projection
 
-else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields a outer projection
+else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields a projection
 
-else instance aggregateToProjection :: (Cons alias t () projection) => ToProjection (As alias (Aggregate inp fields t)) fields a outer projection
+else instance aggregateToProjection :: Cons alias t () projection => ToProjection (As alias (Aggregate inp fields t)) fields a projection
 
-else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Proxy name)) fields a outer projection
+else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Proxy name)) fields a projection
 
-else instance pathAAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Path table name)) fields table outer projection
+else instance pathAAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Path table name)) fields table projection
 
-else instance pathAsToProjection :: (Append table "." path, Append path name fullPath, Cons fullPath t e outer, Cons alias t () projection) => ToProjection (As alias (Path table name)) fields a outer projection
+else instance pathAsToProjection :: Cons alias (Path table name) () projection => ToProjection (As alias (Path table name)) fields a projection
 
-else instance starToProjection :: (RowToList fields list, UnwrapAll list projection) => ToProjection Star fields alias outer projection
+else instance starToProjection :: (RowToList fields list, UnwrapAll list projection) => ToProjection Star fields alias projection
 
-else instance tupleToProjection :: (ToProjection s fields alias outer some, ToProjection t fields alias outer more, Union some more projection) => ToProjection (s /\ t) fields alias outer projection
+else instance tupleToProjection :: (ToProjection s fields alias some, ToProjection t fields alias more, Union some more projection) => ToProjection (s /\ t) fields alias projection
 
 --change projection to Maybe since subqueries may return null
 else instance selectFromRestToProjection :: (
-      IsTableAliased f table, --alias for the inner select table
-      ToProjection s fields table outer projection, --wrong here
+      IsTableAliased f table,
+      ToProjection s fields table projection,
       RowToList projection list,
       ToSingleColumn list name t,
       IsNamedSubQuery rest name alias, -- if the subquery ends in as
       Cons alias t () single
-) => ToProjection (Select s p (From f fields rest)) fd a outer single
+) => ToProjection (Select s p (From f fields rest)) fd a single
 
-else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f a o p
+else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f a p
 
 --not required but makes for clearer type errors
 class ToSingleColumn (fields :: RowList Type) (name :: Symbol) (t :: Type) | fields -> name t

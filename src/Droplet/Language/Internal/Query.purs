@@ -48,14 +48,14 @@ instance selToQuery :: (IsValidTopLevel rest, Translate (Select s projection (Fr
       toQuery q = translate q
 
 else instance nselToQuery :: (
-      ToProjection s () "" () projection,
+      ToProjection s () "" projection,
       Nub projection unique,
       UniqueColumnNames projection unique,
       Translate (Select s p E)
 ) => ToQuery (Select s p E) unique where
       toQuery q = translate q
 
-else instance returningToQuery :: (ToProjection f fields "" () projection, Translate (Insert (Into name fields fieldNames (Values v (Returning fields f))))) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning fields f)))) projection where
+else instance returningToQuery :: (ToProjection f fields "" projection, Translate (Insert (Into name fields fieldNames (Values v (Returning fields f))))) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning fields f)))) projection where
       toQuery q = translate q
 
 else instance queryToQuery :: ToQuery (Query projection) projection where
