@@ -3,7 +3,7 @@
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
 module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class IsNamedQuery, class IsNamedSubQuery, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
-import Droplet.Language.Internal.Condition
+import Droplet.Language.Internal.Condition (class ToCondition)
 import Droplet.Language.Internal.Definition
 import Prelude
 
@@ -182,7 +182,7 @@ data From f (fields :: Row Type) rest = From f rest
 class ToFrom (f :: Type) (q :: Type) (fields :: Row Type) | q f -> fields
 
 instance tableToFrom :: (
-      ToProjection s fields "" selected,
+      ToProjection s fields Empty selected,
       Nub selected unique,
       UniqueColumnNames selected unique
 ) => ToFrom (Table name fields) (Select s unique E) fields
@@ -212,20 +212,25 @@ from f q = toRest q $ From f E
 
 -------------------------------WHERE----------------------------
 
-data Where rest = Where Filtered rest
+data Where c rest = Where c rest
 
 
-class ToWhere (q :: Type) (fields :: Row Type) | q -> fields
+class ToWhere (c :: Type) (q :: Type)
 
-instance selectToWhere :: ToWhere (Select s projection (From f fields E)) fields
+instance selectToWhere :: ToCondition c fields alias => ToWhere c (Select s projection (From (As alias f) fields E))
 
-instance updateToWhere :: ToWhere (Update name fields (Set v E)) fields
+instance selectFromToWhere :: ToCondition c fields Empty => ToWhere c (Select s projection (From (Table name fields) fields E))
 
-instance deleteToWhere :: ToWhere (Delete (From f fields E)) fields
+instance selectAsToWhere :: (IsNamedQuery rest alias, ToCondition c fields alias) => ToWhere c (Select s projection (From (Select s p (From f fd rest)) fields E))
+
+instance updateToWhere :: ToCondition c fields Empty => ToWhere c (Update name fields (Set v E))
+
+instance deleteToWhere :: ToCondition c fields Empty => ToWhere c (Delete (From f fields E))
 
 
-wher :: forall q fields sql. ToWhere q fields => ToRest q (Where E) sql => Condition fields -> q -> sql
-wher (Condition filtered) q = toRest q $ Where filtered E
+
+wher :: forall c q sql. ToWhere c q  => ToRest q (Where c E) sql => c -> q -> sql
+wher c q = toRest q $ Where c E
 
 
 
@@ -265,7 +270,7 @@ class ToOrderBy (f :: Type) (q :: Type)
 
 instance fromToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields E))
 
-instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where E)))
+instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where cd E)))
 
 
 class ToOrderByFields (f :: Type) (fields :: Row Type) | f -> fields
@@ -298,7 +303,7 @@ class ToLimit (q :: Type)
 
 instance fromToLimit :: ToLimit (Select s projection (From fr fields (OrderBy f E)))
 
-instance whereToLimit :: ToLimit (Select s projection (From fr fields (Where (OrderBy f E))))
+instance whereToLimit :: ToLimit (Select s projection (From fr fields (Where cd (OrderBy f E))))
 
 limit :: forall q sql. ToLimit q => ToRest q (Limit E) sql => Int -> q -> sql
 limit n q = toRest q $ Limit n E
@@ -600,14 +605,14 @@ class IsTableAliased (f :: Type) (alias :: Symbol) | f -> alias
 
 instance asTableIsTableAliased :: IsTableAliased (As alias (Table name fields)) alias
 
-else instance asSelIsTableAliased :: IsNamedSubQuery rest "" alias => IsTableAliased (Select s p (From f fd rest)) alias
+else instance asSelIsTableAliased :: IsNamedSubQuery rest Empty alias => IsTableAliased (Select s p (From f fd rest)) alias
 
-else instance elseIsTableAliased :: IsTableAliased f ""
+else instance elseIsTableAliased :: IsTableAliased f Empty
 
 
 class IsNamedQuery (q :: Type) (alias :: Symbol) | q -> alias
 
-instance whereIsNamedQuery :: IsNamedQuery rest alias => IsNamedQuery (Where rest) alias
+instance whereIsNamedQuery :: IsNamedQuery rest alias => IsNamedQuery (Where cd rest) alias
 
 instance orderByIsNamedQuery :: IsNamedQuery rest alias => IsNamedQuery (OrderBy f rest) alias
 
@@ -620,7 +625,7 @@ instance asIsNamedQuery :: IsNamedQuery (As alias E) alias
 
 class IsNamedSubQuery (q :: Type) (name :: Symbol) (alias :: Symbol) | q -> name alias
 
-instance whereIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQuery (Where rest) name alias
+instance whereIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQuery (Where cd rest) name alias
 
 instance orderByIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQuery (OrderBy f rest) name alias
 
@@ -658,6 +663,7 @@ instance consUnwrapAll :: (
 ) => UnwrapAll (RL.Cons name t rest) projection
 
 
+
 ---------------------------Rest machinery------------------------------------------
 
 --this trick does the actual replacement of E for the next statement
@@ -672,7 +678,7 @@ instance selectToRest :: ToRest rest b c => ToRest (Select s p rest) b (Select s
 else instance fromToRest :: ToRest rest b c => ToRest (From f fd rest) b (From f fd c) where
       toRest (From f rest) b = From f $ toRest rest b
 
-else instance whereToRest :: ToRest rest b c => ToRest (Where rest) b (Where c) where
+else instance whereToRest :: ToRest rest b c => ToRest (Where cd rest) b (Where cd c) where
       toRest (Where f rest) b = Where f $ toRest rest b
 
 else instance orderByToRest :: ToRest rest b c => ToRest (OrderBy f rest) b (OrderBy f c) where
