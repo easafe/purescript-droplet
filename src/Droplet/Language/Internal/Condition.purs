@@ -1,37 +1,28 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, Condition(..), Filtered(..), OperationFields(..), Operator(..), and, equals, notEquals, greaterThan, lesserThan, or, toCondition, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Op (class ToCompared, Op(..), and, OpType, And, Equals, NotEquals, Or, LesserThan, GreaterThan, equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
-import Prelude
-
-import Data.Either (Either(..))
 import Data.Symbol (class IsSymbol)
-import Data.Symbol as DS
 import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition)
-import Droplet.Language.Internal.Definition as DIED
-import Foreign (Foreign)
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy)
 
-data Operator =
-      Equals |
-      NotEquals |
-      GreaterThan |
-      LesserThan
 
-data Filtered =
-      Operation OperationFields Operator |
-      And Filtered Filtered |
-      Or Filtered Filtered
+data OpType
 
-data OperationFields = OperationFields (Either Foreign String) (Either Foreign String)
+foreign import data Equals :: OpType
+foreign import data NotEquals  :: OpType
+foreign import data GreaterThan  :: OpType
+foreign import data LesserThan :: OpType
 
-newtype Condition (fields :: Row Type) = Condition Filtered
+foreign import data And :: OpType
+foreign import data Or :: OpType
 
---it d be nicer if field parsing was entirely in ToQuery....
-class ToCondition c t (fields :: Row Type) | c -> fields, t -> fields where
-      toCondition :: c -> t -> OperationFields
+data Op (fields :: Row Type) (a :: OpType) b c = Op b c
+
+
+class ToCompared (c :: Type) (t :: Type) (fields :: Row Type) | c t -> fields
 
 --boring
 instance fieldFieldToCondition :: (
@@ -39,48 +30,42 @@ instance fieldFieldToCondition :: (
       IsSymbol otherName,
       Cons name t d fields,
       Cons otherName t e fields
-) => ToCondition (Proxy name) (Proxy otherName) fields where
-      toCondition name otherName = OperationFields (Right $ DS.reflectSymbol name) (Right $ DS.reflectSymbol otherName)
+) => ToCompared (Proxy name) (Proxy otherName) fields
 
 else instance fieldParameterToCondition :: (
       IsSymbol name,
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToCondition (Proxy name) u fields where
-      toCondition name p = OperationFields (Right $ DS.reflectSymbol name) (Left $ DIED.toValue p)
+) => ToCompared (Proxy name) u fields
 
 else instance parameterFieldToCondition :: (
       IsSymbol name,
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToCondition u (Proxy name) fields where
-      toCondition p name = OperationFields (Left $ DIED.toValue p) (Right $ DS.reflectSymbol name)
+) => ToCompared u (Proxy name) fields
 
-else instance parameterParameterToCondition :: ToValue s => ToCondition s s fields where
-      toCondition s t = OperationFields (Left $ DIED.toValue s) (Left $ DIED.toValue t)
+else instance parameterParameterToCondition :: ToValue s => ToCompared s s fields
 
-equals :: forall fields field compared. ToCondition field compared fields => field -> compared -> Condition fields
-equals = cond Equals
 
-notEquals :: forall compared fields field. ToCondition field compared fields => field -> compared -> Condition fields
-notEquals = cond NotEquals
+equals :: forall fields field compared. ToCompared field compared fields => field -> compared -> Op fields Equals field compared
+equals field compared = Op field compared
 
-greaterThan :: forall compared fields field. ToCondition field compared fields => field -> compared -> Condition fields
-greaterThan = cond GreaterThan
+notEquals :: forall compared fields field. ToCompared field compared fields => field -> compared -> Op fields NotEquals field compared
+notEquals field compared = Op field compared
 
-lesserThan :: forall compared fields field. ToCondition field compared fields => field -> compared -> Condition fields
-lesserThan = cond LesserThan
+greaterThan :: forall compared fields field. ToCompared field compared fields => field -> compared -> Op fields GreaterThan field compared
+greaterThan field compared = Op field compared
 
-cond :: forall compared fields field. ToCondition field compared fields => Operator -> field -> compared -> Condition fields
-cond op field compared = Condition $ Operation (toCondition field compared) op
+lesserThan :: forall compared fields field. ToCompared field compared fields => field -> compared -> Op fields LesserThan field compared
+lesserThan field compared = Op field compared
 
-and :: forall fields. Condition fields -> Condition fields -> Condition fields
-and (Condition first) (Condition second) = Condition (And first second)
+and :: forall fields a b c d e f. Op fields a b c -> Op fields d e f -> Op fields And (Op fields a b c) (Op fields d e f)
+and first second = Op first second
 
-or :: forall fields. Condition fields -> Condition fields -> Condition fields
-or (Condition first) (Condition second) = Condition (Or first second)
+or :: forall fields a b c d e f. Op fields a b c -> Op fields d e f -> Op fields Or (Op fields a b c) (Op fields d e f)
+or first second = Op first second
 
 infix 4 notEquals as .<>.
 infix 4 equals as .=.
