@@ -1,7 +1,7 @@
 -- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class ToOuterProjection, class WithColumn, class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, class ToExtraFields, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class ToOuterProjection, class ToNakedProjection, class WithColumn, class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, class ToExtraFields, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -58,7 +58,7 @@ instance selToQuery :: (
       toQuery q = translate q
 
 else instance nselToQuery :: (
-      ToProjection s () Empty projection,
+      ToNakedProjection s projection,
       Nub projection unique,
       UniqueColumnNames projection unique,
       Translate (Select s p E)
@@ -114,6 +114,7 @@ else instance selectFromRestToProjection :: (
 
 else instance elseToProjection :: ToOuterProjection s outer ()
 
+
 --cant use ToSingleColumn as it is not mandatory for a subquery to contain a Path
 class WithColumn (fields :: RowList Type) (q :: Type) (single :: Row Type) | fields -> q single
 
@@ -137,6 +138,24 @@ instance consToExtraFields :: (
       Lacks fullPath tail,
       Union head tail all
 ) => ToExtraFields (RL.Cons name t rest) alias all
+
+
+class ToNakedProjection (s :: Type) (projection :: Row Type)
+
+instance tupleToNProjection :: (ToNakedProjection s some, ToNakedProjection t more, Union some more projection) => ToNakedProjection (s /\ t) projection
+
+else instance selToNProjection :: (
+      ToProjection (Select s p (From f fields rest)) () "" projection,
+      IsTableAliased f table,
+      RowToList fields list,
+      ToExtraFields list table outer,
+      ToOuterProjection s outer refs,
+      RowToList projection pro,
+      ToSingleColumn pro name t,
+      Cons name t () single
+) => ToNakedProjection (Select s p (From f fields rest)) single
+
+else instance elseToNProjection :: ToProjection s () Empty projection => ToNakedProjection s projection
 
 
 {-
