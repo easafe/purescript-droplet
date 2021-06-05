@@ -1,7 +1,7 @@
 -- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class ToOuterProjection, class WithColumn, class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, class ToExtraFields, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -21,11 +21,12 @@ import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
-import Data.Tuple.Nested ((/\))
+import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Function (Aggregate(..))
 import Foreign (Foreign)
-import Prim.Row (class Nub)
-import Prim.RowList (class RowToList)
+import Prim.Row (class Cons, class Lacks, class Nub, class Union)
+import Prim.RowList (class RowToList, RowList)
+import Prim.RowList as RL
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy(..))
@@ -43,18 +44,28 @@ instance queryShow :: Show (Query projection) where
 class ToQuery (q :: Type) (projection :: Row Type) | q -> projection where
       toQuery :: q -> State QueryState String
 
-instance selToQuery :: (IsValidTopLevel rest, Translate (Select s projection (From f fields rest))) => ToQuery (Select s projection (From f fields rest)) projection where
+instance selToQuery :: (
+      IsValidTopLevel rest,
+      IsTableAliased f table,
+      IsNamedSubQuery rest table alias,
+      RowToList fields list,
+      ToExtraFields list alias outer,
+      ToOuterProjection s outer refs,
+      Union refs projection all,
+      Nub all final,
+      Translate (Select s projection (From f fields rest))
+) => ToQuery (Select s projection (From f fields rest)) final where
       toQuery q = translate q
 
 else instance nselToQuery :: (
-      ToProjection s () "" projection,
+      ToProjection s () Empty projection,
       Nub projection unique,
       UniqueColumnNames projection unique,
       Translate (Select s p E)
 ) => ToQuery (Select s p E) unique where
       toQuery q = translate q
 
-else instance returningToQuery :: (ToProjection f fields "" projection, Translate (Insert (Into name fields fieldNames (Values v (Returning fields f))))) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning fields f)))) projection where
+else instance returningToQuery :: (ToProjection f fields Empty projection, Translate (Insert (Into name fields fieldNames (Values v (Returning fields f))))) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning fields f)))) projection where
       toQuery q = translate q
 
 else instance queryToQuery :: ToQuery (Query projection) projection where
@@ -74,12 +85,58 @@ instance orderByIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (Orde
 
 instance limitIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (Limit rest)
 
---can be improved but the gist is that select ... from ... as name translates to (select ... from ... ) as t wich is not a valid top level
+--can be improved but the gist is that select ... from ... as name translates to (select ... from ... ) as t which is not a valid top level
 instance asIsValidTopLevel :: Fail (Text "AS statement cannot be top level") => IsValidTopLevel (As alias E)
 
 instance eIsValidTopLevel :: IsValidTopLevel E
 
 instance qIsValidTopLevel :: IsValidTopLevel (Query projection)
+
+
+class ToOuterProjection (s :: Type) (outer :: Row Type) (projection :: Row Type) | s -> outer projection
+
+instance pathToProjection :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons fullPath t () projection) => ToOuterProjection (Path alias name) outer projection
+
+else instance pathAAsToProjection :: (Append table Dot path, Append path name fullPath, Cons fullPath t e outer, Cons alias t () projection) => ToOuterProjection (As alias (Path table name)) outer projection
+
+else instance tupleToProjection :: (ToOuterProjection s outer some, ToOuterProjection t outer more, Union some more projection) => ToOuterProjection (s /\ t) outer projection
+--union here local and outer references
+else instance selectFromRestToProjection :: (
+      IsTableAliased f table,
+      IsNamedSubQuery rest table tableAlias,
+      RowToList fields fieldList,
+      ToExtraFields fieldList tableAlias inner,
+      Union outer inner all,
+      ToOuterProjection s all projection,
+      RowToList projection list,
+      WithColumn list rest single
+) => ToOuterProjection (Select s p (From f fields rest)) outer single
+
+else instance elseToProjection :: ToOuterProjection s outer ()
+
+--cant use ToSingleColumn as it is not mandatory for a subquery to contain a Path
+class WithColumn (fields :: RowList Type) (q :: Type) (single :: Row Type) | fields -> q single
+
+instance nilToSingleColumn :: WithColumn RL.Nil q ()
+
+else instance singleToSingleColumn :: (IsNamedSubQuery q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name (Maybe t) RL.Nil) q single
+
+else instance singleMaybeToSingleColumn :: (IsNamedSubQuery q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name t RL.Nil) q single
+
+
+class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type) | list alias -> extra
+
+instance nilToExtraFields :: ToExtraFields RL.Nil alias ()
+
+instance consToExtraFields :: (
+      Append alias Dot path,
+      Append path name fullPath,
+      UnwrapDefinition t u,
+      Cons fullPath u () head,
+      ToExtraFields rest alias tail,
+      Lacks fullPath tail,
+      Union head tail all
+) => ToExtraFields (RL.Cons name t rest) alias all
 
 
 {-

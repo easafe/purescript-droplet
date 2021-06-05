@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class IsNamedQuery, class IsNamedSubQuery, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class IsNamedQuery, class IsNamedSubQuery, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Definition
 import Prelude
@@ -203,7 +203,7 @@ instance asToFrom :: (
       ToProjection t projection alias selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Select s projection (From f fd rest)) (Select t unique E) fields
+) => ToFrom (Select s projection (From f fd rest)) (Select t unique E) projection
 
 
 from :: forall f q fields sql. ToFrom f q fields => ToRest q (From f fields E) sql => f -> q -> sql
@@ -635,21 +635,6 @@ instance limitIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQu
 instance eIsNamedSubQuery :: IsNamedSubQuery E name name
 
 instance asIsNamedSubQuery :: IsNamedSubQuery (As alias E) name alias
-
-
-class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type) | list alias -> extra
-
-instance nilToExtraFields :: ToExtraFields RL.Nil alias ()
-
-instance consToExtraFields :: (
-      Append alias Dot path,
-      Append path name fullPath,
-      UnwrapDefinition t u,
-      Cons fullPath u () head,
-      ToExtraFields rest alias tail,
-      Lacks fullPath tail,
-      Union head tail all
-) => ToExtraFields (RL.Cons name t rest) alias all
 
 
 class UnwrapAll (list :: RowList Type) (projection :: Row Type) | list -> projection
