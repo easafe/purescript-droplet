@@ -1,7 +1,7 @@
 -- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class ToOuterProjection, class ToNakedProjection, class WithColumn, class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, class ToExtraFields, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class IsValidReference, class ToOuterProjection, class ToNakedProjection, class WithColumn, class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, class ToExtraFields, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -50,6 +50,7 @@ instance selToQuery :: (
       IsNamedSubQuery rest table alias,
       RowToList fields list,
       ToExtraFields list alias outer,
+      IsValidReference rest outer,
       ToOuterProjection s outer refs,
       Union refs projection all,
       Nub all final,
@@ -107,6 +108,7 @@ else instance selectFromRestToProjection :: (
       RowToList fields fieldList,
       ToExtraFields fieldList tableAlias inner,
       Union outer inner all,
+      IsValidReference rest all,
       ToOuterProjection s all projection,
       RowToList projection list,
       WithColumn list rest single
@@ -140,6 +142,24 @@ instance consToExtraFields :: (
 ) => ToExtraFields (RL.Cons name t rest) alias all
 
 
+class IsValidReference (q :: Type) (outer :: Row Type)
+
+instance whereIsValidReference :: IsValidReference cond outer => IsValidReference (Where cond rest) outer
+
+else instance where2IsValidReference :: (IsValidReference (Op a b) outer, IsValidReference (Op c d) outer) => IsValidReference (Op (Op a b) (Op c d)) outer
+
+else instance where3IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Append otherAlias Dot path, Append path otherName otherFullPath, Cons otherFullPath t f outer) => IsValidReference (Op (Path alias name) (Path otherAlias otherName)) outer
+
+else instance where4IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons otherFullPath t f outer) => IsValidReference (Op (Path alias name) (Proxy otherName)) outer
+
+else instance where5IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons otherFullPath t f outer) => IsValidReference (Op (Proxy otherName) (Path alias name)) outer
+
+else instance where6IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer) => IsValidReference (Op (Path alias name) t) outer
+
+else instance where7IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer) => IsValidReference (Op t (Path alias name)) outer
+
+else instance eIsValidReference :: IsValidReference e outer
+
 class ToNakedProjection (s :: Type) (projection :: Row Type)
 
 instance tupleToNProjection :: (ToNakedProjection s some, ToNakedProjection t more, Union some more projection) => ToNakedProjection (s /\ t) projection
@@ -156,6 +176,7 @@ else instance selToNProjection :: (
 ) => ToNakedProjection (Select s p (From f fields rest)) single
 
 else instance elseToNProjection :: ToProjection s () Empty projection => ToNakedProjection s projection
+
 
 
 {-

@@ -33,7 +33,7 @@ else instance elseToCondition :: ToCompared a b fields alias => ToCondition (Op 
 
 class ToCompared (c :: Type) (t :: Type) (fields :: Row Type) (alias :: Symbol) | c t -> fields
 
---boring
+--boring, but we shouldnt make Path an instance of ToValue
 instance fieldFieldToCondition :: (
       Cons name t d fields,
       Cons otherName t e fields
