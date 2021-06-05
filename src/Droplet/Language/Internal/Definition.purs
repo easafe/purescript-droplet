@@ -27,6 +27,7 @@ import Data.Symbol as DS
 import Data.Traversable as DT
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
+import Droplet.Language.Internal.Keyword (Dot, dotSymbol)
 import Foreign (Foreign)
 import Foreign as F
 import Prim.Row (class Cons)
@@ -52,7 +53,7 @@ data Table (name :: Symbol) (fields :: Row Type) = Table
 
 data Path (alias :: Symbol) (field :: Symbol) = Path
 
-path :: forall alias field path pathField . Append alias "." path => Append path field pathField => Proxy alias -> Proxy field -> Path alias field
+path :: forall alias field path pathField . Append alias Dot path => Append path field pathField => Proxy alias -> Proxy field -> Path alias field
 path _ _ = Path
 
 infix 5 path as ...
@@ -102,7 +103,7 @@ instance arrayToValue :: ToValue a => ToValue (Array a) where
 
 instance dateTimeToValue :: ToValue DateTime where
       toValue (DateTime date (Time h m s ms)) = F.unsafeToForeign $ formatDate date <> "T" <> time <> "+0000"
-            where time = show (DEN.fromEnum h) <> ":" <> show (DEN.fromEnum m) <> ":" <> show (DEN.fromEnum s) <> "." <> show (DEN.fromEnum ms)
+            where time = show (DEN.fromEnum h) <> ":" <> show (DEN.fromEnum m) <> ":" <> show (DEN.fromEnum s) <> dotSymbol <> show (DEN.fromEnum ms)
 
 formatDate :: Date -> String
 formatDate date = show y <> "-" <> show m <> "-" <> show d

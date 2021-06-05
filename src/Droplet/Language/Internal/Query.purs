@@ -1,7 +1,7 @@
 -- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -13,7 +13,6 @@ import Control.Monad.State (State)
 import Control.Monad.State as CMS
 import Data.Array ((..))
 import Data.Array as DA
-import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.String.Regex as DSR
 import Data.String.Regex.Flags (global)
@@ -69,7 +68,7 @@ else instance elseToQuery :: Translate s => ToQuery s () where
 
 class IsValidTopLevel (q :: Type)
 
-instance whereIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (Where rest)
+instance whereIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (Where c rest)
 
 instance orderByIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (OrderBy f rest)
 
@@ -158,7 +157,7 @@ class TranslateColumn q where
 instance fieldTranslateColumn :: IsSymbol name => TranslateColumn (Proxy name) where
       translateColumn name = pure $ DS.reflectSymbol name
 
-else instance pathTranslateColumn :: (IsSymbol fullPath, Append table "." path, Append path name fullPath) => TranslateColumn (Path table name) where
+else instance pathTranslateColumn :: (IsSymbol fullPath, Append table Dot path, Append path name fullPath) => TranslateColumn (Path table name) where
       translateColumn _ = pure $ quoteColumn (Proxy :: Proxy fullPath)
 
 else instance tableTranslateColumn :: TranslateColumn Star where
@@ -173,7 +172,7 @@ else instance asAggregateTranslateColumn :: (IsSymbol name, ToAggregateName inp)
 else instance asFieldTranslateColumn :: (IsSymbol name, IsSymbol alias) => TranslateColumn (As alias (Proxy name)) where
       translateColumn _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
 
-else instance asPathTranslateColumn :: (IsSymbol fullPath, IsSymbol alias, Append table "." path, Append path name fullPath) => TranslateColumn (As alias (Path table name)) where
+else instance asPathTranslateColumn :: (IsSymbol fullPath, IsSymbol alias, Append table Dot path, Append path name fullPath) => TranslateColumn (As alias (Path table name)) where
       translateColumn _ = pure $ DS.reflectSymbol (Proxy :: Proxy fullPath) <> asKeyword <> quote (Proxy :: Proxy alias)
 
 else instance tupleTranslateColumn :: (TranslateColumn s, TranslateColumn t) => TranslateColumn (Tuple s t) where
@@ -220,35 +219,34 @@ instance asTranslate :: IsSymbol name => Translate (As name E) where
                   pure as
 
 --where
-instance whereTranslate :: Translate rest => Translate (Where rest) where
-      translate (Where filtered rest) = do
-            q <- printFilters filtered
+instance whereTranslate :: (ToWhereFields c, Translate rest) => Translate (Where c rest) where
+      translate (Where c rest) = do
+            q <- toWhereFields c
             otherQ <- translate rest
             pure $ whereKeyword <> q <> otherQ
 
-printFilters :: Filtered -> State QueryState String
-printFilters filtered = case filtered of
-      Operation opFields op -> printFilterParameter opFields op
-      And filter otherFilter -> printBracketedFilters andKeyword filter otherFilter
-      Or filter otherFilter -> printBracketedFilters orKeyword filter otherFilter
+class ToWhereFields c where
+      toWhereFields :: c -> State QueryState String
 
-printFilterParameter :: OperationFields -> Operator -> State QueryState String
-printFilterParameter (OperationFields field otherField) op = do
-      q <- fieldParameters field
-      otherQ <- fieldParameters otherField
-      pure $ q <> printOperator op <> otherQ
+instance cToWhereFields :: (ToWhereFields a, ToWhereFields b) => ToWhereFields (Op a b) where
+      toWhereFields (Op operator a b) = do
+            q <- toWhereFields a
+            otherQ <- toWhereFields b
+            pure $
+                  if operator == And || operator == Or then
+                        openBracket <> q <> printOperator operator <> otherQ <> closeBracket
+                   else
+                        q <> printOperator operator <> otherQ
 
-printBracketedFilters :: String -> Filtered -> Filtered -> State QueryState String
-printBracketedFilters keyword filter otherFilter = do
-      q <- printFilters filter
-      otherQ <- printFilters otherFilter
-      pure $ openBracket <> q <> keyword <> otherQ <> closeBracket
+else instance c2ToWhereFields :: IsSymbol name => ToWhereFields (Proxy name) where
+      toWhereFields name = pure $ DS.reflectSymbol name
 
-fieldParameters :: Either Foreign String -> State QueryState String
-fieldParameters = case _ of
-      Right field -> pure field
-      Left p -> do
-            { parameters } <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters p }
+else instance c3ToWhereFields :: (Append alias Dot path, Append path name fullPath,  IsSymbol fullPath) => ToWhereFields (Path alias name) where
+      toWhereFields _ = pure $ DS.reflectSymbol (Proxy :: Proxy fullPath)
+
+else instance c4ToWhereFields :: ToValue v => ToWhereFields v where
+      toWhereFields p = do
+            { parameters } <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters $ toValue p }
             pure $ "$" <> show (DA.length parameters)
 
 printOperator :: Operator -> String
@@ -257,6 +255,8 @@ printOperator = case _ of
       NotEquals -> notEqualsSymbol
       LesserThan -> lesserThanSymbol
       GreaterThan -> greaterThanSymbol
+      And -> andKeyword
+      Or -> orKeyword
 
 --insert
 instance insertTranslate :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v, Translate rest) => Translate (Insert (Into name fields fieldNames (Values v rest))) where

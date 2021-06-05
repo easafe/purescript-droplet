@@ -1,7 +1,9 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class ToCompared, Op(..), and, Operator, equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class ToCompared, Op(..), and, Operator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+
+import Prelude
 
 import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, Path)
 import Prim.Row (class Cons)
@@ -15,6 +17,8 @@ data Operator =
       LesserThan |
       And |
       Or
+
+derive instance opEq :: Eq Operator
 
 data Op b c = Op Operator b c
 
@@ -89,7 +93,7 @@ equals :: forall field compared. field -> compared -> Op field compared
 equals field compared = Op Equals field compared
 
 notEquals :: forall compared field. field -> compared -> Op field compared
-notEquals field compared = Op  NotEquals field compared
+notEquals field compared = Op NotEquals field compared
 
 greaterThan :: forall compared field. field -> compared -> Op field compared
 greaterThan field compared = Op GreaterThan field compared

@@ -3,13 +3,14 @@
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
 module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class IsNamedQuery, class IsNamedSubQuery, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
-import Droplet.Language.Internal.Condition (class ToCondition)
 import Droplet.Language.Internal.Definition
 import Prelude
 
 import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
+import Droplet.Language.Internal.Condition (class ToCondition)
 import Droplet.Language.Internal.Function (Aggregate)
+import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
@@ -557,9 +558,9 @@ class ToProjection (s :: Type) (fields :: Row Type) (alias :: Symbol) (projectio
 instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields alias projection
 
 --alias same scope
-else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e fields, Append alias "." path, Append path name fullPath, Cons fullPath u () projection) => ToProjection (Path alias name) fields alias projection
+else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e fields, Append alias Dot path, Append path name fullPath, Cons fullPath u () projection) => ToProjection (Path alias name) fields alias projection
 --alias outer scope
-else instance pathAToProjection :: (Append table "." path, Append path name fullPath, Cons fullPath (Path table name) () projection) => ToProjection (Path table name) fields alias projection
+else instance pathAToProjection :: (Append table Dot path, Append path name fullPath, Cons fullPath (Path table name) () projection) => ToProjection (Path table name) fields alias projection
 
 else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields a projection
 
@@ -641,7 +642,7 @@ class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type)
 instance nilToExtraFields :: ToExtraFields RL.Nil alias ()
 
 instance consToExtraFields :: (
-      Append alias "." path,
+      Append alias Dot path,
       Append path name fullPath,
       UnwrapDefinition t u,
       Cons fullPath u () head,
