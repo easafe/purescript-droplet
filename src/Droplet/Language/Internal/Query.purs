@@ -100,7 +100,7 @@ instance pathToProjection :: (Append alias Dot path, Append path name fullPath, 
 else instance pathAAsToProjection :: (Append table Dot path, Append path name fullPath, Cons fullPath t e outer, Cons alias t () projection) => ToOuterProjection (As alias (Path table name)) outer projection
 
 else instance tupleToProjection :: (ToOuterProjection s outer some, ToOuterProjection t outer more, Union some more projection) => ToOuterProjection (s /\ t) outer projection
---union here local and outer references
+
 else instance selectFromRestToProjection :: (
       IsTableAliased f table,
       IsNamedSubQuery rest table tableAlias,
