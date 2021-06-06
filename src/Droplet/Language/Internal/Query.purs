@@ -1,7 +1,7 @@
 -- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class IsValidReference, class ToOuterProjection, class ToNakedProjection, class WithColumn, class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, class ToExtraFields, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class IsValidReference, class ToPath, class ToOuterProjection, class ToNakedProjection, class WithColumn, class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, class ToExtraFields, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -132,7 +132,7 @@ class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type)
 instance nilToExtraFields :: ToExtraFields RL.Nil alias ()
 
 instance consToExtraFields :: (
-      Append alias Dot path,
+      ToPath alias path,
       Append path name fullPath,
       UnwrapDefinition t u,
       Cons fullPath u () head,
@@ -142,17 +142,24 @@ instance consToExtraFields :: (
 ) => ToExtraFields (RL.Cons name t rest) alias all
 
 
+class ToPath (alias :: Symbol) (path :: Symbol) | alias -> path
+
+instance nToPath :: ToPath Empty Empty
+
+else instance elseToPath :: Append alias Dot path => ToPath alias path
+
+
 class IsValidReference (q :: Type) (outer :: Row Type)
 
 instance whereIsValidReference :: IsValidReference cond outer => IsValidReference (Where cond rest) outer
 
 else instance where2IsValidReference :: (IsValidReference (Op a b) outer, IsValidReference (Op c d) outer) => IsValidReference (Op (Op a b) (Op c d)) outer
 
-else instance where3IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Append otherAlias Dot path, Append path otherName otherFullPath, Cons otherFullPath t f outer) => IsValidReference (Op (Path alias name) (Path otherAlias otherName)) outer
+else instance where3IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Append otherAlias Dot otherPath, Append otherPath otherName otherFullPath, Cons otherFullPath t f outer) => IsValidReference (Op (Path alias name) (Path otherAlias otherName)) outer
 
-else instance where4IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons otherFullPath t f outer) => IsValidReference (Op (Path alias name) (Proxy otherName)) outer
+else instance where4IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons otherName t f outer) => IsValidReference (Op (Path alias name) (Proxy otherName)) outer
 
-else instance where5IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons otherFullPath t f outer) => IsValidReference (Op (Proxy otherName) (Path alias name)) outer
+else instance where5IsValidReference :: (Cons name t f outer, Append alias Dot path, Append path otherName fullPath, Cons fullPath t e outer) => IsValidReference (Op (Proxy name) (Path alias otherName)) outer
 
 else instance where6IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer) => IsValidReference (Op (Path alias name) t) outer
 

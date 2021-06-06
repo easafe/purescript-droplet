@@ -222,7 +222,7 @@ instance selectToWhere :: ToCondition c fields alias => ToWhere c (Select s proj
 
 instance selectFromToWhere :: ToCondition c fields Empty => ToWhere c (Select s projection (From (Table name fields) fields E))
 
-instance selectAsToWhere :: (IsNamedQuery rest alias, ToCondition c fields alias) => ToWhere c (Select s projection (From (Select s p (From f fd rest)) fields E))
+instance selectAsToWhere :: (IsNamedQuery rest alias, ToCondition c fields alias) => ToWhere c (Select s projection (From (Select t p (From f fd rest)) fields E))
 
 instance updateToWhere :: ToCondition c fields Empty => ToWhere c (Update name fields (Set v E))
 

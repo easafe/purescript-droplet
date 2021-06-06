@@ -39,18 +39,6 @@ instance fieldFieldToCondition :: (
       Cons otherName t e fields
 ) => ToCompared (Proxy name) (Proxy otherName) fields alias
 
-else instance fieldParameterToCondition :: (
-      UnwrapDefinition t u,
-      Cons name t d fields,
-      ToValue u
-) => ToCompared (Proxy name) u fields alias
-
-else instance parameterFieldToCondition :: (
-      UnwrapDefinition t u,
-      Cons name t d fields,
-      ToValue u
-) => ToCompared u (Proxy name) fields alias
-
 else instance pToCondition :: (
       Cons name t d fields,
       Cons otherName t e fields
@@ -66,23 +54,35 @@ else instance p3ToCondition :: (
       Cons otherName t e fields
 ) => ToCompared (Proxy name) (Path alias otherName) fields alias
 
+else instance p7ToCondition :: Cons otherName t e fields => ToCompared (Path alias name) (Proxy otherName) fields alias
+
+else instance p8ToCondition :: Cons name t d fields => ToCompared (Proxy name) (Path table otherName) fields alias
+
+else instance p9ToCondition :: ToCompared (Path table name) u fields alias
+
 else instance p4ToCondition :: (
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
 ) => ToCompared (Path alias name) u fields alias
 
+else instance fieldParameterToCondition :: (
+      UnwrapDefinition t u,
+      Cons name t d fields,
+      ToValue u
+) => ToCompared (Proxy name) u fields alias
+
+else instance parameterFieldToCondition :: (
+      UnwrapDefinition t u,
+      Cons name t d fields,
+      ToValue u
+) => ToCompared u (Proxy name) fields alias
+
 else instance p5ToCondition :: (
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
 ) => ToCompared u (Path alias name) fields alias
-
-else instance p7ToCondition :: Cons otherName t e fields => ToCompared (Path alias name) (Proxy otherName) fields alias
-
-else instance p8ToCondition :: Cons name t d fields => ToCompared (Proxy name) (Path table otherName) fields alias
-
-else instance p9ToCondition :: ToCompared (Path table name) u fields alias
 
 else instance p10ToCondition :: ToCompared u (Path table name) fields alias
 
