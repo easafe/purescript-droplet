@@ -1,86 +1,116 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, Condition(..), Filtered(..), OperationFields(..), Operator(..), and, equals, notEquals, greaterThan, lesserThan, or, toCondition, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class ToCompared, Op(..), and, Operator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
 import Prelude
 
-import Data.Either (Either(..))
-import Data.Symbol (class IsSymbol)
-import Data.Symbol as DS
-import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition)
-import Droplet.Language.Internal.Definition as DIED
-import Foreign (Foreign)
+import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, Path)
 import Prim.Row (class Cons)
+import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
+
 
 data Operator =
       Equals |
       NotEquals |
       GreaterThan |
-      LesserThan
+      LesserThan |
+      And |
+      Or
 
-data Filtered =
-      Operation OperationFields Operator |
-      And Filtered Filtered |
-      Or Filtered Filtered
+derive instance opEq :: Eq Operator
 
-data OperationFields = OperationFields (Either Foreign String) (Either Foreign String)
+data Op b c = Op Operator b c
 
-newtype Condition (fields :: Row Type) = Condition Filtered
 
---it d be nicer if field parsing was entirely in ToQuery....
-class ToCondition c t (fields :: Row Type) | c -> fields, t -> fields where
-      toCondition :: c -> t -> OperationFields
+--two type classes to not clutter Op with fields and alias type parameters
+class ToCondition (c :: Type) (fields :: Row Type) (alias :: Symbol)
 
---boring
+instance eToCondition :: (ToCondition (Op a b) fields alias, ToCondition (Op c d) fields alias) => ToCondition (Op (Op a b) (Op c d)) fields alias
+
+else instance elseToCondition :: ToCompared a b fields alias => ToCondition (Op a b) fields alias
+
+
+class ToCompared (c :: Type) (t :: Type) (fields :: Row Type) (alias :: Symbol) | c t -> fields
+
+--boring, but we shouldnt make Path an instance of ToValue
 instance fieldFieldToCondition :: (
-      IsSymbol name,
-      IsSymbol otherName,
       Cons name t d fields,
       Cons otherName t e fields
-) => ToCondition (Proxy name) (Proxy otherName) fields where
-      toCondition name otherName = OperationFields (Right $ DS.reflectSymbol name) (Right $ DS.reflectSymbol otherName)
+) => ToCompared (Proxy name) (Proxy otherName) fields alias
+
+else instance pToCondition :: (
+      Cons name t d fields,
+      Cons otherName t e fields
+) => ToCompared (Path alias name) (Path alias otherName) fields alias
+
+else instance p2ToCondition :: (
+      Cons name t d fields,
+      Cons otherName t e fields
+) => ToCompared (Path alias name) (Proxy otherName) fields alias
+
+else instance p3ToCondition :: (
+      Cons name t d fields,
+      Cons otherName t e fields
+) => ToCompared (Proxy name) (Path alias otherName) fields alias
+
+else instance p7ToCondition :: Cons otherName t e fields => ToCompared (Path table name) (Proxy otherName) fields alias
+
+else instance p8ToCondition :: Cons name t d fields => ToCompared (Proxy name) (Path table otherName) fields alias
+
+else instance p9ToCondition :: ToCompared (Path table name) (Path alias otherName) fields alias
+
+else instance p19ToCondition :: ToCompared (Path alias otherName) (Path table name)  fields alias
+
+else instance p4ToCondition :: (
+      UnwrapDefinition t u,
+      Cons name t d fields,
+      ToValue u
+) => ToCompared (Path alias name) u fields alias
 
 else instance fieldParameterToCondition :: (
-      IsSymbol name,
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToCondition (Proxy name) u fields where
-      toCondition name p = OperationFields (Right $ DS.reflectSymbol name) (Left $ DIED.toValue p)
+) => ToCompared (Proxy name) u fields alias
 
 else instance parameterFieldToCondition :: (
-      IsSymbol name,
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToCondition u (Proxy name) fields where
-      toCondition p name = OperationFields (Left $ DIED.toValue p) (Right $ DS.reflectSymbol name)
+) => ToCompared u (Proxy name) fields alias
 
-else instance parameterParameterToCondition :: ToValue s => ToCondition s s fields where
-      toCondition s t = OperationFields (Left $ DIED.toValue s) (Left $ DIED.toValue t)
+else instance p5ToCondition :: (
+      UnwrapDefinition t u,
+      Cons name t d fields,
+      ToValue u
+) => ToCompared u (Path alias name) fields alias
 
-equals :: forall fields field compared. ToCondition field compared fields => field -> compared -> Condition fields
-equals = cond Equals
+else instance p98ToCondition :: ToValue u => ToCompared (Path table name) u fields alias
 
-notEquals :: forall compared fields field. ToCondition field compared fields => field -> compared -> Condition fields
-notEquals = cond NotEquals
+else instance p10ToCondition :: ToValue u => ToCompared u (Path table name) fields alias
 
-greaterThan :: forall compared fields field. ToCondition field compared fields => field -> compared -> Condition fields
-greaterThan = cond GreaterThan
+else instance parameterParameterToCondition :: ToValue s => ToCompared s s fields alias
 
-lesserThan :: forall compared fields field. ToCondition field compared fields => field -> compared -> Condition fields
-lesserThan = cond LesserThan
 
-cond :: forall compared fields field. ToCondition field compared fields => Operator -> field -> compared -> Condition fields
-cond op field compared = Condition $ Operation (toCondition field compared) op
+equals :: forall field compared. field -> compared -> Op field compared
+equals field compared = Op Equals field compared
 
-and :: forall fields. Condition fields -> Condition fields -> Condition fields
-and (Condition first) (Condition second) = Condition (And first second)
+notEquals :: forall compared field. field -> compared -> Op field compared
+notEquals field compared = Op NotEquals field compared
 
-or :: forall fields. Condition fields -> Condition fields -> Condition fields
-or (Condition first) (Condition second) = Condition (Or first second)
+greaterThan :: forall compared field. field -> compared -> Op field compared
+greaterThan field compared = Op GreaterThan field compared
+
+lesserThan :: forall compared field. field -> compared -> Op field compared
+lesserThan field compared = Op LesserThan field compared
+
+and :: forall a b c d. Op a b -> Op c d -> Op (Op a b) (Op c d)
+and first second = Op And first second
+
+or :: forall a b c d. Op a b -> Op c d -> Op (Op a b) (Op c d)
+or first second = Op Or first second
 
 infix 4 notEquals as .<>.
 infix 4 equals as .=.

@@ -1,6 +1,8 @@
 -- | SQL Keywords and tokens
 module Droplet.Language.Internal.Keyword where
 
+type Dot = "."
+
 --magic strings
 selectKeyword :: String
 selectKeyword = "SELECT "

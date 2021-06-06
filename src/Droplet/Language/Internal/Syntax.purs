@@ -1,15 +1,16 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class IsNamedQuery, class IsNamedSubQuery, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), class ToExtraFields, Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class IsNamedQuery, class IsNamedSubQuery, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
-import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
 import Prelude
 
 import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
+import Droplet.Language.Internal.Condition (class ToCondition)
 import Droplet.Language.Internal.Function (Aggregate)
+import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
@@ -179,59 +180,58 @@ select s = Select s E
 data From f (fields :: Row Type) rest = From f rest
 
 --from needs to check if columns referenced by Select are valid
-class ToFrom (f :: Type) (q :: Type) (fields :: Row Type) (outer :: Row Type) | q -> outer, f -> fields
+class ToFrom (f :: Type) (q :: Type) (fields :: Row Type) | q f -> fields
 
 instance tableToFrom :: (
-      ToProjection s fields "" outer selected,
+      ToProjection s fields Empty selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Table name fields) (Select s unique E) fields outer
+) => ToFrom (Table name fields) (Select s unique E) fields
 
 --named tables like select ... from table as alias
 instance tableAsToFrom :: (
-      RowToList fields list,
-      ToExtraFields list alias extra,
-      Union fields extra all,
-      ToProjection s fields alias extra selected,
+      ToProjection s fields alias selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (As alias (Table name fields)) (Select s unique E) all outer
+) => ToFrom (As alias (Table name fields)) (Select s unique E) fields
 
-instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete E) fields ()
+instance tableDeleteToFrom :: ToFrom (Table name fields) (Delete E) fields
 
 --named queries like (select ... from ... ) as alias
 instance asToFrom :: (
-      RowToList projection list,
       IsNamedQuery rest alias,
-      ToExtraFields list alias extra,
-      Union projection extra all,
-      ToProjection t projection alias extra selected,
+      ToProjection t projection alias selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Select s projection (From f fd rest)) (Select t unique E) all outer
+) => ToFrom (Select s projection (From f fd rest)) (Select t unique E) projection
 
 
-from :: forall f q fields outer sql. ToFrom f q fields outer => ToRest q (From f fields E) sql => f -> q -> sql
+from :: forall f q fields sql. ToFrom f q fields => ToRest q (From f fields E) sql => f -> q -> sql
 from f q = toRest q $ From f E
 
 
 
 -------------------------------WHERE----------------------------
 
-data Where rest = Where Filtered rest
+data Where c rest = Where c rest
 
 
-class ToWhere (q :: Type) (fields :: Row Type) | q -> fields
+class ToWhere (c :: Type) (q :: Type)
 
-instance selectToWhere :: ToWhere (Select s projection (From f fields E)) fields
+instance selectToWhere :: ToCondition c fields alias => ToWhere c (Select s projection (From (As alias f) fields E))
 
-instance updateToWhere :: ToWhere (Update name fields (Set v E)) fields
+instance selectFromToWhere :: ToCondition c fields Empty => ToWhere c (Select s projection (From (Table name fields) fields E))
 
-instance deleteToWhere :: ToWhere (Delete (From f fields E)) fields
+instance selectAsToWhere :: (IsNamedQuery rest alias, ToCondition c fields alias) => ToWhere c (Select s projection (From (Select t p (From f fd rest)) fields E))
+
+instance updateToWhere :: ToCondition c fields Empty => ToWhere c (Update name fields (Set v E))
+
+instance deleteToWhere :: ToCondition c fields Empty => ToWhere c (Delete (From f fields E))
 
 
-wher :: forall q fields sql. ToWhere q fields => ToRest q (Where E) sql => Condition fields -> q -> sql
-wher (Condition filtered) q = toRest q $ Where filtered E
+
+wher :: forall c q sql. ToWhere c q  => ToRest q (Where c E) sql => c -> q -> sql
+wher c q = toRest q $ Where c E
 
 
 
@@ -271,7 +271,7 @@ class ToOrderBy (f :: Type) (q :: Type)
 
 instance fromToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields E))
 
-instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where E)))
+instance whereToOrderBy :: (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where cd E)))
 
 
 class ToOrderByFields (f :: Type) (fields :: Row Type) | f -> fields
@@ -304,7 +304,7 @@ class ToLimit (q :: Type)
 
 instance fromToLimit :: ToLimit (Select s projection (From fr fields (OrderBy f E)))
 
-instance whereToLimit :: ToLimit (Select s projection (From fr fields (Where (OrderBy f E))))
+instance whereToLimit :: ToLimit (Select s projection (From fr fields (Where cd (OrderBy f E))))
 
 limit :: forall q sql. ToLimit q => ToRest q (Limit E) sql => Int -> q -> sql
 limit n q = toRest q $ Limit n E
@@ -531,7 +531,7 @@ full RETURNING syntax supported by droplet
 newtype Returning (fields :: Row Type) f = Returning f
 
 
-class ToReturning (f :: Type) (fields :: Row Type) (q :: Type) | q -> fields
+class ToReturning (f :: Type) (fields :: Row Type) (q :: Type) | f -> q, q -> fields
 
 instance insertToReturning :: ToReturningFields f fields => ToReturning f fields (Insert (Into tn fields fn (Values fv E)))
 
@@ -552,41 +552,41 @@ returning f q = toRest q $ Returning f
 ------------------------Projection machinery---------------------------
 
 -- | Row Type of columns projected by the query
-class ToProjection (s :: Type) (fields :: Row Type) (alias :: Symbol) (outer :: Row Type) (projection :: Row Type) | s -> fields projection
+class ToProjection (s :: Type) (fields :: Row Type) (alias :: Symbol) (projection :: Row Type) | s -> fields projection
 
 --simple columns
-instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields alias outer projection
+instance fieldToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields alias projection
 
 --alias same scope
-else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e fields, Append alias "." path, Append path name fullPath, Cons fullPath u () projection) => ToProjection (Path alias name) fields alias outer projection
+else instance pathToProjection :: (UnwrapDefinition t u, Cons name t e fields, Append alias Dot path, Append path name fullPath, Cons fullPath u () projection) => ToProjection (Path alias name) fields alias projection
 --alias outer scope
-else instance pathAToProjection :: (Append table "." path, Append path name fullPath, Cons fullPath t e outer, Cons fullPath t () projection) => ToProjection (Path table name) fields alias outer projection
+else instance pathAToProjection :: (Append table Dot path, Append path name fullPath, Cons fullPath (Path table name) () projection) => ToProjection (Path table name) fields alias projection
 
-else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields a outer projection
+else instance intAsToProjection :: Cons alias Int () projection => ToProjection (As alias Int) fields a projection
 
-else instance aggregateToProjection :: (Cons alias t () projection) => ToProjection (As alias (Aggregate inp fields t)) fields a outer projection
+else instance aggregateToProjection :: Cons alias t () projection => ToProjection (As alias (Aggregate inp fields t)) fields a projection
 
-else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Proxy name)) fields a outer projection
+else instance fieldAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Proxy name)) fields a projection
 
-else instance pathAAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Path table name)) fields table outer projection
+else instance pathAAsToProjection :: (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Path table name)) fields table projection
 
-else instance pathAsToProjection :: (Append table "." path, Append path name fullPath, Cons fullPath t e outer, Cons alias t () projection) => ToProjection (As alias (Path table name)) fields a outer projection
+else instance pathAsToProjection :: Cons alias (Path table name) () projection => ToProjection (As alias (Path table name)) fields a projection
 
-else instance starToProjection :: (RowToList fields list, UnwrapAll list projection) => ToProjection Star fields alias outer projection
+else instance starToProjection :: (RowToList fields list, UnwrapAll list projection) => ToProjection Star fields alias projection
 
-else instance tupleToProjection :: (ToProjection s fields alias outer some, ToProjection t fields alias outer more, Union some more projection) => ToProjection (s /\ t) fields alias outer projection
+else instance tupleToProjection :: (ToProjection s fields alias some, ToProjection t fields alias more, Union some more projection) => ToProjection (s /\ t) fields alias projection
 
 --change projection to Maybe since subqueries may return null
 else instance selectFromRestToProjection :: (
-      IsTableAliased f table, --alias for the inner select table
-      ToProjection s fields table outer projection, --wrong here
+      IsTableAliased f table,
+      ToProjection s fields table projection,
       RowToList projection list,
       ToSingleColumn list name t,
       IsNamedSubQuery rest name alias, -- if the subquery ends in as
       Cons alias t () single
-) => ToProjection (Select s p (From f fields rest)) fd a outer single
+) => ToProjection (Select s p (From f fields rest)) fd a single
 
-else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f a o p
+else instance failToProjection :: Fail (Text "Cannot recognize projection") => ToProjection x f a p
 
 --not required but makes for clearer type errors
 class ToSingleColumn (fields :: RowList Type) (name :: Symbol) (t :: Type) | fields -> name t
@@ -606,14 +606,14 @@ class IsTableAliased (f :: Type) (alias :: Symbol) | f -> alias
 
 instance asTableIsTableAliased :: IsTableAliased (As alias (Table name fields)) alias
 
-else instance asSelIsTableAliased :: IsNamedSubQuery rest "" alias => IsTableAliased (Select s p (From f fd rest)) alias
+else instance asSelIsTableAliased :: IsNamedSubQuery rest Empty alias => IsTableAliased (Select s p (From f fd rest)) alias
 
-else instance elseIsTableAliased :: IsTableAliased f ""
+else instance elseIsTableAliased :: IsTableAliased f Empty
 
 
 class IsNamedQuery (q :: Type) (alias :: Symbol) | q -> alias
 
-instance whereIsNamedQuery :: IsNamedQuery rest alias => IsNamedQuery (Where rest) alias
+instance whereIsNamedQuery :: IsNamedQuery rest alias => IsNamedQuery (Where cd rest) alias
 
 instance orderByIsNamedQuery :: IsNamedQuery rest alias => IsNamedQuery (OrderBy f rest) alias
 
@@ -626,7 +626,7 @@ instance asIsNamedQuery :: IsNamedQuery (As alias E) alias
 
 class IsNamedSubQuery (q :: Type) (name :: Symbol) (alias :: Symbol) | q -> name alias
 
-instance whereIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQuery (Where rest) name alias
+instance whereIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQuery (Where cd rest) name alias
 
 instance orderByIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQuery (OrderBy f rest) name alias
 
@@ -635,21 +635,6 @@ instance limitIsNamedSubQuery :: IsNamedSubQuery rest name alias => IsNamedSubQu
 instance eIsNamedSubQuery :: IsNamedSubQuery E name name
 
 instance asIsNamedSubQuery :: IsNamedSubQuery (As alias E) name alias
-
-
-class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type) | list alias -> extra
-
-instance nilToExtraFields :: ToExtraFields RL.Nil alias ()
-
-instance consToExtraFields :: (
-      Append alias "." path,
-      Append path name fullPath,
-      UnwrapDefinition t u,
-      Cons fullPath u () head,
-      ToExtraFields rest alias tail,
-      Lacks fullPath tail,
-      Union head tail all
-) => ToExtraFields (RL.Cons name t rest) alias all
 
 
 class UnwrapAll (list :: RowList Type) (projection :: Row Type) | list -> projection
@@ -662,6 +647,7 @@ instance consUnwrapAll :: (
       UnwrapAll rest tail,
       Union head tail projection
 ) => UnwrapAll (RL.Cons name t rest) projection
+
 
 
 ---------------------------Rest machinery------------------------------------------
@@ -678,7 +664,7 @@ instance selectToRest :: ToRest rest b c => ToRest (Select s p rest) b (Select s
 else instance fromToRest :: ToRest rest b c => ToRest (From f fd rest) b (From f fd c) where
       toRest (From f rest) b = From f $ toRest rest b
 
-else instance whereToRest :: ToRest rest b c => ToRest (Where rest) b (Where c) where
+else instance whereToRest :: ToRest rest b c => ToRest (Where cd rest) b (Where cd c) where
       toRest (Where f rest) b = Where f $ toRest rest b
 
 else instance orderByToRest :: ToRest rest b c => ToRest (OrderBy f rest) b (OrderBy f c) where

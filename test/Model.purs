@@ -56,8 +56,8 @@ result q o = do
             Right connection -> do
                   insertDefaultRecords
                   r <- DD.query connection q
-                  TUA.equal (Right o) r
                   truncateTables connection
+                  TUA.equal (Right o) r
 
 result' :: forall t51 t52 t53. ToQuery t51 t52 => RowToList t52 t53 => FromResult t53 (Record t52) => EqRecord t53 t52 => ShowRecordFields t53 t52 => t51 -> Array (Record t52) -> Aff Unit
 result' q o = do
@@ -66,8 +66,8 @@ result' q o = do
             Left error -> TU.failure $ "Error connecting" <> show error
             Right connection -> do
                   r <- DD.query connection q
-                  TUA.equal (Right o) r
                   truncateTables connection
+                  TUA.equal (Right o) r
 
 unsafeResult :: forall re parameters par result. RowToList result re  => RowToList parameters par => ToParameters parameters par => FromResult re (Record result) => EqRecord re result => ShowRecordFields re result => Maybe Plan -> String -> Record parameters -> Array (Record result) -> Aff Unit
 unsafeResult plan q parameters o = do
@@ -77,8 +77,8 @@ unsafeResult plan q parameters o = do
             Right connection -> do
                   insertDefaultRecords
                   r <- DDU.unsafeQuery connection plan q parameters
-                  TUA.equal (Right o) r
                   truncateTables connection
+                  TUA.equal (Right o) r
 
 truncateTables :: Connection -> Aff Unit
 truncateTables connection = void (DDU.unsafeQuery connection Nothing "select truncate_tables()" {} :: Aff (Either PgError (Array {})))

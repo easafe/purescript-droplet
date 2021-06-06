@@ -30,6 +30,10 @@ tests =
                         TM.notParameterized """SELECT u.id AS "id" FROM users AS "u"""" $ Query.query q
                         TM.result q [{id : 1}, {id: 2}]
             TU.suite "named queries" do
+                  TU.test "subquery column" do
+                        let q = select (select id # from users # wher (name .=. "mary") # as b) # from users # wher (id .=. 1 .||. id .=. 2)
+                        TM.parameterized """SELECT (SELECT id FROM users WHERE name = $1) AS "b" FROM users WHERE (id = $2 OR id = $3)""" $ Query.query q
+                        TM.result q [{b : Just 2}, {b: Just 2}]
                   TU.test "scalar" do
                         let q = select (4 # as n) # from (select (4 # as n) # from users # wher (id .=. id) # as u)
                         TM.notParameterized """SELECT 4 AS "n" FROM (SELECT 4 AS "n" FROM users WHERE id = id) AS "u"""" $ Query.query q

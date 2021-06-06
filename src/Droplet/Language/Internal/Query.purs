@@ -1,7 +1,7 @@
 -- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class IsValidReference, class ToPath, class ToOuterProjection, class ToNakedProjection, class WithColumn, class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, class ToExtraFields, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -13,7 +13,6 @@ import Control.Monad.State (State)
 import Control.Monad.State as CMS
 import Data.Array ((..))
 import Data.Array as DA
-import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.String.Regex as DSR
 import Data.String.Regex.Flags (global)
@@ -22,11 +21,12 @@ import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
-import Data.Tuple.Nested ((/\))
+import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Function (Aggregate(..))
 import Foreign (Foreign)
-import Prim.Row (class Nub)
-import Prim.RowList (class RowToList)
+import Prim.Row (class Cons, class Lacks, class Nub, class Union)
+import Prim.RowList (class RowToList, RowList)
+import Prim.RowList as RL
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy(..))
@@ -44,18 +44,29 @@ instance queryShow :: Show (Query projection) where
 class ToQuery (q :: Type) (projection :: Row Type) | q -> projection where
       toQuery :: q -> State QueryState String
 
-instance selToQuery :: (IsValidTopLevel rest, Translate (Select s projection (From f fields rest))) => ToQuery (Select s projection (From f fields rest)) projection where
+instance selToQuery :: (
+      IsValidTopLevel rest,
+      IsTableAliased f table,
+      IsNamedSubQuery rest table alias,
+      RowToList fields list,
+      ToExtraFields list alias outer,
+      IsValidReference rest outer,
+      ToOuterProjection s outer refs,
+      Union refs projection all,
+      Nub all final,
+      Translate (Select s projection (From f fields rest))
+) => ToQuery (Select s projection (From f fields rest)) final where
       toQuery q = translate q
 
 else instance nselToQuery :: (
-      ToProjection s () "" () projection,
+      ToNakedProjection s projection,
       Nub projection unique,
       UniqueColumnNames projection unique,
       Translate (Select s p E)
 ) => ToQuery (Select s p E) unique where
       toQuery q = translate q
 
-else instance returningToQuery :: (ToProjection f fields "" () projection, Translate (Insert (Into name fields fieldNames (Values v (Returning fields f))))) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning fields f)))) projection where
+else instance returningToQuery :: (ToProjection f fields Empty projection, Translate (Insert (Into name fields fieldNames (Values v (Returning fields f))))) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning fields f)))) projection where
       toQuery q = translate q
 
 else instance queryToQuery :: ToQuery (Query projection) projection where
@@ -69,18 +80,110 @@ else instance elseToQuery :: Translate s => ToQuery s () where
 
 class IsValidTopLevel (q :: Type)
 
-instance whereIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (Where rest)
+instance whereIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (Where c rest)
 
 instance orderByIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (OrderBy f rest)
 
 instance limitIsValidTopLevel :: IsValidTopLevel rest => IsValidTopLevel (Limit rest)
 
---can be improved but the gist is that select ... from ... as name translates to (select ... from ... ) as t wich is not a valid top level
+--can be improved but the gist is that select ... from ... as name translates to (select ... from ... ) as t which is not a valid top level
 instance asIsValidTopLevel :: Fail (Text "AS statement cannot be top level") => IsValidTopLevel (As alias E)
 
 instance eIsValidTopLevel :: IsValidTopLevel E
 
 instance qIsValidTopLevel :: IsValidTopLevel (Query projection)
+
+
+class ToOuterProjection (s :: Type) (outer :: Row Type) (projection :: Row Type) | s -> outer projection
+
+instance pathToProjection :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons fullPath t () projection) => ToOuterProjection (Path alias name) outer projection
+
+else instance pathAAsToProjection :: (Append table Dot path, Append path name fullPath, Cons fullPath t e outer, Cons alias t () projection) => ToOuterProjection (As alias (Path table name)) outer projection
+
+else instance tupleToProjection :: (ToOuterProjection s outer some, ToOuterProjection t outer more, Union some more projection) => ToOuterProjection (s /\ t) outer projection
+
+else instance selectFromRestToProjection :: (
+      IsTableAliased f table,
+      IsNamedSubQuery rest table tableAlias,
+      RowToList fields fieldList,
+      ToExtraFields fieldList tableAlias inner,
+      Union outer inner all,
+      IsValidReference rest all,
+      ToOuterProjection s all projection,
+      RowToList projection list,
+      WithColumn list rest single
+) => ToOuterProjection (Select s p (From f fields rest)) outer single
+
+else instance elseToProjection :: ToOuterProjection s outer ()
+
+
+--cant use ToSingleColumn as it is not mandatory for a subquery to contain a Path
+class WithColumn (fields :: RowList Type) (q :: Type) (single :: Row Type) | fields -> q single
+
+instance nilToSingleColumn :: WithColumn RL.Nil q ()
+
+else instance singleToSingleColumn :: (IsNamedSubQuery q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name (Maybe t) RL.Nil) q single
+
+else instance singleMaybeToSingleColumn :: (IsNamedSubQuery q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name t RL.Nil) q single
+
+
+class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type) | list alias -> extra
+
+instance nilToExtraFields :: ToExtraFields RL.Nil alias ()
+
+instance consToExtraFields :: (
+      ToPath alias path,
+      Append path name fullPath,
+      UnwrapDefinition t u,
+      Cons fullPath u () head,
+      ToExtraFields rest alias tail,
+      Lacks fullPath tail,
+      Union head tail all
+) => ToExtraFields (RL.Cons name t rest) alias all
+
+
+class ToPath (alias :: Symbol) (path :: Symbol) | alias -> path
+
+instance nToPath :: ToPath Empty Empty
+
+else instance elseToPath :: Append alias Dot path => ToPath alias path
+
+
+class IsValidReference (q :: Type) (outer :: Row Type)
+
+instance whereIsValidReference :: IsValidReference cond outer => IsValidReference (Where cond rest) outer
+
+else instance where2IsValidReference :: (IsValidReference (Op a b) outer, IsValidReference (Op c d) outer) => IsValidReference (Op (Op a b) (Op c d)) outer
+
+else instance where3IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Append otherAlias Dot otherPath, Append otherPath otherName otherFullPath, Cons otherFullPath t f outer) => IsValidReference (Op (Path alias name) (Path otherAlias otherName)) outer
+
+else instance where4IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons otherName t f outer) => IsValidReference (Op (Path alias name) (Proxy otherName)) outer
+
+else instance where5IsValidReference :: (Cons name t f outer, Append alias Dot path, Append path otherName fullPath, Cons fullPath t e outer) => IsValidReference (Op (Proxy name) (Path alias otherName)) outer
+
+else instance where6IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer) => IsValidReference (Op (Path alias name) t) outer
+
+else instance where7IsValidReference :: (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer) => IsValidReference (Op t (Path alias name)) outer
+
+else instance eIsValidReference :: IsValidReference e outer
+
+class ToNakedProjection (s :: Type) (projection :: Row Type)
+
+instance tupleToNProjection :: (ToNakedProjection s some, ToNakedProjection t more, Union some more projection) => ToNakedProjection (s /\ t) projection
+
+else instance selToNProjection :: (
+      ToProjection (Select s p (From f fields rest)) () "" projection,
+      IsTableAliased f table,
+      RowToList fields list,
+      ToExtraFields list table outer,
+      ToOuterProjection s outer refs,
+      RowToList projection pro,
+      ToSingleColumn pro name t,
+      Cons name t () single
+) => ToNakedProjection (Select s p (From f fields rest)) single
+
+else instance elseToNProjection :: ToProjection s () Empty projection => ToNakedProjection s projection
+
 
 
 {-
@@ -158,7 +261,7 @@ class TranslateColumn q where
 instance fieldTranslateColumn :: IsSymbol name => TranslateColumn (Proxy name) where
       translateColumn name = pure $ DS.reflectSymbol name
 
-else instance pathTranslateColumn :: (IsSymbol fullPath, Append table "." path, Append path name fullPath) => TranslateColumn (Path table name) where
+else instance pathTranslateColumn :: (IsSymbol fullPath, Append table Dot path, Append path name fullPath) => TranslateColumn (Path table name) where
       translateColumn _ = pure $ quoteColumn (Proxy :: Proxy fullPath)
 
 else instance tableTranslateColumn :: TranslateColumn Star where
@@ -173,7 +276,7 @@ else instance asAggregateTranslateColumn :: (IsSymbol name, ToAggregateName inp)
 else instance asFieldTranslateColumn :: (IsSymbol name, IsSymbol alias) => TranslateColumn (As alias (Proxy name)) where
       translateColumn _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
 
-else instance asPathTranslateColumn :: (IsSymbol fullPath, IsSymbol alias, Append table "." path, Append path name fullPath) => TranslateColumn (As alias (Path table name)) where
+else instance asPathTranslateColumn :: (IsSymbol fullPath, IsSymbol alias, Append table Dot path, Append path name fullPath) => TranslateColumn (As alias (Path table name)) where
       translateColumn _ = pure $ DS.reflectSymbol (Proxy :: Proxy fullPath) <> asKeyword <> quote (Proxy :: Proxy alias)
 
 else instance tupleTranslateColumn :: (TranslateColumn s, TranslateColumn t) => TranslateColumn (Tuple s t) where
@@ -220,35 +323,34 @@ instance asTranslate :: IsSymbol name => Translate (As name E) where
                   pure as
 
 --where
-instance whereTranslate :: Translate rest => Translate (Where rest) where
-      translate (Where filtered rest) = do
-            q <- printFilters filtered
+instance whereTranslate :: (ToWhereFields c, Translate rest) => Translate (Where c rest) where
+      translate (Where c rest) = do
+            q <- toWhereFields c
             otherQ <- translate rest
             pure $ whereKeyword <> q <> otherQ
 
-printFilters :: Filtered -> State QueryState String
-printFilters filtered = case filtered of
-      Operation opFields op -> printFilterParameter opFields op
-      And filter otherFilter -> printBracketedFilters andKeyword filter otherFilter
-      Or filter otherFilter -> printBracketedFilters orKeyword filter otherFilter
+class ToWhereFields c where
+      toWhereFields :: c -> State QueryState String
 
-printFilterParameter :: OperationFields -> Operator -> State QueryState String
-printFilterParameter (OperationFields field otherField) op = do
-      q <- fieldParameters field
-      otherQ <- fieldParameters otherField
-      pure $ q <> printOperator op <> otherQ
+instance cToWhereFields :: (ToWhereFields a, ToWhereFields b) => ToWhereFields (Op a b) where
+      toWhereFields (Op operator a b) = do
+            q <- toWhereFields a
+            otherQ <- toWhereFields b
+            pure $
+                  if operator == And || operator == Or then
+                        openBracket <> q <> printOperator operator <> otherQ <> closeBracket
+                   else
+                        q <> printOperator operator <> otherQ
 
-printBracketedFilters :: String -> Filtered -> Filtered -> State QueryState String
-printBracketedFilters keyword filter otherFilter = do
-      q <- printFilters filter
-      otherQ <- printFilters otherFilter
-      pure $ openBracket <> q <> keyword <> otherQ <> closeBracket
+else instance c2ToWhereFields :: IsSymbol name => ToWhereFields (Proxy name) where
+      toWhereFields name = pure $ DS.reflectSymbol name
 
-fieldParameters :: Either Foreign String -> State QueryState String
-fieldParameters = case _ of
-      Right field -> pure field
-      Left p -> do
-            { parameters } <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters p }
+else instance c3ToWhereFields :: (Append alias Dot path, Append path name fullPath,  IsSymbol fullPath) => ToWhereFields (Path alias name) where
+      toWhereFields _ = pure $ DS.reflectSymbol (Proxy :: Proxy fullPath)
+
+else instance c4ToWhereFields :: ToValue v => ToWhereFields v where
+      toWhereFields p = do
+            { parameters } <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters $ toValue p }
             pure $ "$" <> show (DA.length parameters)
 
 printOperator :: Operator -> String
@@ -257,6 +359,8 @@ printOperator = case _ of
       NotEquals -> notEqualsSymbol
       LesserThan -> lesserThanSymbol
       GreaterThan -> greaterThanSymbol
+      And -> andKeyword
+      Or -> orKeyword
 
 --insert
 instance insertTranslate :: (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v, Translate rest) => Translate (Insert (Into name fields fieldNames (Values v rest))) where
