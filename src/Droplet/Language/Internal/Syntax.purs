@@ -531,7 +531,7 @@ full RETURNING syntax supported by droplet
 newtype Returning (fields :: Row Type) f = Returning f
 
 
-class ToReturning (f :: Type) (fields :: Row Type) (q :: Type) | q -> fields
+class ToReturning (f :: Type) (fields :: Row Type) (q :: Type) | f -> q, q -> fields
 
 instance insertToReturning :: ToReturningFields f fields => ToReturning f fields (Insert (Into tn fields fn (Values fv E)))
 

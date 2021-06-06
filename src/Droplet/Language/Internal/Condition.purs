@@ -7,6 +7,7 @@ import Prelude
 
 import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, Path)
 import Prim.Row (class Cons)
+import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
 
 
@@ -54,11 +55,13 @@ else instance p3ToCondition :: (
       Cons otherName t e fields
 ) => ToCompared (Proxy name) (Path alias otherName) fields alias
 
-else instance p7ToCondition :: Cons otherName t e fields => ToCompared (Path alias name) (Proxy otherName) fields alias
+else instance p7ToCondition :: Cons otherName t e fields => ToCompared (Path table name) (Proxy otherName) fields alias
 
 else instance p8ToCondition :: Cons name t d fields => ToCompared (Proxy name) (Path table otherName) fields alias
 
-else instance p9ToCondition :: ToCompared (Path table name) u fields alias
+else instance p9ToCondition :: ToCompared (Path table name) (Path alias otherName) fields alias
+
+else instance p19ToCondition :: ToCompared (Path alias otherName) (Path table name)  fields alias
 
 else instance p4ToCondition :: (
       UnwrapDefinition t u,
@@ -84,7 +87,9 @@ else instance p5ToCondition :: (
       ToValue u
 ) => ToCompared u (Path alias name) fields alias
 
-else instance p10ToCondition :: ToCompared u (Path table name) fields alias
+else instance p98ToCondition :: ToValue u => ToCompared (Path table name) u fields alias
+
+else instance p10ToCondition :: ToValue u => ToCompared u (Path table name) fields alias
 
 else instance parameterParameterToCondition :: ToValue s => ToCompared s s fields alias
 
