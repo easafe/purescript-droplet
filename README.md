@@ -144,15 +144,23 @@ select :: forall r s projection. ToSelect r s projection => r -> Select s projec
 `projection` tells the final output, devoid of table definitions like `Auto` or `Default`. So one of the above queries' type becomes
 
 ```purescript
-forall inner.
-  Select
-    (Tuple (Proxy "id") (Proxy "name")) -- columns
-    ( id :: Int, name :: String) -- output row
-    (From
-       (Table "users" Users)
-       Users
-       (Where E)
-    )
+Select (Tuple (Proxy "id") (Proxy "name"))
+  ( id :: Int
+  , name :: String
+  )
+  (From
+     (Table "users"
+        ( id :: Auto Int
+        , joined :: Default Date
+        , name :: String
+        )
+     )
+     ( id :: Auto Int
+     , joined :: Default Date
+     , name :: String
+     )
+     (Where (Op (Proxy "id") Int) E)
+  )
 select (id /\ name) # from users # wher (id .=. 3)
 ```
 

@@ -66,7 +66,7 @@ else instance nselToQuery :: (
 ) => ToQuery (Select s p E) unique where
       toQuery q = translate q
 
-else instance returningToQuery :: (ToProjection f fields Empty projection, Translate (Insert (Into name fields fieldNames (Values v (Returning fields f))))) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning fields f)))) projection where
+else instance returningToQuery :: (ToProjection f fields Empty projection, Translate (Insert (Into name fields fieldNames (Values v (Returning f))))) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning f)))) projection where
       toQuery q = translate q
 
 else instance queryToQuery :: ToQuery (Query projection) projection where
@@ -434,7 +434,7 @@ instance deleteTranslate :: Translate (From f fields rest) => Translate (Delete 
             pure $ deleteKeyword <> q
 
 --returning
-instance returningTranslate :: (ToFieldNames fieldNames) => Translate (Returning fields fieldNames) where
+instance returningTranslate :: (ToFieldNames fieldNames) => Translate (Returning fieldNames) where
       translate (Returning fieldNames) = pure $ returningKeyword <> toFieldNames fieldNames
 
 --order by

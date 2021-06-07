@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class IsNamedQuery, class IsNamedSubQuery, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class IsNamedQuery, class IsNamedSubQuery, class ToJoin, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Definition
 import Prelude
@@ -17,9 +17,6 @@ import Prim.RowList as RL
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
-
-
-data E = E
 
 
 ----------------------PREPARE----------------------------
@@ -103,6 +100,7 @@ full select syntax supported by droplet
 SELECT
       * | column | AS | SELECT | [, ...]
       [ FROM ]
+      [ JOIN ]
       [ WHERE ]
       [ ORDER BY ]
       [ LIMIT ]
@@ -112,6 +110,9 @@ AS
 
 FROM
       table_name | AS
+
+JOIN
+      AS ON { field | parameter } OPERATOR { field | parameter } | [ { and | or } ] | [...]
 
 WHERE
       { field | parameter } OPERATOR { field | parameter } | [ { and | or } ] | [...]
@@ -123,6 +124,8 @@ ORDER BY
       field { ASC | DESC } | [, ...]
 
 LIMIT
+      number
+
 
 -}
 
@@ -208,6 +211,36 @@ instance asToFrom :: (
 
 from :: forall f q fields sql. ToFrom f q fields => ToRest q (From f fields E) sql => f -> q -> sql
 from f q = toRest q $ From f E
+
+
+
+-------------------------------JOIN----------------------------
+
+data Side
+
+foreign import data Inner :: Side
+foreign import data Outer :: Side
+
+data Join (k :: Side) q r rest = Join q r rest
+
+data On
+
+class ToJoin (q :: Type)
+
+instance tableAsJoin :: ToJoin (As alias (Table name fields))
+
+instance selectAsJoin :: IsNamedQuery rest alias => ToJoin (Select s p (From f fields rest))
+
+instance onJoin :: ToJoin On
+
+
+join :: forall q r s sql. ToJoin q => ToJoin r => ToRest s (Join Inner q r E) sql => q -> r -> s -> sql
+join q r s = toRest s $ Join q r E
+
+leftJoin :: forall q r s sql. ToJoin q => ToJoin r => ToRest s (Join Outer q r E) sql => q -> r -> s -> sql
+leftJoin q r s = toRest s $ Join q r E
+
+
 
 
 
@@ -527,13 +560,12 @@ full RETURNING syntax supported by droplet
       field | [, ...]
 -}
 
---can we get rid of fields here?
-newtype Returning (fields :: Row Type) f = Returning f
+newtype Returning f = Returning f
 
 
-class ToReturning (f :: Type) (fields :: Row Type) (q :: Type) | f -> q, q -> fields
+class ToReturning (f :: Type) (q :: Type) | q -> f
 
-instance insertToReturning :: ToReturningFields f fields => ToReturning f fields (Insert (Into tn fields fn (Values fv E)))
+instance insertToReturning :: ToReturningFields f fields => ToReturning f (Insert (Into tn fields fn (Values fv E)))
 
 
 class ToReturningFields (f :: Type) (fields :: Row Type) | f -> fields
@@ -543,7 +575,7 @@ instance fieldToReturningFields :: Cons name t e fields => ToReturningFields (Pr
 instance tupleToReturningFields :: (ToReturningFields a fields, ToReturningFields b fields) => ToReturningFields (a /\ b) fields
 
 
-returning :: forall f fields q sql. ToReturning f fields q => ToRest q (Returning fields f) sql => f -> q -> sql
+returning :: forall f q sql. ToReturning f q => ToRest q (Returning f) sql => f -> q -> sql
 returning f q = toRest q $ Returning f
 
 
@@ -700,3 +732,5 @@ else instance eToRest :: ToRest E b b where
 else instance elseToRest :: ToRest b a c => ToRest a b c where
       toRest a b = toRest b a
 
+
+data E = E
