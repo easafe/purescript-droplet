@@ -1,7 +1,7 @@
 -- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class IsValidReference, class ToPath, class ToOuterProjection, class ToNakedProjection, class WithColumn, class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, class ToExtraFields, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class IsValidReference, class ToOuterProjection, class ToNakedProjection, class WithColumn, class ToWhereFields, class TranslateColumn, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), QueryState, translateColumn, toFieldNames, toWhereFields, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -125,28 +125,6 @@ instance nilToSingleColumn :: WithColumn RL.Nil q ()
 else instance singleToSingleColumn :: (IsNamedSubQuery q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name (Maybe t) RL.Nil) q single
 
 else instance singleMaybeToSingleColumn :: (IsNamedSubQuery q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name t RL.Nil) q single
-
-
-class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type) | list alias -> extra
-
-instance nilToExtraFields :: ToExtraFields RL.Nil alias ()
-
-instance consToExtraFields :: (
-      ToPath alias path,
-      Append path name fullPath,
-      UnwrapDefinition t u,
-      Cons fullPath u () head,
-      ToExtraFields rest alias tail,
-      Lacks fullPath tail,
-      Union head tail all
-) => ToExtraFields (RL.Cons name t rest) alias all
-
-
-class ToPath (alias :: Symbol) (path :: Symbol) | alias -> path
-
-instance nToPath :: ToPath Empty Empty
-
-else instance elseToPath :: Append alias Dot path => ToPath alias path
 
 
 class IsValidReference (q :: Type) (outer :: Row Type)

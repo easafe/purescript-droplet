@@ -1,7 +1,7 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class ToCompared, Op(..), and, Operator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class ToComparison, Op(..), and, Operator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
 import Prelude
 
@@ -19,7 +19,7 @@ data Operator =
       And |
       Or
 
-derive instance opEq :: Eq Operator
+derive instance Eq Operator
 
 data Op b c = Op Operator b c
 
@@ -27,71 +27,71 @@ data Op b c = Op Operator b c
 --two type classes to not clutter Op with fields and alias type parameters
 class ToCondition (c :: Type) (fields :: Row Type) (alias :: Symbol)
 
-instance eToCondition :: (ToCondition (Op a b) fields alias, ToCondition (Op c d) fields alias) => ToCondition (Op (Op a b) (Op c d)) fields alias
+instance (ToCondition (Op a b) fields alias, ToCondition (Op c d) fields alias) => ToCondition (Op (Op a b) (Op c d)) fields alias
 
-else instance elseToCondition :: ToCompared a b fields alias => ToCondition (Op a b) fields alias
+else instance ToComparison a b fields alias => ToCondition (Op a b) fields alias
 
 
-class ToCompared (c :: Type) (t :: Type) (fields :: Row Type) (alias :: Symbol) | c t -> fields
+class ToComparison (c :: Type) (t :: Type) (fields :: Row Type) (alias :: Symbol) | c t -> fields
 
 --boring, but we shouldnt make Path an instance of ToValue
-instance fieldFieldToCondition :: (
+instance (
       Cons name t d fields,
       Cons otherName t e fields
-) => ToCompared (Proxy name) (Proxy otherName) fields alias
+) => ToComparison (Proxy name) (Proxy otherName) fields alias
 
-else instance pToCondition :: (
+else instance (
       Cons name t d fields,
       Cons otherName t e fields
-) => ToCompared (Path alias name) (Path alias otherName) fields alias
+) => ToComparison (Path alias name) (Path alias otherName) fields alias
 
-else instance p2ToCondition :: (
+else instance (
       Cons name t d fields,
       Cons otherName t e fields
-) => ToCompared (Path alias name) (Proxy otherName) fields alias
+) => ToComparison (Path alias name) (Proxy otherName) fields alias
 
-else instance p3ToCondition :: (
+else instance (
       Cons name t d fields,
       Cons otherName t e fields
-) => ToCompared (Proxy name) (Path alias otherName) fields alias
+) => ToComparison (Proxy name) (Path alias otherName) fields alias
 
-else instance p7ToCondition :: Cons otherName t e fields => ToCompared (Path table name) (Proxy otherName) fields alias
+else instance Cons otherName t e fields => ToComparison (Path table name) (Proxy otherName) fields alias
 
-else instance p8ToCondition :: Cons name t d fields => ToCompared (Proxy name) (Path table otherName) fields alias
+else instance Cons name t d fields => ToComparison (Proxy name) (Path table otherName) fields alias
 
-else instance p9ToCondition :: ToCompared (Path table name) (Path alias otherName) fields alias
+else instance ToComparison (Path table name) (Path alias otherName) fields alias
 
-else instance p19ToCondition :: ToCompared (Path alias otherName) (Path table name)  fields alias
+else instance ToComparison (Path alias otherName) (Path table name)  fields alias
 
-else instance p4ToCondition :: (
+else instance (
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToCompared (Path alias name) u fields alias
+) => ToComparison (Path alias name) u fields alias
 
-else instance fieldParameterToCondition :: (
+else instance (
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToCompared (Proxy name) u fields alias
+) => ToComparison (Proxy name) u fields alias
 
-else instance parameterFieldToCondition :: (
+else instance (
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToCompared u (Proxy name) fields alias
+) => ToComparison u (Proxy name) fields alias
 
-else instance p5ToCondition :: (
+else instance (
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToCompared u (Path alias name) fields alias
+) => ToComparison u (Path alias name) fields alias
 
-else instance p98ToCondition :: ToValue u => ToCompared (Path table name) u fields alias
+else instance ToValue u => ToComparison (Path table name) u fields alias
 
-else instance p10ToCondition :: ToValue u => ToCompared u (Path table name) fields alias
+else instance ToValue u => ToComparison u (Path table name) fields alias
 
-else instance parameterParameterToCondition :: ToValue s => ToCompared s s fields alias
+else instance ToValue s => ToComparison s s fields alias
 
 
 equals :: forall field compared. field -> compared -> Op field compared
