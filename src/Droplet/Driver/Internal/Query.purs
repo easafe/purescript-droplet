@@ -198,8 +198,6 @@ withClientTransaction client action =
 
 -------------------------------QUERYING----------------------------------
 
-
--- select columns need a way to map fields to whatever type (only for outermost select tho!)
 query :: forall q projection pro.
       ToQuery q projection =>
       RowToList projection pro =>

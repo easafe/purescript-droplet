@@ -56,7 +56,7 @@ data Path (alias :: Symbol) (field :: Symbol) = Path
 path :: forall alias field path pathField . Append alias Dot path => Append path field pathField => Proxy alias -> Proxy field -> Path alias field
 path _ _ = Path
 
-infix 5 path as ...
+infix 7 path as ...
 
 derive instance defaultEq :: Eq a => Eq (Default a)
 

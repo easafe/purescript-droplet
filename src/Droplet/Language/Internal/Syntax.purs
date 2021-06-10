@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class IsNamedQuery, class ToOnCondition, class IsNamedSubQuery, class ToJoin, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToExtraFields, on, On(..), class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class IsNamedQuery, class ToOnCondition, class IsNamedSubQuery, class ToJoin, class ToOnComparision, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToExtraFields, on, On(..), class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Definition
 import Prelude
@@ -210,6 +210,15 @@ instance (
       UniqueColumnNames selected unique
 ) => ToFrom (Select s projection (From f fd rest)) (Select t unique E) projection
 
+--inner join
+-- we can make the third parameter of ToProjection polymorphic and compare it just to fields in case of joins
+-- (same would have to be done for where)
+instance (
+      ToProjection s fields Side selected,
+      Nub selected unique,
+      UniqueColumnNames selected unique
+) => ToFrom (Join Inner fields q r rest) (Select s unique E) fields
+
 
 from :: forall f q fields sql. ToFrom f q fields => ToRest q (From f fields E) sql => f -> q -> sql
 from f q = toRest q $ From f E
@@ -228,23 +237,25 @@ data Join (k :: Side) (fields :: Row Type) q r rest = Join q r rest
 data On c rest = On c rest
 
 
-class ToJoin (q :: Type) (fields :: Row Type) | q -> fields
+class ToJoin (q :: Type) (fields :: Row Type) (extra :: Row Type) | q -> fields extra
 
-instance (RowToList fields list, ToExtraFields list alias extra) => ToJoin (As alias (Table name fields)) extra
+instance (RowToList fields list, ToExtraFields list alias extra) => ToJoin (As alias (Table name fields)) fields extra
 
-instance (IsNamedQuery rest alias, RowToList projection list, ToExtraFields list alias extra) => ToJoin (Select s projection (From f fields rest)) extra
+instance (IsNamedQuery rest alias, RowToList projection list, ToExtraFields list alias extra) => ToJoin (Select s projection (From f fields rest)) projection extra
 
-instance ToJoin (On c (Join k fields q r rest)) fields
+--fix
+instance ToJoin (Join k fields q r rest) fields ()
 
 
 class ToOnCondition (c :: Type) (fields :: Row Type)
 
-instance ToOnComparision a b fields => ToOnCondition (Op a b) fields
+instance (ToOnCondition (Op a b) fields, ToOnCondition (Op c d) fields) => ToOnCondition (Op (Op a b) (Op c d)) fields
 
-else instance (ToOnCondition (Op a b) fields, ToOnCondition (Op c d) fields) => ToOnCondition (Op (Op a b) (Op c d)) fields
+else instance ToOnComparision a b fields => ToOnCondition (Op a b) fields
+
 
 --only allowing alias.field for now
-class ToOnComparision (a :: Type) (b :: Type) (fields :: Row Type)
+class ToOnComparision (a :: Type) (b :: Type) (fields :: Row Type) | a b -> fields
 
 instance (
       Append alias Dot path,
@@ -252,17 +263,38 @@ instance (
       Cons fullPath t d fields,
       Append otherAlias Dot otherPath,
       Append otherPath otherName otherFullPath,
-      Cons otherFullPath t d fields
+      Cons otherFullPath t e fields
 ) => ToOnComparision (Path alias name) (Path otherAlias otherName) fields
 
-join :: forall q r s sql some more fields. ToJoin q some => ToJoin q more => Union some more fields => ToRest s (Join Inner fields q r E) sql => q -> r -> s -> sql
-join q r s = toRest s $ Join q r E
 
-leftJoin :: forall q r s sql some more fields. ToJoin q some => ToJoin q more => Union some more fields => ToRest s (Join Outer fields q r E) sql => q -> r -> s -> sql
-leftJoin q r s = toRest s $ Join q r E
+join :: forall r l fields some more right left joined lf rt unique extra all.
+      ToJoin l left some =>
+      ToJoin r right more =>
+      Union some more extra =>
+      Union left right joined =>
+      Nub joined fields =>
+      Union left lf fields =>
+      Union right rt fields =>
+      Union lf rt unique =>
+      Union unique extra all =>
+      l -> r -> Join Inner all l r E
+join l r = Join l r E
 
-on :: forall k q r c fields. ToOnCondition c fields => Join k fields q r E -> c -> Join k fields q r (On c E)
-on (Join q r _) c = Join q r $ On c E
+leftJoin :: forall r l fields some more right left joined lf rt unique extra all.
+      ToJoin l left some =>
+      ToJoin r right more =>
+      Union some more extra =>
+      Union left right joined =>
+      Nub joined fields =>
+      Union left lf fields =>
+      Union right rt fields =>
+      Union lf rt unique =>
+      Union unique extra all =>
+      l -> r -> Join Outer all l r E
+leftJoin l r = Join l r E
+
+on :: forall k q r c fields. ToOnCondition c fields => c -> Join k fields q r E -> Join k fields q r (On c E)
+on c (Join q r _) = Join q r $ On c E
 
 
 
@@ -606,29 +638,72 @@ returning f q = toRest q $ Returning f
 ------------------------Projection machinery---------------------------
 
 -- | Row Type of columns projected by the query
-class ToProjection (s :: Type) (fields :: Row Type) (alias :: Symbol) (projection :: Row Type) | s -> fields projection
+class ToProjection :: forall k. Type -> Row Type -> k -> Row Type -> Constraint
+class ToProjection s fields alias projection | s -> fields projection
 
 --simple columns
-instance (UnwrapDefinition t u, Cons name t e fields, Cons name u () projection) => ToProjection (Proxy name) fields alias projection
+instance (
+      UnwrapDefinition t u,
+      Cons name t e fields,
+      Cons name u () projection
+) => ToProjection (Proxy name) fields alias projection
+
+--join paths
+else instance (
+      Append alias Dot path,
+      Append path name fullPath,
+      Cons fullPath t e fields,
+      Cons fullPath t () projection
+) => ToProjection (Path alias name) fields Side projection
 
 --alias same scope
-else instance (UnwrapDefinition t u, Cons name t e fields, Append alias Dot path, Append path name fullPath, Cons fullPath u () projection) => ToProjection (Path alias name) fields alias projection
+else instance (
+      UnwrapDefinition t u,
+      Cons name t e fields,
+      Append alias Dot path,
+      Append path name fullPath,
+      Cons fullPath u () projection
+) => ToProjection (Path alias name) fields alias projection
+
 --alias outer scope
-else instance (Append table Dot path, Append path name fullPath, Cons fullPath (Path table name) () projection) => ToProjection (Path table name) fields alias projection
+else instance (
+      Append table Dot path,
+      Append path name fullPath,
+      Cons fullPath (Path table name) () projection
+) => ToProjection (Path table name) fields alias projection
 
 else instance Cons alias Int () projection => ToProjection (As alias Int) fields a projection
 
 else instance Cons alias t () projection => ToProjection (As alias (Aggregate inp fields t)) fields a projection
 
-else instance (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Proxy name)) fields a projection
+else instance (
+      UnwrapDefinition t u,
+      Cons name t e fields,
+      Cons alias u () projection
+) => ToProjection (As alias (Proxy name)) fields a projection
 
-else instance (UnwrapDefinition t u, Cons name t e fields, Cons alias u () projection) => ToProjection (As alias (Path table name)) fields table projection
+else instance (
+      Append table Dot path,
+      Append path name fullPath,
+      Cons fullPath t e fields,
+      Cons alias t () projection
+) => ToProjection (As alias (Path table name)) fields Side projection
+
+else instance (
+      UnwrapDefinition t u,
+      Cons name t e fields,
+      Cons alias u () projection
+) => ToProjection (As alias (Path table name)) fields table projection
 
 else instance Cons alias (Path table name) () projection => ToProjection (As alias (Path table name)) fields a projection
 
 else instance (RowToList fields list, UnwrapAll list projection) => ToProjection Star fields alias projection
 
-else instance (ToProjection s fields alias some, ToProjection t fields alias more, Union some more projection) => ToProjection (s /\ t) fields alias projection
+else instance (
+      ToProjection s fields alias some,
+      ToProjection t fields alias more,
+      Union some more projection
+) => ToProjection (s /\ t) fields alias projection
 
 --change projection to Maybe since subqueries may return null
 else instance (
@@ -707,14 +782,6 @@ class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type)
 
 instance ToExtraFields RL.Nil alias ()
 
-
-class ToPath (alias :: Symbol) (path :: Symbol) | alias -> path
-
-instance ToPath Empty Empty
-
-else instance Append alias Dot path => ToPath alias path
-
-
 instance (
       ToPath alias path,
       Append path name fullPath,
@@ -724,6 +791,14 @@ instance (
       Lacks fullPath tail,
       Union head tail all
 ) => ToExtraFields (RL.Cons name t rest) alias all
+
+
+class ToPath (alias :: Symbol) (path :: Symbol) | alias -> path
+
+instance ToPath Empty Empty
+
+else instance Append alias Dot path => ToPath alias path
+
 
 
 ---------------------------Rest machinery------------------------------------------

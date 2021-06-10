@@ -7,7 +7,6 @@ import Prelude
 
 import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, Path)
 import Prim.Row (class Cons)
-import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
 
 
