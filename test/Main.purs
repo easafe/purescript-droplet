@@ -8,11 +8,12 @@ import Test.Delete as TD
 import Test.From as TF
 import Test.Function as TFC
 import Test.Insert as TI
+import Test.Join as TJ
 import Test.Limit as TL
 import Test.NakedSelect as TNS
 import Test.OrderBy as TO
-import Test.SubQuery as TS
 import Test.Returning as TR
+import Test.SubQuery as TS
 import Test.Transaction as TST
 import Test.Unit.Main as TUM
 import Test.Unsafe as TUS
@@ -27,6 +28,7 @@ main = TUM.runTest do
       TD.tests
       TR.tests
       TF.tests
+      TJ.tests
       TW.tests
       TA.tests
       TS.tests

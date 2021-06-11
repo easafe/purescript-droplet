@@ -22,6 +22,18 @@ orKeyword = " OR "
 asKeyword :: String
 asKeyword = " AS "
 
+innerKeyword :: String
+innerKeyword = " INNER "
+
+joinKeyword :: String
+joinKeyword = "JOIN "
+
+onKeyword :: String
+onKeyword = " ON "
+
+outerKeyword :: String
+outerKeyword = " OUTER "
+
 starSymbol :: String
 starSymbol = "*"
 

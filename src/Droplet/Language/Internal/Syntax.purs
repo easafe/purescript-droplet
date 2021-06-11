@@ -114,7 +114,7 @@ FROM
       table_name | AS
 
 JOIN
-      AS ON { field | parameter } OPERATOR { field | parameter } | [ { and | or } ] | [...]
+     AS ON { field | parameter } OPERATOR { field | parameter } | [ { and | or } ] | [...]
 
 WHERE
       { field | parameter } OPERATOR { field | parameter } | [ { and | or } ] | [...]
@@ -211,13 +211,11 @@ instance (
 ) => ToFrom (Select s projection (From f fd rest)) (Select t unique E) projection
 
 --inner join
--- we can make the third parameter of ToProjection polymorphic and compare it just to fields in case of joins
--- (same would have to be done for where)
 instance (
       ToProjection s fields Side selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Join Inner fields q r rest) (Select s unique E) fields
+) => ToFrom (Join Inner fields l r (On c rest)) (Select s unique E) fields
 
 
 from :: forall f q fields sql. ToFrom f q fields => ToRest q (From f fields E) sql => f -> q -> sql
@@ -243,8 +241,8 @@ instance (RowToList fields list, ToExtraFields list alias extra) => ToJoin (As a
 
 instance (IsNamedQuery rest alias, RowToList projection list, ToExtraFields list alias extra) => ToJoin (Select s projection (From f fields rest)) projection extra
 
---fix
-instance ToJoin (Join k fields q r rest) fields ()
+--we dont support natural joins (or using) so on is mandatory
+instance ToJoin (Join k fields l r (On c rest)) fields ()
 
 
 class ToOnCondition (c :: Type) (fields :: Row Type)
@@ -293,7 +291,7 @@ leftJoin :: forall r l fields some more right left joined lf rt unique extra all
       l -> r -> Join Outer all l r E
 leftJoin l r = Join l r E
 
-on :: forall k q r c fields. ToOnCondition c fields => c -> Join k fields q r E -> Join k fields q r (On c E)
+on :: forall k l r c fields. ToOnCondition c fields => c -> Join k fields l r E -> Join k fields l r (On c E)
 on c (Join q r _) = Join q r $ On c E
 
 

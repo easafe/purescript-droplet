@@ -58,50 +58,50 @@ path _ _ = Path
 
 infix 7 path as ...
 
-derive instance defaultEq :: Eq a => Eq (Default a)
+derive instance Eq a => Eq (Default a)
 
-derive instance autoEq :: Eq a => Eq (Auto a)
+derive instance Eq a => Eq (Auto a)
 
-instance defaultShow :: Show a => Show (Default a) where
+instance Show a => Show (Default a) where
       show (Default a) = show a
 
-instance autoShow :: Show a => Show (Auto a) where
+instance Show a => Show (Auto a) where
       show (Auto a) = show a
 
 
 class ToValue v where
       toValue :: v -> Foreign
 
-instance stringToValue :: ToValue String where
+instance ToValue String where
       toValue = F.unsafeToForeign
 
-instance intToValue :: ToValue Int where
+instance ToValue Int where
       toValue = F.unsafeToForeign
 
-instance booleanToValue :: ToValue Boolean where
+instance ToValue Boolean where
       toValue = F.unsafeToForeign
 
-instance numberToValue :: ToValue Number where
+instance ToValue Number where
       toValue = F.unsafeToForeign
 
-instance defaultToValue :: ToValue a => ToValue (Default a) where
+instance ToValue a => ToValue (Default a) where
       toValue (Default a) = toValue a
 
-instance autoToValue :: ToValue a => ToValue (Auto a) where
+instance ToValue a => ToValue (Auto a) where
       toValue (Auto a) = toValue a
 
-instance maybeToValue :: ToValue a => ToValue (Maybe a) where
+instance ToValue a => ToValue (Maybe a) where
       toValue = case _ of
             Nothing -> F.unsafeToForeign DN.null
             Just a -> toValue a
 
-instance dateToValue :: ToValue Date where
+instance ToValue Date where
       toValue = F.unsafeToForeign <<< formatDate
 
-instance arrayToValue :: ToValue a => ToValue (Array a) where
+instance ToValue a => ToValue (Array a) where
       toValue = F.unsafeToForeign <<< map toValue
 
-instance dateTimeToValue :: ToValue DateTime where
+instance ToValue DateTime where
       toValue (DateTime date (Time h m s ms)) = F.unsafeToForeign $ formatDate date <> "T" <> time <> "+0000"
             where time = show (DEN.fromEnum h) <> ":" <> show (DEN.fromEnum m) <> ":" <> show (DEN.fromEnum s) <> dotSymbol <> show (DEN.fromEnum ms)
 
@@ -115,43 +115,43 @@ formatDate date = show y <> "-" <> show m <> "-" <> show d
 class FromValue t where
       fromValue :: Foreign -> Either String t
 
-instance intFromValue :: FromValue Int where
+instance FromValue Int where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readInt
 
-instance stringFromValue :: FromValue String where
+instance FromValue String where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readString
 
-instance booleanFromValue :: FromValue Boolean where
+instance FromValue Boolean where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readBoolean
 
-instance numberFromValue :: FromValue Number where
+instance FromValue Number where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readNumber
 
-instance defaultFromValue :: FromValue v => FromValue (Default v) where
+instance FromValue v => FromValue (Default v) where
       fromValue v = Default <$> fromValue v
 
-instance autoFromValue :: FromValue v => FromValue (Auto v) where
+instance FromValue v => FromValue (Auto v) where
       fromValue v = Auto <$> fromValue v
 
-instance arrayFromValue :: FromValue v => FromValue (Array v) where
+instance FromValue v => FromValue (Array v) where
       fromValue = DT.traverse fromValue <=< DB.lmap show <<< CME.runExcept <<< F.readArray
 
-instance bigIntFromValue :: FromValue BigInt where
+instance FromValue BigInt where
       fromValue v = do
             i <- DB.lmap show <<< CME.runExcept $ F.readString v
             DET.note ("Could not parse big int from " <> i) $ DBT.fromString i
 
-instance maybeFromValue :: FromValue v => FromValue (Maybe v) where
+instance FromValue v => FromValue (Maybe v) where
       fromValue v
             | F.isNull v = pure Nothing
             | otherwise = Just <$> fromValue v
 
-instance dateFromValue :: FromValue Date where
+instance FromValue Date where
       fromValue v = do
             s <- DB.lmap show <<< CME.runExcept $ F.readString v
             parseDate s $ "ISO 8601 date parsing failed for value: " <> s
 
-instance dateTimeFromValue :: FromValue DateTime where
+instance FromValue DateTime where
       fromValue v = do
             s <- DB.lmap show <<< CME.runExcept $ F.readString v
             let errorMessage = "ISO 8601 date time parsing failed for value: " <> s
@@ -181,27 +181,27 @@ parseTime input errorMessage =
 
 class UnwrapDefinition (w :: Type) (t :: Type) | w -> t
 
-instance autoUnwrapDefinition :: UnwrapDefinition (Auto t) t
+instance UnwrapDefinition (Auto t) t
 
-else instance defaultUnwrapDefinition :: UnwrapDefinition (Default t) t
+else instance UnwrapDefinition (Default t) t
 
-else instance elseUnwrapDefinition :: UnwrapDefinition t t
+else instance UnwrapDefinition t t
 
 
 class InvalidField (t :: Type)
 
-instance autoInvalidField :: Fail (Text "Auto columns cannot be inserted or updated") => InvalidField (Auto t)
+instance Fail (Text "Auto columns cannot be inserted or updated") => InvalidField (Auto t)
 
-else instance elseInvalidField :: InvalidField t
+else instance InvalidField t
 
 
 class ToParameters record (list :: RowList Type) where
       toParameters :: Proxy list -> Record record -> Array (Tuple String Foreign)
 
-instance nilToParameters :: ToParameters record RL.Nil where
+instance ToParameters record RL.Nil where
       toParameters _ _ = []
 
-instance consToParameters :: (
+instance (
       IsSymbol name,
       ToValue t,
       Cons name t e record,

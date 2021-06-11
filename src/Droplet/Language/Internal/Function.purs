@@ -14,9 +14,9 @@ data Aggregate inp (fields :: Row Type) (out :: Type) =
 
 class ToCount (f :: Type) (fields :: Row Type) | f -> fields
 
-instance proxyToCount :: Cons name t e fields => ToCount (Proxy name) fields
+instance Cons name t e fields => ToCount (Proxy name) fields
 
-instance starToCountr :: ToCount Star fields
+instance ToCount Star fields
 
 count :: forall f fields. ToCount f fields => f -> Aggregate f fields BigInt
 count = Count
