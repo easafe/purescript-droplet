@@ -111,8 +111,9 @@ else instance (
       RowToList fields fieldList,
       ToExtraFields fieldList tableAlias inner,
       Union outer inner all,
-      IsValidReference rest all,
-      ToOuterProjection s all projection,
+      Nub all nubbed,
+      IsValidReference rest nubbed,
+      ToOuterProjection s nubbed projection,
       RowToList projection list,
       WithColumn list rest single
 ) => ToOuterProjection (Select s p (From f fields rest)) outer single
