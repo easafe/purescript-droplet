@@ -27,7 +27,7 @@ tests =
                         TM.result q [{id: 1}, {id: 2}]
                   TU.test "named aliased field" do
                         let q = select (u ... id # as id) # from (users # as u)
-                        TM.notParameterized """SELECT u.id AS "id" FROM users AS "u"""" $ Query.query q
+                        TM.notParameterized """SELECT "u".id AS "id" FROM users AS "u"""" $ Query.query q
                         TM.result q [{id : 1}, {id: 2}]
             TU.suite "named queries" do
                   TU.test "subquery column" do

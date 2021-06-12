@@ -104,4 +104,4 @@ dotSymbol :: String
 dotSymbol = "."
 
 quoteSymbol :: String
-quoteSymbol = "\""
+quoteSymbol = """""""

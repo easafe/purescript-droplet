@@ -245,8 +245,11 @@ class TranslateColumn q where
 instance IsSymbol name => TranslateColumn (Proxy name) where
       translateColumn name = pure $ DS.reflectSymbol name
 
-else instance (IsSymbol fullPath, Append table Dot path, Append path name fullPath) => TranslateColumn (Path table name) where
-      translateColumn _ = pure $ quoteColumn (Proxy :: Proxy fullPath)
+else instance (IsSymbol fullPath, IsSymbol name, IsSymbol alias, Append alias Dot path, Append path name fullPath) => TranslateColumn (Path alias name) where
+      translateColumn _ = pure $
+            quotePath (Proxy :: Proxy alias) (Proxy :: Proxy name) <>
+            " " <>
+            quoteSymbol <> DS.reflectSymbol (Proxy :: Proxy fullPath) <> quoteSymbol
 
 else instance TranslateColumn Star where
       translateColumn _ = pure starSymbol
@@ -260,8 +263,8 @@ else instance (IsSymbol name, ToAggregateName inp) => TranslateColumn (As name (
 else instance (IsSymbol name, IsSymbol alias) => TranslateColumn (As alias (Proxy name)) where
       translateColumn _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
 
-else instance (IsSymbol fullPath, IsSymbol alias, Append table Dot path, Append path name fullPath) => TranslateColumn (As alias (Path table name)) where
-      translateColumn _ = pure $ DS.reflectSymbol (Proxy :: Proxy fullPath) <> asKeyword <> quote (Proxy :: Proxy alias)
+else instance (IsSymbol fullPath, IsSymbol alias, IsSymbol name, IsSymbol table, Append table Dot path, Append path name fullPath) => TranslateColumn (As alias (Path table name)) where
+      translateColumn _ = pure $ quotePath (Proxy :: Proxy table) (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
 
 else instance (TranslateColumn s, TranslateColumn t) => TranslateColumn (Tuple s t) where
       translateColumn (s /\ t) = do
@@ -368,8 +371,8 @@ instance (TranslateConditions a, TranslateConditions b) => TranslateConditions (
 else instance IsSymbol name => TranslateConditions (Proxy name) where
       translateConditions name = pure $ DS.reflectSymbol name
 
-else instance (Append alias Dot path, Append path name fullPath,  IsSymbol fullPath) => TranslateConditions (Path alias name) where
-      translateConditions _ = pure $ DS.reflectSymbol (Proxy :: Proxy fullPath)
+else instance (IsSymbol alias, IsSymbol name) => TranslateConditions (Path alias name) where
+      translateConditions _ = pure $ quotePath (Proxy :: Proxy alias) (Proxy :: Proxy name)
 
 else instance ToValue v => TranslateConditions v where
       translateConditions p = do
@@ -504,9 +507,8 @@ instance ToAggregateName Star where
 quote :: forall alias. IsSymbol alias => Proxy alias -> String
 quote name = quoteSymbol <> DS.reflectSymbol name <> quoteSymbol
 
-quoteColumn :: forall name. IsSymbol name => Proxy name -> String
-quoteColumn name = ref <> " " <> quoteSymbol <> ref <> quoteSymbol
-      where ref =  DS.reflectSymbol name
+quotePath :: forall alias name. IsSymbol alias => IsSymbol name => Proxy alias -> Proxy name -> String
+quotePath alias name = quote alias <> dotSymbol <> DS.reflectSymbol name
 
 query :: forall q projection. ToQuery q projection => q -> Query projection
 query qr = Query plan q parameters

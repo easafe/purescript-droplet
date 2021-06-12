@@ -26,26 +26,26 @@ tests = do
                   TU.suite "projection from table" do
                         TU.test "field" do
                               let q = select (select (u ... id) # from users # orderBy id # limit 1) # from (users # as u) # orderBy id # limit 1
-                              TM.notParameterized """SELECT (SELECT u.id "u.id" FROM users ORDER BY id LIMIT 1) FROM users AS "u" ORDER BY id LIMIT 1""" $ Query.query q
+                              TM.notParameterized """SELECT (SELECT "u".id "u.id" FROM users ORDER BY id LIMIT 1) FROM users AS "u" ORDER BY id LIMIT 1""" $ Query.query q
                               TM.result q [{"u.id": Just 1}]
                         TU.test "alias" do
                               let q = select (select (u ... id # as n) # from users # orderBy id # limit 1) # from (users # as u) # orderBy id # limit 1
-                              TM.notParameterized """SELECT (SELECT u.id AS "n" FROM users ORDER BY id LIMIT 1) FROM users AS "u" ORDER BY id LIMIT 1""" $ Query.query q
+                              TM.notParameterized """SELECT (SELECT "u".id AS "n" FROM users ORDER BY id LIMIT 1) FROM users AS "u" ORDER BY id LIMIT 1""" $ Query.query q
                               TM.result q [{n: Just 1}]
                         TU.test "same table different alias" do
                               let q = select (select (n ... name) # from (users # as n) # orderBy id # limit 1) # from (users # as u)
-                              TM.notParameterized """SELECT (SELECT n.name "n.name" FROM users AS "n" ORDER BY id LIMIT 1) FROM users AS "u"""" $ Query.query q
+                              TM.notParameterized """SELECT (SELECT "n".name "n.name" FROM users AS "n" ORDER BY id LIMIT 1) FROM users AS "u"""" $ Query.query q
                               TM.result q [{"n.name": Just "josh"}, {"n.name": Just "josh"}]
                         TU.test "same table alias" do
                               let q = select (select (u ... sent) # from (messages # as u) # orderBy id # limit 1) # from (users # as u)
-                              TM.notParameterized """SELECT (SELECT u.sent "u.sent" FROM messages AS "u" ORDER BY id LIMIT 1) FROM users AS "u"""" $ Query.query q
+                              TM.notParameterized """SELECT (SELECT "u".sent "u.sent" FROM messages AS "u" ORDER BY id LIMIT 1) FROM users AS "u"""" $ Query.query q
                               TM.result q [{"u.sent": Just true}, {"u.sent": Just true}]
                   TU.suite "projection from named query" do
                         TU.test "field" do
                               let q = select (select (u ... id) # from users # orderBy id # limit 1) # from (select id # from users # as u)
-                              TM.notParameterized """SELECT (SELECT u.id "u.id" FROM users ORDER BY id LIMIT 1) FROM (SELECT id FROM users) AS "u"""" $ Query.query q
+                              TM.notParameterized """SELECT (SELECT "u".id "u.id" FROM users ORDER BY id LIMIT 1) FROM (SELECT id FROM users) AS "u"""" $ Query.query q
                               TM.result q [{"u.id": Just 1}, {"u.id": Just 2}]
                         TU.test "alias" do
                               let q = select (select (u ... id # as n) # from users # orderBy id # limit 1) # from (select id # from users # as u)
-                              TM.notParameterized """SELECT (SELECT u.id AS "n" FROM users ORDER BY id LIMIT 1) FROM (SELECT id FROM users) AS "u"""" $ Query.query q
+                              TM.notParameterized """SELECT (SELECT "u".id AS "n" FROM users ORDER BY id LIMIT 1) FROM (SELECT id FROM users) AS "u"""" $ Query.query q
                               TM.result q [{n: Just 1}, {n: Just 2}]

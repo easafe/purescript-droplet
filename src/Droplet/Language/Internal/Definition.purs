@@ -102,7 +102,7 @@ instance ToValue a => ToValue (Array a) where
       toValue = F.unsafeToForeign <<< map toValue
 
 instance ToValue DateTime where
-      toValue (DateTime date (Time h m s ms)) = F.unsafeToForeign $ formatDate date <> "T" <> time <> "+0000"
+      toValue (DateTime date (Time h m s ms)) = F.unsafeToForeign $ formatDate date <> "t" <> time <> "+0000"
             where time = show (DEN.fromEnum h) <> ":" <> show (DEN.fromEnum m) <> ":" <> show (DEN.fromEnum s) <> dotSymbol <> show (DEN.fromEnum ms)
 
 formatDate :: Date -> String
