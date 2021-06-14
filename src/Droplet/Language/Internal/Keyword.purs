@@ -31,8 +31,8 @@ joinKeyword = "JOIN "
 onKeyword :: String
 onKeyword = " ON "
 
-outerKeyword :: String
-outerKeyword = " OUTER "
+leftKeyword :: String
+leftKeyword = " LEFT "
 
 starSymbol :: String
 starSymbol = "*"

@@ -1,12 +1,12 @@
 -- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class IsValidReference, class ToOuterProjection, class TranslateSource, class ToNakedProjection, class WithColumn, class TranslateConditions, class TranslateColumn, class ToJoin, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoin, toFieldNames, translateConditions, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class IsValidReference, class ToOuterProjection, class TranslateSource, class ToNakedProjection, class WithColumn, class TranslateConditions, class TranslateColumn, class ToJoinType, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, toFieldNames, translateConditions, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
 import Droplet.Language.Internal.Keyword
-import Droplet.Language.Internal.Syntax hiding (class ToJoin)
+import Droplet.Language.Internal.Syntax
 import Prelude
 
 import Control.Monad.State (State)
@@ -307,26 +307,26 @@ instance Translate (Select s ppp more) => TranslateSource (Select s ppp more) wh
 instance (IsSymbol name, IsSymbol alias) => TranslateSource (As alias (Table name fd)) where
       translateSource _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
 
-instance (ToJoin k, Translate (Join k fields l r rest)) => TranslateSource (Join k fields l r rest) where
+instance (ToJoinType k, Translate (Join k fields l r rest)) => TranslateSource (Join k fields l r rest) where
       translateSource j = translate j
 
 --join
-instance (ToJoin k, TranslateSource l,TranslateSource r, Translate rest) => Translate (Join k fields l r rest) where
+instance (ToJoinType k, TranslateSource l,TranslateSource r, Translate rest) => Translate (Join k fields l r rest) where
       translate (Join l r rest) = do
             left <- translateSource l
             right <- translateSource r
             q <- translate rest
-            pure $ left <> toJoin (Proxy :: Proxy k) <> right <> q
+            pure $ left <> toJoinType (Proxy :: Proxy k) <> right <> q
 
 
-class ToJoin (k :: Side) where
-      toJoin :: Proxy k -> String
+class ToJoinType (k :: Side) where
+      toJoinType :: Proxy k -> String
 
-instance ToJoin Inner where
-      toJoin _ = innerKeyword <> joinKeyword
+instance ToJoinType Inner where
+      toJoinType _ = innerKeyword <> joinKeyword
 
-instance ToJoin Outer where
-      toJoin _ = outerKeyword <> joinKeyword
+instance ToJoinType Outer where
+      toJoinType _ = leftKeyword <> joinKeyword
 
 --on
 instance (TranslateConditions c, Translate rest) => Translate (On c rest) where
