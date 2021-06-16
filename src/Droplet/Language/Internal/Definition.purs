@@ -187,7 +187,7 @@ instance UnwrapDefinition (Auto t) t
 
 else instance UnwrapDefinition (Default t) t
 
-else instance UnwrapDefinition (Joined t) t
+else instance UnwrapDefinition t u => UnwrapDefinition (Joined t) u
 
 else instance UnwrapDefinition t t
 

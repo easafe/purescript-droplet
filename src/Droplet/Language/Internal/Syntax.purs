@@ -1,13 +1,11 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class IsNamedQuery, class UniqueAliases, class ToOnCondition, class IsNamedSubQuery, class ToJoin, class ToOnComparision, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToExtraFields, on, On(..), class ToWhere, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class IsNamedQuery, class UniqueAliases, class ToOnCondition, class IsNamedSubQuery, class ToJoin, class ToOnComparision, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToExtraFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Definition
 import Prelude
 
-import Data.Date (Date)
-import Data.DateTime (DateTime(..))
 import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, Op)
@@ -216,7 +214,7 @@ instance (
 instance (
       Nub fields source,
       UniqueAliases fields source,
-      ToProjection s fields Side selected,
+      ToProjection s fields Inner selected,
       Nub selected unique,
       UniqueColumnNames selected unique
 ) => ToFrom (Join Inner fields l r (On c rest)) (Select s unique E) fields
@@ -225,7 +223,7 @@ instance (
 instance (
       Nub fields source,
       UniqueAliases fields source,
-      ToProjection s fields Side selected,
+      ToProjection s fields Outer selected,
       Nub selected unique,
       UniqueColumnNames selected unique
 ) => ToFrom (Join Outer fields l r (On c rest)) (Select s unique E) fields
@@ -253,7 +251,11 @@ class ToJoin (q :: Type) (extra :: Row Type) | q -> extra
 
 instance (RowToList fields list, ToExtraFields list alias extra) => ToJoin (As alias (Table name fields))  extra
 
-instance (IsNamedQuery rest alias, RowToList projection list, ToExtraFields list alias extra) => ToJoin (Select s projection (From f fields rest)) extra
+instance (
+      IsNamedQuery rest alias,
+      RowToList projection list,
+      ToExtraFields list alias extra
+) => ToJoin (Select s projection (From f fields rest)) extra
 
 --we dont support natural joins (or using) so on is mandatory
 instance ToJoin (Join k fields l r (On c rest)) fields
@@ -303,17 +305,16 @@ else instance ToOnComparision a b fields => ToOnCondition (Op a b) fields
 --only allowing alias.field for now
 class ToOnComparision (a :: Type) (b :: Type) (fields :: Row Type) | a b -> fields
 
--- instance (
---       UnwrapDefinition t u,
---       UnwrapDefinition r u,
---       Append alias Dot path,
---       Append path name fullPath,
---       Cons fullPath t d fields,
---       Append otherAlias Dot otherPath,
---       Append otherPath otherName otherFullPath,
---       Cons otherFullPath r e fields
--- ) => ToOnComparision (Path alias name) (Path otherAlias otherName) fields
-instance ToOnComparision (Path alias name) (Path otherAlias otherName) fields
+instance (
+      UnwrapDefinition t u,
+      UnwrapDefinition r u,
+      Append alias Dot path,
+      Append path name fullPath,
+      Cons fullPath t d fields,
+      Append otherAlias Dot otherPath,
+      Append otherPath otherName otherFullPath,
+      Cons otherFullPath r e fields
+) => ToOnComparision (Path alias name) (Path otherAlias otherName) fields
 
 
 on :: forall k l r c fields. ToOnCondition c fields => c -> Join k fields l r E -> Join k fields l r (On c E)
@@ -677,7 +678,15 @@ else instance (
       Append path name fullPath,
       Cons fullPath t e fields,
       Cons fullPath t () projection
-) => ToProjection (Path alias name) fields Side projection
+) => ToProjection (Path alias name) fields Inner projection
+
+else instance (
+      Append alias Dot path,
+      Append path name fullPath,
+      Cons fullPath t e fields,
+      JoinedToMaybe t v,
+      Cons fullPath v () projection
+) => ToProjection (Path alias name) fields Outer projection
 
 --alias same scope
 else instance (
@@ -739,6 +748,7 @@ else instance (
 ) => ToProjection (Select s p (From f fields rest)) fd a single
 
 else instance Fail (Text "Cannot recognize projection") => ToProjection x f a p
+
 
 --not required but makes for clearer type errors
 class ToSingleColumn (fields :: RowList Type) (name :: Symbol) (t :: Type) | fields -> name t
@@ -813,8 +823,7 @@ instance ToExtraFields RL.Nil alias ()
 instance (
       ToPath alias path,
       Append path name fullPath,
-      UnwrapDefinition t u,
-      Cons fullPath u () head,
+      Cons fullPath t () head,
       ToExtraFields rest alias tail,
       Lacks fullPath tail,
       Union head tail all
@@ -827,6 +836,18 @@ instance ToPath Empty Empty
 
 else instance Append alias Dot path => ToPath alias path
 
+
+class JoinedToMaybe (t :: Type) (v :: Type) | t -> v
+
+instance JoinedToMaybe (Joined (f (Maybe t))) (Maybe t)
+
+else instance JoinedToMaybe (Joined (Maybe t)) (Maybe t)
+
+else instance UnwrapDefinition t u => JoinedToMaybe (Joined t) (Maybe u)
+
+-- else instance UnwrapDefinition t u => JoinedToMaybe t u
+
+else instance JoinedToMaybe t t
 
 
 ---------------------------Rest machinery------------------------------------------

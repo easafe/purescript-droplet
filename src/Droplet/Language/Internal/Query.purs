@@ -96,14 +96,33 @@ instance IsValidTopLevel E
 
 instance IsValidTopLevel (Query projection)
 
-
+--alternatively, this could be written based on the projection rowlist type
+-- (by checking Path entries ) instead of recomputing all of Path fields
 class ToOuterProjection (s :: Type) (outer :: Row Type) (projection :: Row Type) | s -> outer projection
 
-instance (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons fullPath t () projection) => ToOuterProjection (Path alias name) outer projection
+instance (
+      Append alias Dot path,
+      Append path name fullPath,
+      Cons fullPath t e outer,
+      JoinedToMaybe t u,
+      UnwrapDefinition u v,
+      Cons fullPath v () projection
+) => ToOuterProjection (Path alias name) outer projection
 
-else instance (Append table Dot path, Append path name fullPath, Cons fullPath t e outer, Cons alias t () projection) => ToOuterProjection (As alias (Path table name)) outer projection
+else instance (
+      Append table Dot path,
+      Append path name fullPath,
+      Cons fullPath t e outer,
+      JoinedToMaybe t u,
+      UnwrapDefinition u v,
+      Cons alias v () projection
+) => ToOuterProjection (As alias (Path table name)) outer projection
 
-else instance (ToOuterProjection s outer some, ToOuterProjection t outer more, Union some more projection) => ToOuterProjection (s /\ t) outer projection
+else instance (
+      ToOuterProjection s outer some,
+      ToOuterProjection t outer more,
+      Union some more projection
+) => ToOuterProjection (s /\ t) outer projection
 
 else instance (
       IsTableAliased f table,
@@ -137,15 +156,37 @@ instance IsValidReference cond outer => IsValidReference (Where cond rest) outer
 
 else instance (IsValidReference (Op a b) outer, IsValidReference (Op c d) outer) => IsValidReference (Op (Op a b) (Op c d)) outer
 
-else instance (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Append otherAlias Dot otherPath, Append otherPath otherName otherFullPath, Cons otherFullPath t f outer) => IsValidReference (Op (Path alias name) (Path otherAlias otherName)) outer
+else instance (
+      Append alias Dot path,
+      Append path name fullPath,
+      Cons fullPath t e outer,
+      Append otherAlias Dot otherPath,
+      Append otherPath otherName otherFullPath,
+      Cons otherFullPath t f outer
+) => IsValidReference (Op (Path alias name) (Path otherAlias otherName)) outer
 
 else instance (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons otherName t f outer) => IsValidReference (Op (Path alias name) (Proxy otherName)) outer
 
-else instance (Cons name t f outer, Append alias Dot path, Append path otherName fullPath, Cons fullPath t e outer) => IsValidReference (Op (Proxy name) (Path alias otherName)) outer
+else instance (
+      Cons name t f outer,
+      Append alias Dot path,
+      Append path otherName fullPath,
+      Cons fullPath t e outer
+) => IsValidReference (Op (Proxy name) (Path alias otherName)) outer
 
-else instance (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer) => IsValidReference (Op (Path alias name) t) outer
+else instance (
+      Append alias Dot path,
+      Append path name fullPath,
+      Cons fullPath t e outer,
+      UnwrapDefinition t u
+) => IsValidReference (Op (Path alias name) u) outer
 
-else instance (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer) => IsValidReference (Op t (Path alias name)) outer
+else instance (
+      Append alias Dot path,
+      Append path name fullPath,
+      Cons fullPath t e outer,
+      UnwrapDefinition t u
+) => IsValidReference (Op u (Path alias name)) outer
 
 else instance IsValidReference e outer
 
