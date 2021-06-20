@@ -31,6 +31,9 @@ joinKeyword = "JOIN "
 onKeyword :: String
 onKeyword = " ON "
 
+groupByKeyword :: String
+groupByKeyword = " GROUP BY "
+
 leftKeyword :: String
 leftKeyword = " LEFT "
 

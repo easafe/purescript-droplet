@@ -85,6 +85,8 @@ class IsValidTopLevel (q :: Type)
 
 instance IsValidTopLevel rest => IsValidTopLevel (Where c rest)
 
+instance IsValidTopLevel rest => IsValidTopLevel (GroupBy f rest)
+
 instance IsValidTopLevel rest => IsValidTopLevel (OrderBy f rest)
 
 instance IsValidTopLevel rest => IsValidTopLevel (Limit rest)
@@ -428,6 +430,12 @@ printOperator = case _ of
       GreaterThan -> greaterThanSymbol
       And -> andKeyword
       Or -> orKeyword
+
+--group by
+instance (ToFieldNames f, Translate rest) => Translate (GroupBy f rest) where
+      translate (GroupBy fields rest) = do
+            q <- translate rest
+            pure $ groupByKeyword <> toFieldNames fields <> q
 
 --insert
 instance (IsSymbol name, ToFieldNames fieldNames, ToFieldValues v, Translate rest) => Translate (Insert (Into name fields fieldNames (Values v rest))) where

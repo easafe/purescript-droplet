@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class IsNamedQuery, class UniqueAliases, class ToOnCondition, class IsNamedSubQuery, class ToJoin, class ToOnComparision, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToExtraFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class IsNamedQuery, class UniqueAliases, class ToOnCondition, class IsNamedSubQuery, class ToJoin, class ToOnComparision, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class ToGroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToExtraFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Definition
 import Prelude
@@ -345,6 +345,45 @@ wher c q = toRest q $ Where c E
 
 
 
+----------------------------GROUP BY----------------------------
+
+data GroupBy f rest = GroupBy f rest
+
+
+class ToGroupBy (q :: Type) (s :: Type) (fields :: Row Type) | q -> s fields
+
+instance ToGroupBy (Select s p (From f fields E)) s fields
+
+instance ToGroupBy (Select s p (From f fields (Where cond E))) s fields
+
+
+class ToGroupByFields (f :: Type) (fields :: Row Type) (grouped :: Row Type) | f -> fields grouped
+
+instance (Cons name t e fields, Cons name t () grouped) => ToGroupByFields (Proxy name) fields grouped
+
+instance (
+      ToGroupByFields a fields some,
+      ToGroupByFields b fields more,
+      Union some more grouped
+) => ToGroupByFields (a /\ b) fields grouped
+
+
+class ValidGroupByProjection (s :: Type) (grouped :: Row Type) | s -> grouped
+
+instance Cons name t e grouped => ValidGroupByProjection (Proxy name) grouped
+
+else instance Cons name t e grouped => ValidGroupByProjection (As alias (Proxy name)) grouped
+
+else instance (ValidGroupByProjection a grouped, ValidGroupByProjection b grouped) => ValidGroupByProjection (a /\ b) grouped
+
+else instance ValidGroupByProjection q grouped
+
+
+groupBy :: forall f s q sql grouped fields. ToGroupBy q s fields => ToGroupByFields f fields grouped => ValidGroupByProjection s grouped => ToRest q (GroupBy f E) sql => f -> q -> sql
+groupBy f q = toRest q $ GroupBy f E
+
+
+
 ----------------------------AS----------------------------
 
 --beware of brackets
@@ -381,7 +420,11 @@ class ToOrderBy (f :: Type) (q :: Type)
 
 instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields E))
 
+instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (GroupBy fd E)))
+
 instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where cd E)))
+
+instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where cd (GroupBy fd E))))
 
 
 class ToOrderByFields (f :: Type) (fields :: Row Type) | f -> fields
@@ -795,6 +838,8 @@ class IsNamedSubQuery (q :: Type) (name :: Symbol) (alias :: Symbol) | q -> name
 
 instance IsNamedSubQuery rest name alias => IsNamedSubQuery (Where cd rest) name alias
 
+instance IsNamedSubQuery rest name alias => IsNamedSubQuery (GroupBy f rest) name alias
+
 instance IsNamedSubQuery rest name alias => IsNamedSubQuery (OrderBy f rest) name alias
 
 instance IsNamedSubQuery rest name alias => IsNamedSubQuery (Limit rest) name alias
@@ -845,8 +890,6 @@ else instance JoinedToMaybe (Joined (Maybe t)) (Maybe t)
 
 else instance UnwrapDefinition t u => JoinedToMaybe (Joined t) (Maybe u)
 
--- else instance UnwrapDefinition t u => JoinedToMaybe t u
-
 else instance JoinedToMaybe t t
 
 
@@ -866,6 +909,9 @@ else instance ToRest rest b c => ToRest (From f fd rest) b (From f fd c) where
 
 else instance ToRest rest b c => ToRest (Where cd rest) b (Where cd c) where
       toRest (Where f rest) b = Where f $ toRest rest b
+
+else instance ToRest rest b c => ToRest (GroupBy f rest) b (GroupBy f c) where
+      toRest (GroupBy f rest) b = GroupBy f $ toRest rest b
 
 else instance ToRest rest b c => ToRest (OrderBy f rest) b (OrderBy f c) where
       toRest (OrderBy f rest) b = OrderBy f $ toRest rest b

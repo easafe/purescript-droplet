@@ -7,6 +7,7 @@ import Test.As as TA
 import Test.Delete as TD
 import Test.From as TF
 import Test.Function as TFC
+import Test.GroupBy as TG
 import Test.Insert as TI
 import Test.Join as TJ
 import Test.Limit as TL
@@ -30,6 +31,7 @@ main = TUM.runTest do
       TF.tests
       TJ.tests
       TW.tests
+      TG.tests
       TA.tests
       TS.tests
       TO.tests
