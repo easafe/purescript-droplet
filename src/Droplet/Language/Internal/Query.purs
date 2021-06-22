@@ -459,6 +459,9 @@ class ToFieldNames fieldNames where
 instance IsSymbol name => ToFieldNames (Proxy name) where
       toFieldNames name = DS.reflectSymbol name
 
+instance (IsSymbol alias, IsSymbol name) => ToFieldNames (Path alias name) where
+      toFieldNames _ =  quote (Proxy :: Proxy alias) <> dotSymbol <> DS.reflectSymbol (Proxy :: Proxy name)
+
 instance (ToFieldNames f, ToFieldNames rest) => ToFieldNames (Tuple f rest) where
       toFieldNames (Tuple f rest) = toFieldNames f <> comma <> toFieldNames rest
 

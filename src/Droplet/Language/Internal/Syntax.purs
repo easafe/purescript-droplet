@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class IsNamedQuery, class UniqueAliases, class ToOnCondition, class IsNamedSubQuery, class ToJoin, class ToOnComparision, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class ToGroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToExtraFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class IsNamedQuery, class UniqueAliases, class ToOnCondition, class IsNamedSubQuery, class ToJoin, class ToOnComparision, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class ToGroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToExtraFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Definition
 import Prelude
@@ -246,7 +246,6 @@ data Join (k :: Side) (fields :: Row Type) q r rest = Join q r rest
 data On c rest = On c rest
 
 
-
 class ToJoin (q :: Type) (extra :: Row Type) | q -> extra
 
 instance (RowToList fields list, ToExtraFields list alias extra) => ToJoin (As alias (Table name fields))  extra
@@ -352,14 +351,37 @@ data GroupBy f rest = GroupBy f rest
 
 class ToGroupBy (q :: Type) (s :: Type) (fields :: Row Type) | q -> s fields
 
-instance ToGroupBy (Select s p (From f fields E)) s fields
+instance GroupBySource f fields => ToGroupBy (Select s p (From f fd E)) s fields
 
-instance ToGroupBy (Select s p (From f fields (Where cond E))) s fields
+instance GroupBySource f fields => ToGroupBy (Select s p (From f fd (Where cond E))) s fields
+
+
+class GroupBySource (f :: Type) (fields :: Row Type) | f -> fields
+
+instance GroupBySource (Table name fields) fields
+
+instance GroupBySource (Join k fields q r rest) fields
+
+instance (
+      RowToList fields list,
+      ToExtraFields list alias extra,
+      Union extra fields all
+) => GroupBySource (As alias (Table name fields)) all
+
+instance GroupBySource (Select s projection (From f fd rest)) projection
 
 
 class ToGroupByFields (f :: Type) (fields :: Row Type) (grouped :: Row Type) | f -> fields grouped
 
 instance (Cons name t e fields, Cons name t () grouped) => ToGroupByFields (Proxy name) fields grouped
+
+instance (
+      Append alias Dot path,
+      Append path name fullPath,
+      Cons fullPath t e fields,
+      Cons fullPath t () g,
+      Cons name t g grouped
+) => ToGroupByFields (Path alias name) fields grouped
 
 instance (
       ToGroupByFields a fields some,

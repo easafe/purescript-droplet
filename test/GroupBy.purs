@@ -22,3 +22,12 @@ tests =
                   let q = select ((count id # as b) /\ name) # from users # groupBy (id /\ name) # orderBy id
                   TM.notParameterized """SELECT COUNT(id) AS "b", name FROM users GROUP BY id, name ORDER BY id""" $ Query.query q
                   TM.result q [{b : BG.fromInt 1, name: "josh"}, {b: BG.fromInt 1, name: "mary"}]
+            TU.suite "path" do
+                  TU.test "single field" do
+                        let q = select id # from (users # as u) # groupBy (u ... id) # orderBy id
+                        TM.notParameterized """SELECT id FROM users AS "u" GROUP BY "u".id ORDER BY id""" $ Query.query q
+                        TM.result q [{id: 1}, {id: 2}]
+                  TU.test "many fields" do
+                        let q = select (id /\ u ... name) # from (users # as u) # groupBy (u ... name /\ id) # orderBy id
+                        TM.notParameterized """SELECT id, "u".name "u.name" FROM users AS "u" GROUP BY "u".name, id ORDER BY id""" $ Query.query q
+                        TM.result q [{id: 1, "u.name": "josh"}, {id: 2, "u.name": "mary"}]
