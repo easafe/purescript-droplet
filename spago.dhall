@@ -31,6 +31,7 @@ You can edit this file as you like.
   , "test-unit"
   , "transformers"
   , "tuples"
+  , "typelevel-prelude"
   , "unsafe-coerce"
   ]
 , packages = ./packages.dhall

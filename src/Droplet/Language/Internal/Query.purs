@@ -1,7 +1,7 @@
 -- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class IsValidReference, class ToOuterProjection, class TranslateSource, class ToNakedProjection, class WithColumn, class TranslateConditions, class TranslateColumn, class ToJoinType, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, toFieldNames, translateConditions, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class IsValidReference, class ToOuterProjection, class TranslateSource, class ToNakedProjection, class WithColumn, class TranslateConditions, class TranslateColumn, class IsColumns, class IsAggregations, class IsGrouped, class IsValidAggregation, class ToJoinType, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, toFieldNames, translateConditions, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -24,11 +24,13 @@ import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Function (Aggregate(..))
 import Foreign (Foreign)
+import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
+import Type.Data.Boolean (class And)
 import Type.Proxy (Proxy(..))
 
 --this is all really ugly right now
@@ -45,6 +47,10 @@ class ToQuery (q :: Type) (projection :: Row Type) | q -> projection where
       toQuery :: q -> State QueryState String
 
 instance (
+      IsGrouped rest is,
+      IsColumns s isc,
+      IsAggregations s isa,
+      IsValidAggregation isc isa is,
       IsValidTopLevel rest,
       IsTableAliased f table,
       IsNamedSubQuery rest table alias,
@@ -79,6 +85,48 @@ else instance ToQuery (Query projection) projection where
 
 else instance Translate s => ToQuery s () where
       toQuery q = translate q
+
+
+class IsGrouped (q :: Type) (is :: Boolean) | q -> is
+
+instance IsGrouped rest is => IsGrouped (Where c rest) is
+
+else instance IsGrouped (GroupBy f rest) True
+
+else instance IsGrouped q False
+
+
+class IsColumns (q :: Type) (is :: Boolean) | q -> is
+
+instance IsColumns (Aggregate i f o) False
+
+else instance IsColumns (As n (Aggregate i f o)) False
+
+else instance (IsColumns a isa, IsColumns b isb, And isa isb is) => IsColumns (Tuple a b) is
+
+else instance IsColumns s True
+
+
+class IsAggregations (q :: Type) (is :: Boolean) | q -> is
+
+instance IsAggregations (Aggregate i f o) True
+
+else instance IsAggregations (As n (Aggregate i f o)) True
+
+else instance (IsAggregations a isa, IsAggregations b isb, And isa isb is) => IsAggregations (Tuple a b) is
+
+else instance IsAggregations s False
+
+
+class IsValidAggregation (s :: Boolean) (t :: Boolean) (is :: Boolean)
+
+instance IsValidAggregation False True False
+
+else instance IsValidAggregation True False False
+
+else instance Fail (Text "Projection cannot include aggregations. Are you missing a GROUP BY clause?") => IsValidAggregation False False False
+
+else instance IsValidAggregation s t True
 
 
 class IsValidTopLevel (q :: Type)
