@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class IsNamedQuery, class UniqueAliases, class ToOnCondition, class IsNamedSubQuery, class ToJoin, class ToOnComparision, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class ToGroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class ToExtraFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class IsNamedSubQuery, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class AliasedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Definition
 import Prelude
@@ -19,16 +19,18 @@ import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
 
 
+
 ----------------------PREPARE----------------------------
 
 data Prepare q = Prepare q Plan
 
+-- | Name of this prepared statement
 newtype Plan = Plan String
 
 
+-- | Only complete statements are accepted by PREPARE
 class ToPrepare (q :: Type)
 
---to allow general selects/insert, ToQuery would need to check for invalid statements
 instance ToPrepare (Select s p (From f fields rest))
 
 instance ToPrepare (Insert (Into name fields fieldNames (Values v rest)))
@@ -38,6 +40,11 @@ instance ToPrepare (Update name fields (Set v rest))
 instance ToPrepare (Delete (From f fields rest))
 
 
+-- | https://www.postgresql.org/docs/current/sql-prepare.html
+-- |
+-- | PREPARE statements can be employed to reuse execution plans, and thus optimize performance
+-- |
+-- | Note: droplet always creates server-side parameters for literal values in queries. In the case of PREPARE, however, literals will be be parsed as statement parameters
 prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
 prepare plan s = Prepare s plan
 
@@ -131,20 +138,20 @@ LIMIT
 
 -}
 
+-- | SELECT representation. `projection` refers to the final output of this statement
 data Select s (projection :: Row Type) rest = Select s rest
 
 
+-- | Acceptable column type for SELECT statements
 class ToSelect (s :: Type)
 
 instance ToSelect (Proxy name)
 
-else instance ToSelect Star
+else instance ToSelect (Path table name)
 
 else instance ToSelect (As alias Int)
 
 else instance ToSelect (As alias (Proxy name))
-
-else instance ToSelect (Path table name)
 
 else instance ToSelect (As alias (Path table name))
 
@@ -152,29 +159,37 @@ else instance ToSelect (As alias (Aggregate inp fields out))
 
 else instance (ToSelect r, ToSelect t) => ToSelect (r /\ t)
 
+else instance ToSelect Star
+
 else instance ToSubExpression q => ToSelect q
 
 
+-- | Only single columns can be projected by subqueries
+-- |
+-- | Note: column subqueries may not return a value, thus their projection will be `Maybe` unless the original column type is already `Maybe`
 class ToSubExpression (s :: Type)
 
---for sub queries only a single column can be returned
 instance ToSubExpression (Select (Proxy name) projection rest)
 
-else instance ToSubExpression (Select (As alias Int) rojection rest)
+instance ToSubExpression (Select (Path table name) projection rest)
 
-else instance ToSubExpression (Select (As alias (Proxy name)) projection rest)
+instance ToSubExpression (Select (As alias Int) rojection rest)
 
-else instance ToSubExpression (Select (As alias (Path table name)) projection rest)
+instance ToSubExpression (Select (As alias (Proxy name)) projection rest)
 
-else instance ToSubExpression (Select (Path table name) projection rest)
+instance ToSubExpression (Select (As alias (Path table name)) projection rest)
 
-else instance ToSubExpression (Select (As alias (Aggregate inp fields out)) projection rest)
+instance ToSubExpression (Select (As alias (Aggregate inp fields out)) projection rest)
 
-else instance Fail (Text "Subquery must return a single column") => ToSubExpression (Select (a /\ b) projection rest)
-
-else instance (ToSubExpression s, IsNamedQuery rest alias) => ToSubExpression (Select s projection (From f fd rest))
+instance Fail (Text "Subquery must return a single column") => ToSubExpression (Select (a /\ b) projection rest)
 
 
+-- | SELECT can project literals, columns and subqueries with the following considerations:
+-- |
+-- | - Multiple columns are represented by tuples. `Data.Tuple.Nested./\` is convenient for this
+-- | - Literal values (e.g., numbers) must be aliased (with AS)
+-- | - Columns names in projections must be unique, or referenced by different table aliases (e.g., u.name, t.name)
+-- | - Subqueries must return a single column
 select :: forall s projection. ToSelect s => s -> Select s projection E
 select s = Select s E
 
@@ -184,51 +199,58 @@ select s = Select s E
 
 data From f (fields :: Row Type) rest = From f rest
 
---from needs to check if columns referenced by Select are valid
+
+-- | Acceptable sources for FROM statements
 class ToFrom (f :: Type) (q :: Type) (fields :: Row Type) | q f -> fields
 
+-- | FROM table
 instance (
       ToProjection s fields Empty selected,
       Nub selected unique,
       UniqueColumnNames selected unique
 ) => ToFrom (Table name fields) (Select s unique E) fields
 
---named tables like select ... from table as alias
+-- FROM table AS alias
 instance (
       ToProjection s fields alias selected,
       Nub selected unique,
       UniqueColumnNames selected unique
 ) => ToFrom (As alias (Table name fields)) (Select s unique E) fields
 
+-- | (DELETE) FROM table
 instance ToFrom (Table name fields) (Delete E) fields
 
---named queries like (select ... from ... ) as alias
+-- | FROM (SELECT ... FROM ...) AS alias
 instance (
-      IsNamedQuery rest alias,
-      ToProjection t projection alias selected,
+      QueryMustBeAliased rest alias,
+      ToProjection s projection alias selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Select s projection (From f fd rest)) (Select t unique E) projection
+) => ToFrom (Select t projection (From f fd rest)) (Select s unique E) projection
 
---inner join
+-- | FROM ... INNER JOIN ...
 instance (
-      Nub fields source,
-      UniqueAliases fields source,
       ToProjection s fields Inner selected,
       Nub selected unique,
       UniqueColumnNames selected unique
 ) => ToFrom (Join Inner fields l r (On c rest)) (Select s unique E) fields
 
---outer join
+-- | FROM ... OUTER JOIN ...
 instance (
-      Nub fields source,
-      UniqueAliases fields source,
       ToProjection s fields Outer selected,
       Nub selected unique,
       UniqueColumnNames selected unique
 ) => ToFrom (Join Outer fields l r (On c rest)) (Select s unique E) fields
 
 
+-- | FROM accepts the following sources
+-- |
+-- | - Tables
+-- | - Inner and outer joins
+-- | - Aliased tables
+-- | - Aliased SELECT statements
+-- |
+-- | To aid composition, SELECT projections are only validated on FROM
 from :: forall f q fields sql. ToFrom f q fields => ToRest q (From f fields E) sql => f -> q -> sql
 from f q = toRest q $ From f E
 
@@ -236,6 +258,7 @@ from f q = toRest q $ From f E
 
 -------------------------------JOIN----------------------------
 
+-- | Kind for OUTER and INNER joins
 data Side
 
 foreign import data Inner :: Side
@@ -246,24 +269,31 @@ data Join (k :: Side) (fields :: Row Type) q r rest = Join q r rest
 data On c rest = On c rest
 
 
-class ToJoin (q :: Type) (extra :: Row Type) | q -> extra
+-- | Given a source `q`, compute its (aliased) fields
+class ToJoin (q :: Type) (aliased :: Row Type) | q -> aliased
 
-instance (RowToList fields list, ToExtraFields list alias extra) => ToJoin (As alias (Table name fields))  extra
+-- | Aliased tables
+instance (RowToList fields list, AliasedFields list alias aliased) => ToJoin (As alias (Table name fields)) aliased
 
+-- | Aliased subqueries
 instance (
-      IsNamedQuery rest alias,
+      QueryMustBeAliased rest alias,
       RowToList projection list,
-      ToExtraFields list alias extra
-) => ToJoin (Select s projection (From f fields rest)) extra
+      AliasedFields list alias aliased
+) => ToJoin (Select s projection (From f fields rest)) aliased
 
---we dont support natural joins (or using) so on is mandatory
+-- | JOIN ... ON
 instance ToJoin (Join k fields l r (On c rest)) fields
 
-
+--refactor: see if we actually need this when going over toprojection
+-- | OUTER JOINs make one side nullable, as a corresponding record may not be found
+-- |
+-- | For ease of use, this class marks the nullable side fields with `Joined`, later on `ToProjection` will flatten it to `Maybe`
 class ToOuterFields (list :: RowList Type) (fields :: Row Type) | list -> fields
 
 instance ToOuterFields RL.Nil ()
 
+-- | Avoid nesting `Joined`s
 instance (
       Cons name (Joined t) () head,
       ToOuterFields rest tail,
@@ -277,46 +307,54 @@ else instance (
 ) => ToOuterFields (RL.Cons name t rest) all
 
 
-join :: forall r l right left all.
+-- | INNER JOIN
+-- |
+-- | JOIN sources are the same as FROM, with the exception that tables must be aliased
+join :: forall r l right left all fields.
       ToJoin l left =>
       ToJoin r right =>
       Union right left all =>
+      Nub all fields =>
+      UniqueAliases all fields =>
       l -> r -> Join Inner all l r E
 join l r = Join l r E
 
-leftJoin :: forall r l list out right left all.
+-- | LEFT OUTER JOIN
+-- |
+-- | JOIN sources are the same as FROM, with the exception that tables must be aliased
+leftJoin :: forall r l list out right left all fields.
       ToJoin l left =>
       ToJoin r right =>
       RowToList right list =>
       ToOuterFields list out =>
       Union left out all =>
-      l -> r -> Join Outer all l r E
+      Nub all fields =>
+      UniqueAliases all fields =>
+      l -> r -> Join Outer fields l r E
 leftJoin l r = Join l r E
 
+--refactor: check this together with ToCondiction from Condition.purs
+class OnCondition (c :: Type) (fields :: Row Type)
 
-class ToOnCondition (c :: Type) (fields :: Row Type)
+instance (OnCondition (Op a b) fields, OnCondition (Op c d) fields) => OnCondition (Op (Op a b) (Op c d)) fields
 
-instance (ToOnCondition (Op a b) fields, ToOnCondition (Op c d) fields) => ToOnCondition (Op (Op a b) (Op c d)) fields
-
-else instance ToOnComparision a b fields => ToOnCondition (Op a b) fields
+else instance OnComparision a b fields => OnCondition (Op a b) fields
 
 
 --only allowing alias.field for now
-class ToOnComparision (a :: Type) (b :: Type) (fields :: Row Type) | a b -> fields
+class OnComparision (a :: Type) (b :: Type) (fields :: Row Type) | a b -> fields
 
 instance (
       UnwrapDefinition t u,
       UnwrapDefinition r u,
-      Append alias Dot path,
-      Append path name fullPath,
+      AppendPath alias name fullPath,
       Cons fullPath t d fields,
-      Append otherAlias Dot otherPath,
-      Append otherPath otherName otherFullPath,
+      AppendPath otherAlias otherName otherFullPath,
       Cons otherFullPath r e fields
-) => ToOnComparision (Path alias name) (Path otherAlias otherName) fields
+) => OnComparision (Path alias name) (Path otherAlias otherName) fields
 
-
-on :: forall k l r c fields. ToOnCondition c fields => c -> Join k fields l r E -> Join k fields l r (On c E)
+-- | JOIN ... ON
+on :: forall k l r c fields. OnCondition c fields => c -> Join k fields l r E -> Join k fields l r (On c E)
 on c (Join q r _) = Join q r $ On c E
 
 
@@ -326,20 +364,22 @@ on c (Join q r _) = Join q r $ On c E
 data Where c rest = Where c rest
 
 
+-- | WHERE can only follow FROM, UPDATE and DELETE
 class ToWhere (c :: Type) (q :: Type)
-
+--refactor: examine tocondition after toprojection and thinking more about Path
 instance ToCondition c fields alias => ToWhere c (Select s projection (From (As alias f) fields E))
 
 instance ToCondition c fields Empty => ToWhere c (Select s projection (From (Table name fields) fields E))
 
-instance (IsNamedQuery rest alias, ToCondition c fields alias) => ToWhere c (Select s projection (From (Select t p (From f fd rest)) fields E))
+instance (QueryMustBeAliased rest alias, ToCondition c fields alias) => ToWhere c (Select s projection (From (Select t p (From f fd rest)) fields E))
 
 instance ToCondition c fields Empty => ToWhere c (Update name fields (Set v E))
 
 instance ToCondition c fields Empty => ToWhere c (Delete (From f fields E))
 
 
-wher :: forall c q sql. ToWhere c q  => ToRest q (Where c E) sql => c -> q -> sql
+-- | WHERE statement
+wher :: forall c q sql. ToWhere c q => ToRest q (Where c E) sql => c -> q -> sql
 wher c q = toRest q $ Where c E
 
 
@@ -348,7 +388,7 @@ wher c q = toRest q $ Where c E
 
 data GroupBy f rest = GroupBy f rest
 
-
+-- | GROUP BY can only follow FROM or WHERE
 class ToGroupBy (q :: Type) (s :: Type) (fields :: Row Type) | q -> s fields
 
 instance GroupBySource f fields => ToGroupBy (Select s p (From f fd E)) s fields
@@ -357,37 +397,36 @@ instance GroupBySource f fields => ToGroupBy (Select s p (From f fd (Where cond 
 
 
 class GroupBySource (f :: Type) (fields :: Row Type) | f -> fields
-
+--refactor: there are many places that inspect from contents to get fields, abstract this
 instance GroupBySource (Table name fields) fields
-
-instance GroupBySource (Join k fields q r rest) fields
 
 instance (
       RowToList fields list,
-      ToExtraFields list alias extra,
-      Union extra fields all
+      AliasedFields list alias aliased,
+      Union aliased fields all
 ) => GroupBySource (As alias (Table name fields)) all
+
+instance GroupBySource (Join k fields q r rest) fields
 
 instance GroupBySource (Select s projection (From f fd rest)) projection
 
 
-class ToGroupByFields (f :: Type) (fields :: Row Type) (grouped :: Row Type) | f -> fields grouped
+class GroupByFields (f :: Type) (fields :: Row Type) (grouped :: Row Type) | f -> fields grouped
 
-instance (Cons name t e fields, Cons name t () grouped) => ToGroupByFields (Proxy name) fields grouped
+instance (Cons name t e fields, Cons name t () grouped) => GroupByFields (Proxy name) fields grouped
 
 instance (
-      Append alias Dot path,
-      Append path name fullPath,
+      AppendPath alias name fullPath,
       Cons fullPath t e fields,
       Cons fullPath t () g,
       Cons name t g grouped
-) => ToGroupByFields (Path alias name) fields grouped
+) => GroupByFields (Path alias name) fields grouped
 
 instance (
-      ToGroupByFields a fields some,
-      ToGroupByFields b fields more,
+      GroupByFields a fields some,
+      GroupByFields b fields more,
       Union some more grouped
-) => ToGroupByFields (a /\ b) fields grouped
+) => GroupByFields (a /\ b) fields grouped
 
 
 class ValidGroupByProjection (s :: Type) (grouped :: Row Type) | s -> grouped
@@ -401,7 +440,7 @@ else instance (ValidGroupByProjection a grouped, ValidGroupByProjection b groupe
 else instance ValidGroupByProjection q grouped
 
 
-groupBy :: forall f s q sql grouped fields. ToGroupBy q s fields => ToGroupByFields f fields grouped => ValidGroupByProjection s grouped => ToRest q (GroupBy f E) sql => f -> q -> sql
+groupBy :: forall f s q sql grouped fields. ToGroupBy q s fields => GroupByFields f fields grouped => ValidGroupByProjection s grouped => ToRest q (GroupBy f E) sql => f -> q -> sql
 groupBy f q = toRest q $ GroupBy f E
 
 
@@ -739,15 +778,13 @@ instance (
 
 --join paths
 else instance (
-      Append alias Dot path,
-      Append path name fullPath,
+      AppendPath alias name fullPath,
       Cons fullPath t e fields,
       Cons fullPath t () projection
 ) => ToProjection (Path alias name) fields Inner projection
 
 else instance (
-      Append alias Dot path,
-      Append path name fullPath,
+      AppendPath alias name fullPath,
       Cons fullPath t e fields,
       JoinedToMaybe t v,
       Cons fullPath v () projection
@@ -757,17 +794,12 @@ else instance (
 else instance (
       UnwrapDefinition t u,
       Cons name t e fields,
-      Append alias Dot path,
-      Append path name fullPath,
+      AppendPath alias name fullPath,
       Cons fullPath u () projection
 ) => ToProjection (Path alias name) fields alias projection
 
 --alias outer scope
-else instance (
-      Append table Dot path,
-      Append path name fullPath,
-      Cons fullPath (Path table name) () projection
-) => ToProjection (Path table name) fields alias projection
+else instance (AppendPath table name fullPath, Cons fullPath (Path table name) () projection) => ToProjection (Path table name) fields alias projection
 
 else instance Cons alias Int () projection => ToProjection (As alias Int) fields a projection
 
@@ -780,8 +812,7 @@ else instance (
 ) => ToProjection (As alias (Proxy name)) fields a projection
 
 else instance (
-      Append table Dot path,
-      Append path name fullPath,
+      AppendPath table name fullPath,
       Cons fullPath t e fields,
       Cons alias t () projection
 ) => ToProjection (As alias (Path table name)) fields Side projection
@@ -829,6 +860,7 @@ class UniqueColumnNames (some :: Row Type) (more :: Row Type)
 instance UniqueColumnNames fields fields
 
 
+-- | Joined tables should not repeat table aliases
 class UniqueAliases (some :: Row Type) (more :: Row Type)
 
 instance UniqueAliases fields fields
@@ -843,17 +875,20 @@ else instance IsNamedSubQuery rest Empty alias => IsTableAliased (Select s p (Fr
 else instance IsTableAliased f Empty
 
 
-class IsNamedQuery (q :: Type) (alias :: Symbol) | q -> alias
+-- | Find this query's alias, or fail at compile time if query is not aliased
+class QueryMustBeAliased (q :: Type) (alias :: Symbol) | q -> alias
 
-instance IsNamedQuery rest alias => IsNamedQuery (Where cd rest) alias
+instance QueryMustBeAliased rest alias => QueryMustBeAliased (Where cd rest) alias
 
-instance IsNamedQuery rest alias => IsNamedQuery (OrderBy f rest) alias
+instance QueryMustBeAliased rest alias => QueryMustBeAliased (GroupBy f rest) alias
 
-instance IsNamedQuery rest alias => IsNamedQuery (Limit rest) alias
+instance QueryMustBeAliased rest alias => QueryMustBeAliased (OrderBy f rest) alias
 
-instance Fail (Text "Query in FROM clause must be named") => IsNamedQuery E alias
+instance QueryMustBeAliased rest alias => QueryMustBeAliased (Limit rest) alias
 
-instance IsNamedQuery (As alias E) alias
+instance Fail (Text "Expected query to end in AS statement") => QueryMustBeAliased E alias
+
+instance QueryMustBeAliased (As alias E) alias
 
 
 class IsNamedSubQuery (q :: Type) (name :: Symbol) (alias :: Symbol) | q -> name alias
@@ -883,20 +918,19 @@ instance (
 ) => UnwrapAll (RL.Cons name t rest) projection
 
 
-class ToExtraFields (list :: RowList Type) (alias :: Symbol) (extra :: Row Type) | list alias -> extra
+class AliasedFields (list :: RowList Type) (alias :: Symbol) (fields :: Row Type) | list alias -> fields
 
-instance ToExtraFields RL.Nil alias ()
+instance AliasedFields RL.Nil alias ()
 
 instance (
       ToPath alias path,
       Append path name fullPath,
       Cons fullPath t () head,
-      ToExtraFields rest alias tail,
-      Lacks fullPath tail,
-      Union head tail all
-) => ToExtraFields (RL.Cons name t rest) alias all
+      AliasedFields rest alias tail,
+      Union head tail fields
+) => AliasedFields (RL.Cons name t rest) alias fields
 
-
+--refactor: this class is only needed for ToQuery (Select s projection (From f fields rest)) final, which might be able to do it in another way, and thus remove this
 class ToPath (alias :: Symbol) (path :: Symbol) | alias -> path
 
 instance ToPath Empty Empty
@@ -913,6 +947,12 @@ else instance JoinedToMaybe (Joined (Maybe t)) (Maybe t)
 else instance UnwrapDefinition t u => JoinedToMaybe (Joined t) (Maybe u)
 
 else instance JoinedToMaybe t t
+
+
+class AppendPath (alias :: Symbol) (name :: Symbol) (fullPath :: Symbol) | alias name -> fullPath
+
+instance (Append alias Dot path, Append path name fullPath) => AppendPath alias name fullPath
+
 
 
 ---------------------------Rest machinery------------------------------------------
