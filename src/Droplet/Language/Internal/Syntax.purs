@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class IsNamedSubQuery, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class ToInsertFields, class ToInsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class AliasedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class IsNamedSubQuery, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class AliasedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Definition
 import Prelude
@@ -250,6 +250,10 @@ instance (
 -- | - Aliased tables
 -- | - Aliased SELECT statements
 -- |
+-- | Due to how SQL binding works, joins and subqueries require brackets to be parsed correctly. For example:
+-- | - `SELECT column FROM (SELECT column FROM table) AS alias` should be `select column # from (select column # from table # as alias)`)
+-- | - `SELECT column FROM table alias JOIN other_table other_alias` should be `select column # from ((table # as alias) `join` (other_table # as other_alias))`)
+-- |
 -- | To aid composition, SELECT projections are only validated on FROM
 from :: forall f q fields sql. ToFrom f q fields => ToRest q (From f fields E) sql => f -> q -> sql
 from f q = toRest q $ From f E
@@ -388,6 +392,7 @@ wher c q = toRest q $ Where c E
 
 data GroupBy f rest = GroupBy f rest
 
+
 -- | GROUP BY can only follow FROM or WHERE
 class ToGroupBy (q :: Type) (s :: Type) (fields :: Row Type) | q -> s fields
 
@@ -395,7 +400,8 @@ instance GroupBySource f fields => ToGroupBy (Select s p (From f fd E)) s fields
 
 instance GroupBySource f fields => ToGroupBy (Select s p (From f fd (Where cond E))) s fields
 
-
+--refactor: this can be made simpler
+-- also has a bug, check: select (t ... id) # from (select id # from users # as t) # groupBy (t ... id)
 class GroupBySource (f :: Type) (fields :: Row Type) | f -> fields
 --refactor: there are many places that inspect from contents to get fields, abstract this
 instance GroupBySource (Table name fields) fields
@@ -429,6 +435,7 @@ instance (
 ) => GroupByFields (a /\ b) fields grouped
 
 
+-- | Asserts that a SELECT ... GROUP BY projection contains only grouped columns or aggreagate functions
 class ValidGroupByProjection (s :: Type) (grouped :: Row Type) | s -> grouped
 
 instance Cons name t e grouped => ValidGroupByProjection (Proxy name) grouped
@@ -440,17 +447,22 @@ else instance (ValidGroupByProjection a grouped, ValidGroupByProjection b groupe
 else instance ValidGroupByProjection q grouped
 
 
-groupBy :: forall f s q sql grouped fields. ToGroupBy q s fields => GroupByFields f fields grouped => ValidGroupByProjection s grouped => ToRest q (GroupBy f E) sql => f -> q -> sql
+-- | GROUP BY statement
+groupBy :: forall f s q sql grouped fields.
+      ToGroupBy q s fields =>
+      GroupByFields f fields grouped =>
+      ValidGroupByProjection s grouped =>
+      ToRest q (GroupBy f E) sql =>
+      f -> q -> sql
 groupBy f q = toRest q $ GroupBy f E
 
 
 
 ----------------------------AS----------------------------
 
---beware of brackets
 newtype As (alias :: Symbol) rest = As rest
 
-
+-- | Acceptable alias targets
 class ToAs (q :: Type) (alias :: Symbol) | q -> alias
 
 instance ToAs Int alias
@@ -465,6 +477,8 @@ instance ToAs (Aggregate inp fields out) alias
 
 instance ToAs (Select s p (From f fields rest)) alias
 
+
+-- | AS statement
 as :: forall q alias sql. ToAs q alias => ToRest q (As alias E) sql => Proxy alias -> q -> sql
 as _ q = toRest q $ As E
 
@@ -476,7 +490,7 @@ data OrderBy f rest = OrderBy f rest
 
 data Sort (name :: Symbol) = Asc | Desc
 
-
+--refactor: besides being repetitive, this doesnt allow table.column in order by
 class ToOrderBy (f :: Type) (q :: Type)
 
 instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields E))
@@ -497,13 +511,15 @@ instance Cons name t e fields  => ToOrderByFields (Sort name) fields
 instance (ToOrderByFields a fields, ToOrderByFields b fields) => ToOrderByFields (a /\ b) fields
 
 
---works as long we dont support order by number
+-- | ASC
 asc :: forall name. Proxy name -> Sort name
 asc _ = Asc
 
+-- | DESC
 desc :: forall name. Proxy name -> Sort name
 desc _ = Desc
 
+-- | ORDER BY statement
 orderBy :: forall f q sql. ToOrderBy f q => ToRest q (OrderBy f E) sql => f -> q -> sql
 orderBy f q = toRest q $ OrderBy f E
 
@@ -518,8 +534,14 @@ class ToLimit (q :: Type)
 
 instance ToLimit (Select s projection (From fr fields (OrderBy f E)))
 
-instance ToLimit (Select s projection (From fr fields (Where cd (OrderBy f E))))
+instance ToLimit (Select s projection (From fr fields (GroupBy fg (OrderBy f E))))
 
+instance ToLimit (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f E)))))
+
+
+-- | LIMIT statement
+-- |
+-- | Note: LIMIT must always follow after ORDER BY
 limit :: forall q sql. ToLimit q => ToRest q (Limit E) sql => Int -> q -> sql
 limit n q = toRest q $ Limit n E
 
@@ -589,15 +611,15 @@ data Into (name :: Symbol) (fields :: Row Type) fieldNames rest = Into fieldName
 data Values fieldValues rest = Values fieldValues rest
 
 
-class ToInsertFields (fields :: Row Type) (fieldNames :: Type) (inserted :: Row Type) | fieldNames -> fields inserted
+class InsertList (fields :: Row Type) (fieldNames :: Type) (inserted :: Row Type) | fieldNames -> fields inserted
 
-instance (InvalidField t, Cons name t e fields, Cons name t () single) => ToInsertFields fields (Proxy name) single
+instance (InvalidField t, Cons name t e fields, Cons name t () single) => InsertList fields (Proxy name) single
 
 instance (
-      ToInsertFields fields f head,
-      ToInsertFields fields rest tail,
+      InsertList fields f head,
+      InsertList fields rest tail,
       Union head tail all
-) => ToInsertFields fields  (f /\ rest) all
+) => InsertList fields  (f /\ rest) all
 
 
 class RequiredFields (fieldList :: RowList Type) (required :: Row Type) | fieldList -> required
@@ -613,26 +635,25 @@ else instance RequiredFields rest required => RequiredFields (RL.Cons n (Maybe t
 else instance (RequiredFields rest tail, Cons name t () head, Lacks name tail, Union head tail required) => RequiredFields (RL.Cons name t rest) required
 
 
-class ToInsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fieldNames -> fields t
+class InsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fieldNames -> fields t
 
-instance (UnwrapDefinition t u, Cons name t e fields, ToValue u) => ToInsertValues fields (Proxy name) u
+instance (UnwrapDefinition t u, Cons name t e fields, ToValue u) => InsertValues fields (Proxy name) u
 
-else instance (ToInsertValues fields name value, ToInsertValues fields some more) => ToInsertValues fields (name /\ some) (value /\ more)
+else instance (InsertValues fields name value, InsertValues fields some more) => InsertValues fields (name /\ some) (value /\ more)
 
 
 insert :: Insert E
 insert = Insert E
 
---as it is, error messages are not intuitive at all
 into :: forall tableName fields fieldNames fieldList required e inserted.
       RowToList fields fieldList =>
       RequiredFields fieldList required =>
-      ToInsertFields fields fieldNames inserted =>
+      InsertList fields fieldNames inserted =>
       Union required e inserted =>
       Table tableName fields -> fieldNames -> Insert E -> Insert (Into tableName fields fieldNames E)
 into _ fieldNames _ = Insert (Into fieldNames E)
 
-values :: forall tableName fields fieldNames fieldValues. ToInsertValues fields fieldNames fieldValues => fieldValues -> Insert (Into tableName fields fieldNames E) -> Insert (Into tableName fields fieldNames (Values fieldValues E))
+values :: forall tableName fields fieldNames fieldValues. InsertValues fields fieldNames fieldValues => fieldValues -> Insert (Into tableName fields fieldNames E) -> Insert (Into tableName fields fieldNames (Values fieldValues E))
 values fieldValues (Insert (Into fieldNames _)) = Insert <<< Into fieldNames $ Values fieldValues E
 
 
@@ -762,27 +783,27 @@ returning f q = toRest q $ Returning f
 
 
 
-
 ------------------------Projection machinery---------------------------
 
--- | Row Type of columns projected by the query
+-- | Computes SELECT projection as a `Row Type`
 class ToProjection :: forall k. Type -> Row Type -> k -> Row Type -> Constraint
 class ToProjection s fields alias projection | s -> fields projection
 
---simple columns
+-- | Columns
 instance (
       UnwrapDefinition t u,
       Cons name t e fields,
       Cons name u () projection
 ) => ToProjection (Proxy name) fields alias projection
 
---join paths
+-- | Inner join path columns
 else instance (
       AppendPath alias name fullPath,
       Cons fullPath t e fields,
       Cons fullPath t () projection
 ) => ToProjection (Path alias name) fields Inner projection
 
+-- | Outer join path columns
 else instance (
       AppendPath alias name fullPath,
       Cons fullPath t e fields,
@@ -790,7 +811,7 @@ else instance (
       Cons fullPath v () projection
 ) => ToProjection (Path alias name) fields Outer projection
 
---alias same scope
+-- | Path column from current scope
 else instance (
       UnwrapDefinition t u,
       Cons name t e fields,
@@ -798,42 +819,50 @@ else instance (
       Cons fullPath u () projection
 ) => ToProjection (Path alias name) fields alias projection
 
---alias outer scope
+-- | Path column from outer scope
 else instance (AppendPath table name fullPath, Cons fullPath (Path table name) () projection) => ToProjection (Path table name) fields alias projection
 
+-- | Aliased literal
 else instance Cons alias Int () projection => ToProjection (As alias Int) fields a projection
 
+-- | Aliased aggregation
 else instance Cons alias t () projection => ToProjection (As alias (Aggregate inp fields t)) fields a projection
 
+-- | Aliased column
 else instance (
       UnwrapDefinition t u,
       Cons name t e fields,
       Cons alias u () projection
 ) => ToProjection (As alias (Proxy name)) fields a projection
 
+-- | Aliased join path column
 else instance (
       AppendPath table name fullPath,
       Cons fullPath t e fields,
       Cons alias t () projection
 ) => ToProjection (As alias (Path table name)) fields Side projection
 
+-- | Aliased path column from current scope
 else instance (
       UnwrapDefinition t u,
       Cons name t e fields,
       Cons alias u () projection
 ) => ToProjection (As alias (Path table name)) fields table projection
 
+-- | Aliased path column from outer scope
 else instance Cons alias (Path table name) () projection => ToProjection (As alias (Path table name)) fields a projection
 
+-- | All columns from source
 else instance (RowToList fields list, UnwrapAll list projection) => ToProjection Star fields alias projection
 
+-- | Column list
 else instance (
       ToProjection s fields alias some,
       ToProjection t fields alias more,
       Union some more projection
 ) => ToProjection (s /\ t) fields alias projection
 
---change projection to Maybe since subqueries may return null
+-- | Subquery as column
 else instance (
       IsTableAliased f table,
       ToProjection s fields table projection,
@@ -842,6 +871,7 @@ else instance (
       IsNamedSubQuery rest name alias, -- if the subquery ends in as
       Cons alias t () single
 ) => ToProjection (Select s p (From f fields rest)) fd a single
+
 
 else instance Fail (Text "Cannot recognize projection") => ToProjection x f a p
 
