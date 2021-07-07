@@ -9,7 +9,7 @@ import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefiniti
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy)
 
-
+-- | SQL logic/comparision operators
 data Operator =
       Equals |
       NotEquals |
@@ -20,20 +20,23 @@ data Operator =
 
 derive instance Eq Operator
 
+-- | Wrapper for comparisions
 data Op b c = Op Operator b c
 
 
---two type classes to not clutter Op with fields and alias type parameters
+-- | SQL logical expressions
 class ToCondition (c :: Type) (fields :: Row Type) (alias :: Symbol)
 
+-- | AND/OR
 instance (ToCondition (Op a b) fields alias, ToCondition (Op c d) fields alias) => ToCondition (Op (Op a b) (Op c d)) fields alias
 
+-- | Comparisions
 else instance ToComparison a b fields alias => ToCondition (Op a b) fields alias
 
 
+-- | Whether expressions can be compared
 class ToComparison (c :: Type) (t :: Type) (fields :: Row Type) (alias :: Symbol) | c t -> fields
 
---boring, but we shouldnt make Path an instance of ToValue
 instance (
       Cons name t d fields,
       Cons otherName t e fields
@@ -115,7 +118,6 @@ infix 4 notEquals as .<>.
 infix 4 equals as .=.
 infix 4 greaterThan as .>.
 infix 4 lesserThan as .<.
---left associativity is what sql uses
 infixl 3 and as .&&.
 infixl 2 or as .||.
 

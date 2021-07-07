@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class IsTableAliased, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class IsNamedSubQuery, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class AliasedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class AliasedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Definition
 import Prelude
@@ -273,7 +273,7 @@ data Join (k :: Side) (fields :: Row Type) q r rest = Join q r rest
 data On c rest = On c rest
 
 
--- | Given a source `q`, compute its (aliased) fields
+-- | Given a source `q`, compute its (qualified) fields
 class ToJoin (q :: Type) (aliased :: Row Type) | q -> aliased
 
 -- | Aliased tables
@@ -289,7 +289,7 @@ instance (
 -- | JOIN ... ON
 instance ToJoin (Join k fields l r (On c rest)) fields
 
---refactor: see if we actually need this when going over toprojection
+
 -- | OUTER JOINs make one side nullable, as a corresponding record may not be found
 -- |
 -- | For ease of use, this class marks the nullable side fields with `Joined`, later on `ToProjection` will flatten it to `Maybe`
@@ -311,7 +311,7 @@ else instance (
 ) => ToOuterFields (RL.Cons name t rest) all
 
 
--- | INNER JOIN
+-- | INNER JOIN statement
 -- |
 -- | JOIN sources are the same as FROM, with the exception that tables must be aliased
 join :: forall r l right left all fields.
@@ -323,7 +323,7 @@ join :: forall r l right left all fields.
       l -> r -> Join Inner all l r E
 join l r = Join l r E
 
--- | LEFT OUTER JOIN
+-- | LEFT OUTER JOIN statement
 -- |
 -- | JOIN sources are the same as FROM, with the exception that tables must be aliased
 leftJoin :: forall r l list out right left all fields.
@@ -337,7 +337,11 @@ leftJoin :: forall r l list out right left all fields.
       l -> r -> Join Outer fields l r E
 leftJoin l r = Join l r E
 
---refactor: check this together with ToCondiction from Condition.purs
+
+--refactor: it would be nice to be able to reuse ToCondition, but joins only allow alias.field for now
+-- | Comparision logic for ON statements
+-- |
+-- | Note: as of now, only qualifieds fields (e.g., table.column) can be used
 class OnCondition (c :: Type) (fields :: Row Type)
 
 instance (OnCondition (Op a b) fields, OnCondition (Op c d) fields) => OnCondition (Op (Op a b) (Op c d)) fields
@@ -345,7 +349,6 @@ instance (OnCondition (Op a b) fields, OnCondition (Op c d) fields) => OnConditi
 else instance OnComparision a b fields => OnCondition (Op a b) fields
 
 
---only allowing alias.field for now
 class OnComparision (a :: Type) (b :: Type) (fields :: Row Type) | a b -> fields
 
 instance (
@@ -357,7 +360,8 @@ instance (
       Cons otherFullPath r e fields
 ) => OnComparision (Path alias name) (Path otherAlias otherName) fields
 
--- | JOIN ... ON
+
+-- | JOIN ... ON statement
 on :: forall k l r c fields. OnCondition c fields => c -> Join k fields l r E -> Join k fields l r (On c E)
 on c (Join q r _) = Join q r $ On c E
 
@@ -370,12 +374,8 @@ data Where c rest = Where c rest
 
 -- | WHERE can only follow FROM, UPDATE and DELETE
 class ToWhere (c :: Type) (q :: Type)
---refactor: examine tocondition after toprojection and thinking more about Path
-instance ToCondition c fields alias => ToWhere c (Select s projection (From (As alias f) fields E))
 
-instance ToCondition c fields Empty => ToWhere c (Select s projection (From (Table name fields) fields E))
-
-instance (QueryMustBeAliased rest alias, ToCondition c fields alias) => ToWhere c (Select s projection (From (Select t p (From f fd rest)) fields E))
+instance (SourceAlias f alias, ToCondition c fields alias) => ToWhere c (Select s projection (From f fields E))
 
 instance ToCondition c fields Empty => ToWhere c (Update name fields (Set v E))
 
@@ -400,10 +400,10 @@ instance GroupBySource f fields => ToGroupBy (Select s p (From f fd E)) s fields
 
 instance GroupBySource f fields => ToGroupBy (Select s p (From f fd (Where cond E))) s fields
 
---refactor: this can be made simpler
--- also has a bug, check: select (t ... id) # from (select id # from users # as t) # groupBy (t ... id)
+
+--refactor: this can be made simpler (it could be removed fields in From included alaises but this complicates Translate)
 class GroupBySource (f :: Type) (fields :: Row Type) | f -> fields
---refactor: there are many places that inspect from contents to get fields, abstract this
+--refactor: could be the same as tojoin if joins accepted non aliased tables
 instance GroupBySource (Table name fields) fields
 
 instance (
@@ -490,7 +490,7 @@ data OrderBy f rest = OrderBy f rest
 
 data Sort (name :: Symbol) = Asc | Desc
 
---refactor: besides being repetitive, this doesnt allow table.column in order by
+--refactor: this doesnt allow table.column in order by
 class ToOrderBy (f :: Type) (q :: Type)
 
 instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields E))
@@ -535,6 +535,8 @@ class ToLimit (q :: Type)
 instance ToLimit (Select s projection (From fr fields (OrderBy f E)))
 
 instance ToLimit (Select s projection (From fr fields (GroupBy fg (OrderBy f E))))
+
+instance ToLimit (Select s projection (From fr fields (Where cd (OrderBy f E))))
 
 instance ToLimit (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f E)))))
 
@@ -622,6 +624,7 @@ instance (
 ) => InsertList fields  (f /\ rest) all
 
 
+--refactor: error messages are quite bad
 class RequiredFields (fieldList :: RowList Type) (required :: Row Type) | fieldList -> required
 
 instance RequiredFields RL.Nil ()
@@ -743,7 +746,6 @@ delete = Delete E
 
 
 
-
 ---------------------------RETURNING------------------------------------------
 
 {-
@@ -820,6 +822,8 @@ else instance (
 ) => ToProjection (Path alias name) fields alias projection
 
 -- | Path column from outer scope
+-- |
+-- | This column is validated once the full query is known (i.e., before running it)
 else instance (AppendPath table name fullPath, Cons fullPath (Path table name) () projection) => ToProjection (Path table name) fields alias projection
 
 -- | Aliased literal
@@ -850,6 +854,8 @@ else instance (
 ) => ToProjection (As alias (Path table name)) fields table projection
 
 -- | Aliased path column from outer scope
+-- |
+-- | This column is validated once the full query is known (i.e., before running it)
 else instance Cons alias (Path table name) () projection => ToProjection (As alias (Path table name)) fields a projection
 
 -- | All columns from source
@@ -864,15 +870,15 @@ else instance (
 
 -- | Subquery as column
 else instance (
-      IsTableAliased f table,
+      SourceAlias f table, --does source has an alias? we need it to figure out which qualified fields can be validated here
       ToProjection s fields table projection,
       RowToList projection list,
-      ToSingleColumn list name t,
-      IsNamedSubQuery rest name alias, -- if the subquery ends in as
+      ToSingleColumn list name t, --is column already Maybe or needs to be made into Maybe? subquery can only return a single column
+      QueryOptionallyAliased rest name alias, --is query aliased? if so we have to use the alias instead of the column name
       Cons alias t () single
 ) => ToProjection (Select s p (From f fields rest)) fd a single
 
-
+-- | Any valid instance should be recognizable
 else instance Fail (Text "Cannot recognize projection") => ToProjection x f a p
 
 
@@ -896,13 +902,14 @@ class UniqueAliases (some :: Row Type) (more :: Row Type)
 instance UniqueAliases fields fields
 
 
-class IsTableAliased (f :: Type) (alias :: Symbol) | f -> alias
+-- | Table/subquery alias or `Empty`
+class SourceAlias (f :: Type) (alias :: Symbol) | f -> alias
 
-instance IsTableAliased (As alias (Table name fields)) alias
+instance SourceAlias (As alias (Table name fields)) alias
 
-else instance IsNamedSubQuery rest Empty alias => IsTableAliased (Select s p (From f fd rest)) alias
+else instance QueryOptionallyAliased rest Empty alias => SourceAlias (Select s p (From f fd rest)) alias
 
-else instance IsTableAliased f Empty
+else instance SourceAlias f Empty
 
 
 -- | Find this query's alias, or fail at compile time if query is not aliased
@@ -921,21 +928,23 @@ instance Fail (Text "Expected query to end in AS statement") => QueryMustBeAlias
 instance QueryMustBeAliased (As alias E) alias
 
 
-class IsNamedSubQuery (q :: Type) (name :: Symbol) (alias :: Symbol) | q -> name alias
+-- | If this query is in the form of (SELECT ...) AS alias, return `alias`, otherwise keep `name`
+class QueryOptionallyAliased (q :: Type) (name :: Symbol) (alias :: Symbol) | q -> name alias
 
-instance IsNamedSubQuery rest name alias => IsNamedSubQuery (Where cd rest) name alias
+instance QueryOptionallyAliased rest name alias => QueryOptionallyAliased (Where cd rest) name alias
 
-instance IsNamedSubQuery rest name alias => IsNamedSubQuery (GroupBy f rest) name alias
+instance QueryOptionallyAliased rest name alias => QueryOptionallyAliased (GroupBy f rest) name alias
 
-instance IsNamedSubQuery rest name alias => IsNamedSubQuery (OrderBy f rest) name alias
+instance QueryOptionallyAliased rest name alias => QueryOptionallyAliased (OrderBy f rest) name alias
 
-instance IsNamedSubQuery rest name alias => IsNamedSubQuery (Limit rest) name alias
+instance QueryOptionallyAliased rest name alias => QueryOptionallyAliased (Limit rest) name alias
 
-instance IsNamedSubQuery E name name
+instance QueryOptionallyAliased E name name
 
-instance IsNamedSubQuery (As alias E) name alias
+instance QueryOptionallyAliased (As alias E) name alias
 
 
+-- | Recursively remove source field wrappers
 class UnwrapAll (list :: RowList Type) (projection :: Row Type) | list -> projection
 
 instance UnwrapAll RL.Nil ()
@@ -948,6 +957,7 @@ instance (
 ) => UnwrapAll (RL.Cons name t rest) projection
 
 
+-- | Computes all source fields with their alias
 class AliasedFields (list :: RowList Type) (alias :: Symbol) (fields :: Row Type) | list alias -> fields
 
 instance AliasedFields RL.Nil alias ()
@@ -968,6 +978,7 @@ instance ToPath Empty Empty
 else instance Append alias Dot path => ToPath alias path
 
 
+-- | `Joined` fields appear as `Maybe` in projections
 class JoinedToMaybe (t :: Type) (v :: Type) | t -> v
 
 instance JoinedToMaybe (Joined (f (Maybe t))) (Maybe t)
@@ -979,6 +990,7 @@ else instance UnwrapDefinition t u => JoinedToMaybe (Joined t) (Maybe u)
 else instance JoinedToMaybe t t
 
 
+-- | Simplify append qualifiying column names
 class AppendPath (alias :: Symbol) (name :: Symbol) (fullPath :: Symbol) | alias name -> fullPath
 
 instance (Append alias Dot path, Append path name fullPath) => AppendPath alias name fullPath
@@ -987,9 +999,11 @@ instance (Append alias Dot path, Append path name fullPath) => AppendPath alias 
 
 ---------------------------Rest machinery------------------------------------------
 
---this trick does the actual replacement of E for the next statement
--- we could use a alternative encoding for queries (e.g. tuples),
--- but I think this one is clearer (for the end user) when looking at the (final) types
+-- | (Most) SQL statement constructors accept a `rest` type parameter that refers to next statements
+-- |
+-- | Such parameter is initially filled with `E`, meaning that the query ends there
+-- |
+-- | This type class replaces the (nested) final `E` for the next statement
 class ToRest a b c | a -> b, a b -> c where
       toRest :: a -> b -> c
 
@@ -1039,4 +1053,5 @@ else instance ToRest b a c => ToRest a b c where
       toRest a b = toRest b a
 
 
+-- | Marks the query end
 data E = E

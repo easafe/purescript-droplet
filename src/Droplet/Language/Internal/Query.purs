@@ -52,8 +52,8 @@ instance (
       IsAggregations s isa,
       IsValidAggregation isc isa is,
       IsValidTopLevel rest,
-      IsTableAliased f table,
-      IsNamedSubQuery rest table alias,
+      SourceAlias f table,
+      QueryOptionallyAliased rest table alias,
       RowToList fields list,
       AliasedFields list alias outer,
       IsValidReference rest outer,
@@ -175,8 +175,8 @@ else instance (
 ) => ToOuterProjection (s /\ t) outer projection
 
 else instance (
-      IsTableAliased f table,
-      IsNamedSubQuery rest table tableAlias,
+      SourceAlias f table,
+      QueryOptionallyAliased rest table tableAlias,
       RowToList fields fieldList,
       AliasedFields fieldList tableAlias inner,
       Union outer inner all,
@@ -195,9 +195,9 @@ class WithColumn (fields :: RowList Type) (q :: Type) (single :: Row Type) | fie
 
 instance WithColumn RL.Nil q ()
 
-else instance (IsNamedSubQuery q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name (Maybe t) RL.Nil) q single
+else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name (Maybe t) RL.Nil) q single
 
-else instance (IsNamedSubQuery q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name t RL.Nil) q single
+else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name t RL.Nil) q single
 
 
 class IsValidReference (q :: Type) (outer :: Row Type)
@@ -247,7 +247,7 @@ instance (ToNakedProjection s some, ToNakedProjection t more, Union some more pr
 
 else instance (
       ToProjection (Select s p (From f fields rest)) () "" projection,
-      IsTableAliased f table,
+      SourceAlias f table,
       RowToList fields list,
       AliasedFields list table outer,
       ToOuterProjection s outer refs,
