@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class AliasedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Droplet.Language.Internal.Definition
 import Prelude
@@ -277,13 +277,13 @@ data On c rest = On c rest
 class ToJoin (q :: Type) (aliased :: Row Type) | q -> aliased
 
 -- | Aliased tables
-instance (RowToList fields list, AliasedFields list alias aliased) => ToJoin (As alias (Table name fields)) aliased
+instance (RowToList fields list, QualifiedFields list alias aliased) => ToJoin (As alias (Table name fields)) aliased
 
 -- | Aliased subqueries
 instance (
       QueryMustBeAliased rest alias,
       RowToList projection list,
-      AliasedFields list alias aliased
+      QualifiedFields list alias aliased
 ) => ToJoin (Select s projection (From f fields rest)) aliased
 
 -- | JOIN ... ON
@@ -408,7 +408,7 @@ instance GroupBySource (Table name fields) fields
 
 instance (
       RowToList fields list,
-      AliasedFields list alias aliased,
+      QualifiedFields list alias aliased,
       Union aliased fields all
 ) => GroupBySource (As alias (Table name fields)) all
 
@@ -490,7 +490,7 @@ data OrderBy f rest = OrderBy f rest
 
 data Sort (name :: Symbol) = Asc | Desc
 
---refactor: this doesnt allow table.column in order by
+
 class ToOrderBy (f :: Type) (q :: Type)
 
 instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields E))
@@ -958,17 +958,17 @@ instance (
 
 
 -- | Computes all source fields with their alias
-class AliasedFields (list :: RowList Type) (alias :: Symbol) (fields :: Row Type) | list alias -> fields
+class QualifiedFields (list :: RowList Type) (alias :: Symbol) (fields :: Row Type) | list alias -> fields
 
-instance AliasedFields RL.Nil alias ()
+instance QualifiedFields RL.Nil alias ()
 
 instance (
       ToPath alias path,
       Append path name fullPath,
       Cons fullPath t () head,
-      AliasedFields rest alias tail,
+      QualifiedFields rest alias tail,
       Union head tail fields
-) => AliasedFields (RL.Cons name t rest) alias fields
+) => QualifiedFields (RL.Cons name t rest) alias fields
 
 --refactor: this class is only needed for ToQuery (Select s projection (From f fields rest)) final, which might be able to do it in another way, and thus remove this
 class ToPath (alias :: Symbol) (path :: Symbol) | alias -> path

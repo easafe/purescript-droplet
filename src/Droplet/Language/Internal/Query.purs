@@ -1,7 +1,7 @@
 -- | `Translate`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class IsValidReference, class ToOuterProjection, class TranslateSource, class ToNakedProjection, class WithColumn, class TranslateConditions, class TranslateColumn, class IsColumns, class IsAggregations, class IsGrouped, class IsValidAggregation, class ToJoinType, class IsValidTopLevel, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, toFieldNames, translateConditions, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
+module Droplet.Language.Internal.Query (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class ToAggregateName, toAggregateName, class ToFieldNames, class ToSortNames, toSortNames, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, toFieldNames, translateConditions, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
 import Droplet.Language.Internal.Condition
 import Droplet.Language.Internal.Definition
@@ -43,27 +43,26 @@ instance Show (Query projection) where
       show (Query _ q _) = q
 
 
+-- | Prints a SQL query
 class ToQuery (q :: Type) (projection :: Row Type) | q -> projection where
       toQuery :: q -> State QueryState String
 
+-- | Fully formed queries in the shape of SELECT ... FROM ...
 instance (
-      IsGrouped rest is,
-      IsColumns s isc,
-      IsAggregations s isa,
-      IsValidAggregation isc isa is,
-      IsValidTopLevel rest,
-      SourceAlias f table,
-      QueryOptionallyAliased rest table alias,
+      AggregatedQuery s rest, --aggregation errors
+      QueryMustNotBeAliased rest, --alias errors
+      SourceAlias f alias,
       RowToList fields list,
-      AliasedFields list alias outer,
-      IsValidReference rest outer,
-      ToOuterProjection s outer refs,
-      Union refs projection all,
+      QualifiedFields list alias outer, --From currently does not include fields with their source alias
+      FilteredQuery rest outer, --where condition errors
+      QualifiedProjection s outer qual, --qualified columns projection
+      Union qual projection all,
       Nub all final,
       Translate (Select s projection (From f fields rest))
 ) => ToQuery (Select s projection (From f fields rest)) final where
       toQuery q = translate q
 
+-- | "Naked" queries in the shape of SELECT ...
 else instance (
       ToNakedProjection s projection,
       Nub projection unique,
@@ -72,53 +71,74 @@ else instance (
 ) => ToQuery (Select s p E) unique where
       toQuery q = translate q
 
+-- | INSERT
 else instance (
       ToProjection f fields Empty projection,
       Translate (Insert (Into name fields fieldNames (Values v (Returning f))))
 ) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning f)))) projection where
       toQuery q = translate q
 
+-- | Trivial instance for unsafe queries
 else instance ToQuery (Query projection) projection where
       toQuery (Query p q parameters) = do
             CMS.put { plan: p, parameters, bracketed: false }
             pure q
 
+-- | Queries that don't output data
 else instance Translate s => ToQuery s () where
       toQuery q = translate q
 
 
-class IsGrouped (q :: Type) (is :: Boolean) | q -> is
+-- | Asserts that queries not using GROUP BY do not mix aggregated and non aggregated columns
+class AggregatedQuery (s :: Type) (q :: Type)
 
-instance IsGrouped rest is => IsGrouped (Where c rest) is
+instance AggregatedQuery s rest => AggregatedQuery s (Where c rest)
 
-else instance IsGrouped (GroupBy f rest) True
+else instance AggregatedQuery s (GroupBy f rest)
 
-else instance IsGrouped q False
-
-
-class IsColumns (q :: Type) (is :: Boolean) | q -> is
-
-instance IsColumns (Aggregate i f o) False
-
-else instance IsColumns (As n (Aggregate i f o)) False
-
-else instance (IsColumns a isa, IsColumns b isb, And isa isb is) => IsColumns (Tuple a b) is
-
-else instance IsColumns s True
+else instance (
+      NoAggregations s no,
+      OnlyAggregations s yes,
+      IsValidAggregation no yes ans
+) => AggregatedQuery s q
 
 
-class IsAggregations (q :: Type) (is :: Boolean) | q -> is
+-- | Are all columns not aggregated?
+class NoAggregations (q :: Type) (is :: Boolean) | q -> is
 
-instance IsAggregations (Aggregate i f o) True
+instance NoAggregations (Aggregate i f o) False
 
-else instance IsAggregations (As n (Aggregate i f o)) True
+else instance NoAggregations (As n (Aggregate i f o)) False
 
-else instance (IsAggregations a isa, IsAggregations b isb, And isa isb is) => IsAggregations (Tuple a b) is
+else instance (
+      NoAggregations a isa,
+      NoAggregations b isb,
+      And isa isb is
+) => NoAggregations (Tuple a b) is
 
-else instance IsAggregations s False
+else instance NoAggregations s True
 
 
-class IsValidAggregation (s :: Boolean) (t :: Boolean) (is :: Boolean)
+-- | Are all columns aggregated?
+class OnlyAggregations (q :: Type) (is :: Boolean) | q -> is
+
+instance OnlyAggregations (Aggregate i f o) True
+
+else instance OnlyAggregations (As n (Aggregate i f o)) True
+
+else instance (
+      OnlyAggregations a isa,
+      OnlyAggregations b isb,
+      And isa isb is
+) => OnlyAggregations (Tuple a b) is
+
+else instance OnlyAggregations s False
+
+
+-- | Simple AND on the aggreagation check results
+-- |
+-- | Having a separated type class leads to better error messages
+class IsValidAggregation (s :: Boolean) (t :: Boolean) (is :: Boolean) | s t -> is
 
 instance IsValidAggregation False True False
 
@@ -129,128 +149,130 @@ else instance Fail (Text "Projection cannot include aggregations. Are you missin
 else instance IsValidAggregation s t True
 
 
-class IsValidTopLevel (q :: Type)
+-- | Prevents top level queries to end in AS
+class QueryMustNotBeAliased (q :: Type)
 
-instance IsValidTopLevel rest => IsValidTopLevel (Where c rest)
+instance QueryMustNotBeAliased rest => QueryMustNotBeAliased (Where c rest)
 
-instance IsValidTopLevel rest => IsValidTopLevel (GroupBy f rest)
+instance QueryMustNotBeAliased rest => QueryMustNotBeAliased (GroupBy f rest)
 
-instance IsValidTopLevel rest => IsValidTopLevel (OrderBy f rest)
+instance QueryMustNotBeAliased rest => QueryMustNotBeAliased (OrderBy f rest)
 
-instance IsValidTopLevel rest => IsValidTopLevel (Limit rest)
+instance QueryMustNotBeAliased rest => QueryMustNotBeAliased (Limit rest)
 
---can be improved but the gist is that select ... from ... as name translates to (select ... from ... ) as t which is not a valid top level
-instance Fail (Text "AS statement cannot be top level") => IsValidTopLevel (As alias E)
+instance Fail (Text "AS statement cannot be top level") => QueryMustNotBeAliased (As alias E)
 
-instance IsValidTopLevel E
+instance QueryMustNotBeAliased E
 
-instance IsValidTopLevel (Query projection)
+instance QueryMustNotBeAliased (Query projection)
 
---alternatively, this could be written based on the projection rowlist type
--- (by checking Path entries ) instead of recomputing all of Path fields
-class ToOuterProjection (s :: Type) (outer :: Row Type) (projection :: Row Type) | s -> outer projection
+
+class QualifiedProjection (s :: Type) (outer :: Row Type) (projection :: Row Type) | s -> outer projection
 
 instance (
-      Append alias Dot path,
-      Append path name fullPath,
+      AppendPath alias name fullPath,
       Cons fullPath t e outer,
       JoinedToMaybe t u,
       UnwrapDefinition u v,
       Cons fullPath v () projection
-) => ToOuterProjection (Path alias name) outer projection
+) => QualifiedProjection (Path alias name) outer projection
 
 else instance (
-      Append table Dot path,
-      Append path name fullPath,
+      AppendPath table name fullPath,
       Cons fullPath t e outer,
       JoinedToMaybe t u,
       UnwrapDefinition u v,
       Cons alias v () projection
-) => ToOuterProjection (As alias (Path table name)) outer projection
+) => QualifiedProjection (As alias (Path table name)) outer projection
 
 else instance (
-      ToOuterProjection s outer some,
-      ToOuterProjection t outer more,
+      QualifiedProjection s outer some,
+      QualifiedProjection t outer more,
       Union some more projection
-) => ToOuterProjection (s /\ t) outer projection
+) => QualifiedProjection (s /\ t) outer projection
 
 else instance (
       SourceAlias f table,
       QueryOptionallyAliased rest table tableAlias,
       RowToList fields fieldList,
-      AliasedFields fieldList tableAlias inner,
+      QualifiedFields fieldList tableAlias inner,
       Union outer inner all,
       Nub all nubbed,
-      IsValidReference rest nubbed,
-      ToOuterProjection s nubbed projection,
+      FilteredQuery rest nubbed,
+      QualifiedProjection s nubbed projection,
       RowToList projection list,
-      WithColumn list rest single
-) => ToOuterProjection (Select s p (From f fields rest)) outer single
+      SingleQualifiedColumn list rest single
+) => QualifiedProjection (Select s p (From f fields rest)) outer single
 
-else instance ToOuterProjection s outer ()
-
-
---cant use ToSingleColumn as it is not mandatory for a subquery to contain a Path
-class WithColumn (fields :: RowList Type) (q :: Type) (single :: Row Type) | fields -> q single
-
-instance WithColumn RL.Nil q ()
-
-else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name (Maybe t) RL.Nil) q single
-
-else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () single) => WithColumn (RL.Cons name t RL.Nil) q single
+else instance QualifiedProjection s outer ()
 
 
-class IsValidReference (q :: Type) (outer :: Row Type)
+-- | Projects a single qualified column, if it exists
+class SingleQualifiedColumn (fields :: RowList Type) (q :: Type) (single :: Row Type) | fields -> q single
 
-instance IsValidReference cond outer => IsValidReference (Where cond rest) outer
+instance SingleQualifiedColumn RL.Nil q ()
 
-else instance (IsValidReference (Op a b) outer, IsValidReference (Op c d) outer) => IsValidReference (Op (Op a b) (Op c d)) outer
+else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () single) => SingleQualifiedColumn (RL.Cons name (Maybe t) RL.Nil) q single
+
+else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () single) => SingleQualifiedColumn (RL.Cons name t RL.Nil) q single
+
+
+-- | Checks for invalid qualified columns usage in WHERE clauses
+class FilteredQuery (q :: Type) (outer :: Row Type)
+
+instance FilteredQuery cond outer => FilteredQuery (Where cond rest) outer
+
+else instance (FilteredQuery (Op a b) outer, FilteredQuery (Op c d) outer) => FilteredQuery (Op (Op a b) (Op c d)) outer
 
 else instance (
-      Append alias Dot path,
-      Append path name fullPath,
+      AppendPath alias name fullPath,
       Cons fullPath t e outer,
-      Append otherAlias Dot otherPath,
-      Append otherPath otherName otherFullPath,
+      AppendPath otherAlias otherName otherFullPath,
       Cons otherFullPath t f outer
-) => IsValidReference (Op (Path alias name) (Path otherAlias otherName)) outer
+) => FilteredQuery (Op (Path alias name) (Path otherAlias otherName)) outer
 
-else instance (Append alias Dot path, Append path name fullPath, Cons fullPath t e outer, Cons otherName t f outer) => IsValidReference (Op (Path alias name) (Proxy otherName)) outer
+else instance (
+      AppendPath alias name fullPath,
+      Cons fullPath t e outer,
+      Cons otherName t f outer
+) => FilteredQuery (Op (Path alias name) (Proxy otherName)) outer
 
 else instance (
       Cons name t f outer,
-      Append alias Dot path,
-      Append path otherName fullPath,
+      AppendPath alias otherName fullPath,
       Cons fullPath t e outer
-) => IsValidReference (Op (Proxy name) (Path alias otherName)) outer
+) => FilteredQuery (Op (Proxy name) (Path alias otherName)) outer
 
 else instance (
-      Append alias Dot path,
-      Append path name fullPath,
+      AppendPath alias name fullPath,
       Cons fullPath t e outer,
       UnwrapDefinition t u
-) => IsValidReference (Op (Path alias name) u) outer
+) => FilteredQuery (Op (Path alias name) u) outer
 
 else instance (
-      Append alias Dot path,
-      Append path name fullPath,
+      AppendPath alias name fullPath,
       Cons fullPath t e outer,
       UnwrapDefinition t u
-) => IsValidReference (Op u (Path alias name)) outer
+) => FilteredQuery (Op u (Path alias name)) outer
 
-else instance IsValidReference e outer
+else instance FilteredQuery e outer
 
 
+-- | Naked selects may be composed of subqueries whose projections need to be checked and merged individually
 class ToNakedProjection (s :: Type) (projection :: Row Type)
 
-instance (ToNakedProjection s some, ToNakedProjection t more, Union some more projection) => ToNakedProjection (s /\ t) projection
+instance (
+      ToNakedProjection s some,
+      ToNakedProjection t more,
+      Union some more projection
+) => ToNakedProjection (s /\ t) projection
 
 else instance (
-      ToProjection (Select s p (From f fields rest)) () "" projection,
+      ToProjection (Select s p (From f fields rest)) () Empty projection, --let ToProjection figure out alias and outer since this is necessarily a subquery
       SourceAlias f table,
       RowToList fields list,
-      AliasedFields list table outer,
-      ToOuterProjection s outer refs,
+      QualifiedFields list table outer,
+      QualifiedProjection s outer refs,
       RowToList projection pro,
       ToSingleColumn pro name t,
       Cons name t () single
