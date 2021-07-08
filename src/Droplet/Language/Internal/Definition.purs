@@ -45,14 +45,18 @@ data Star = Star
 star :: Star
 star = Star
 
+-- | Identity fields
 newtype Auto a = Auto a
 
+-- | Defaul constraints
 newtype Default a = Default a
 
+-- | A trick to mark left joined columns as nullable
 newtype Joined a = Joined a
 
 data Table (name :: Symbol) (fields :: Row Type) = Table
 
+-- | Qualifieds columns (e.g, table.column)
 data Path (alias :: Symbol) (field :: Symbol) = Path
 
 path :: forall alias field path pathField . Append alias Dot path => Append path field pathField => Proxy alias -> Proxy field -> Path alias field
@@ -181,6 +185,7 @@ parseTime input errorMessage =
             _ -> Left errorMessage
 
 
+-- | Conveniently remove type wrappers
 class UnwrapDefinition (w :: Type) (t :: Type) | w -> t
 
 instance UnwrapDefinition (Auto t) t
