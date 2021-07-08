@@ -99,7 +99,7 @@ else instance AggregatedQuery s (GroupBy f rest)
 else instance (
       NoAggregations s no,
       OnlyAggregations s yes,
-      IsValidAggregation no yes ans
+      IsValidAggregation no yes
 ) => AggregatedQuery s q
 
 
@@ -135,18 +135,14 @@ else instance (
 else instance OnlyAggregations s False
 
 
--- | Simple AND on the aggreagation check results
+-- | Check aggregation results
 -- |
 -- | Having a separated type class leads to better error messages
-class IsValidAggregation (s :: Boolean) (t :: Boolean) (is :: Boolean) | s t -> is
+class IsValidAggregation (s :: Boolean) (t :: Boolean)
 
-instance IsValidAggregation False True False
+instance Fail (Text "Projection cannot include aggregations. Are you missing a GROUP BY clause?") => IsValidAggregation False False
 
-else instance IsValidAggregation True False False
-
-else instance Fail (Text "Projection cannot include aggregations. Are you missing a GROUP BY clause?") => IsValidAggregation False False False
-
-else instance IsValidAggregation s t True
+else instance IsValidAggregation s t
 
 
 -- | Prevents top level queries to end in AS
