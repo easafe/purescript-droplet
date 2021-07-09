@@ -840,7 +840,8 @@ instance (
 else instance (
       AppendPath alias name fullPath,
       Cons fullPath t e fields,
-      Cons fullPath t () projection
+      UnwrapDefinition t u,
+      Cons fullPath u () projection
 ) => ToProjection (Path alias name) fields Inner projection
 
 -- | Outer join path columns
@@ -848,7 +849,8 @@ else instance (
       AppendPath alias name fullPath,
       Cons fullPath t e fields,
       JoinedToMaybe t v,
-      Cons fullPath v () projection
+      UnwrapDefinition v u,
+      Cons fullPath u () projection
 ) => ToProjection (Path alias name) fields Outer projection
 
 -- | Path column from current scope
@@ -877,12 +879,22 @@ else instance (
       Cons alias u () projection
 ) => ToProjection (As alias (Proxy name)) fields a projection
 
--- | Aliased join path column
+-- | Aliased inner join path column
 else instance (
       AppendPath table name fullPath,
       Cons fullPath t e fields,
-      Cons alias t () projection
-) => ToProjection (As alias (Path table name)) fields Side projection
+      UnwrapDefinition t u,
+      Cons alias u () projection
+) => ToProjection (As alias (Path table name)) fields Inner projection
+
+-- | Aliased outer join path column
+else instance (
+      AppendPath table name fullPath,
+      Cons fullPath t e fields,
+      JoinedToMaybe t v,
+      UnwrapDefinition v u,
+      Cons alias u () projection
+) => ToProjection (As alias (Path table name)) fields Outer projection
 
 -- | Aliased path column from current scope
 else instance (

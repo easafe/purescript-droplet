@@ -2,36 +2,65 @@
 
 Composable, type-safe EDSL and query mapper for PureScript targeting PostgreSQL
 
+* EDSL made out of combinators (nearly) identital to their SQL counterparts
+
+* Generated SQL matches EDSL one-to-one, and is guaranteed to be correct and unambiguous
+
+* Supports nearly all common SQL operations for SELECT, INSERT, UPDATE and DELETE, including joins, aggregations, subqueries, etc
+
+* Very little boilerplate: query results are automatically mapped to records, (valid) queries never require type annotations
+
+
 ### Documentation
 
-See the [project page](https://droplet.asafe.dev/) or [pursuit](https://pursuit.purescript.org/packages/purescript-droplet)
+See the [project page](https://droplet.asafe.dev/) for an in-depth look, or [pursuit](https://pursuit.purescript.org/packages/purescript-droplet) for API docs
+
 
 ### Quick start
 
-Droplet is a bit different from other PureScript (or Haskell) SQL libraries. There is no monads, functions to yield columns, or a higher level API abstracting away from the generated SQL query. Instead, the EDSL is made out exclusively of combinators (nearly) identical to their SQL statement counterparts. Likewise, the output of a query is automatically inferred from its projection with almost no need for type annotations or boilerplate type class instances.
-
-As an example, let's create a user table for some imaginary application
+Write some SQL
 
 ```sql
 create table users (
     id integer generated always as identity primary key,
     name text not null,
-    joined date default (now() at time zone 'utc'),
+    birthday date null
 );
+
+create table messages (
+    id integer generated always as identity primary key,
+    sender integer not null,
+    recipient integer not null,
+    date timestamptz default now(),
+
+    constraint sender_user foreign key (sender) references users(id),
+    constraint recipient_user foreign key (recipient) references users(id)
+);
+
 ```
 
-So we don't have to repeat it in every query, let's define some types for this table as well
+Define some types for your SQL
 
 ```purescript
 -- representation of the table itself
 users :: Table "users" Users
 users = Table
 
+messages :: Table "messages" Messages
+messages = Table
+
 -- representation of the table's columns definitions
 type Users = (
     id :: Auto Int, -- identity column
     name :: String,
-    joined :: Default Date, -- column with default
+    birthday :: Maybe Date, -- nullable column
+)
+
+type Messages = (
+    id :: Auto Int,
+    sender :: Int,
+    recipient :: Int,
+    date :: Default DateTime -- column with default
 )
 
 -- representation of column names to be used in queries
@@ -41,180 +70,99 @@ id = Proxy
 name :: Proxy "name"
 name = Proxy
 
-joined :: Proxy "joined"
-joined = Proxy
+birthday :: Proxy "birthday"
+birthday = Proxy
+
+sender :: Proxy "sender"
+sender = Proxy
+
+recipient :: Proxy "recipient"
+recipient = Proxy
+
+date :: Proxy "date"
+date = Proxy
 
 -- alias
 u :: Proxy "u"
 u = Proxy
+
+m :: Proxy "m"
+m = Proxy
 ```
 
-#### Writing queries
-
-If we wanted to insert and then fetch records from the `users` tables, we could write the following SQL queries
-
-```sql
-INSERT INTO users (name, joined) values ('Mary Sue', '2000-01-01')
-
-SELECT * FROM users
-```
-
-Using the types above, the same in Droplet reads
+Prepare some queries
 
 ```purescript
-insert # into users (name /\ joined) # values ("Mary Sue" /\ canonicalDate year month day)
 
-select star # from users
+-- INSERT
+
+mary :: _
+mary =
+    insert #
+    into users (name) #
+    values ("Mary Sue") # -- `name` is the only required field; it would be a type error to set `id`, as it is an identity column
+    returning id -- output inserted `id`
+
+gary :: Date -> _
+gary bday =
+    insert #
+    into users (name /\ birthday) # -- tuple for field list
+    values ("Gary Stu" /\ Just bday) # -- set the nullable field `birthday`
+    returning id
+
+chat :: Int -> Int -> _
+chat from to = insert # into messages (sender /\ recipient) # values (from /\ to) -- `date` has a default value
+
+
+-- SELECT
+
+selectMessages :: _
+selectMessages =
+      select (id /\ date) #
+      from messages
+
+selectUserMessages :: Int -> _
+selectUserMessages userId =
+      selectMessages #
+      wher (id .=. userId) -- SQL operators are surrounded by dots; we can compare `id` to `userId` as type wrappers such as `Auto` are automatically stripped
+
+joinUserMessages :: _
+joinUserMessages =
+      select (
+              u ... name /\ -- `...` is equivalent to table.column
+              (t ... name # as recipient) /\ -- `name` is displayed as recipient
+              m ... date
+            ) #
+      from (
+            ((messages # as m)
+            `join`
+            (users # as u) #
+            on (m ... sender .=. u ... id))
+            `join`
+            (users # as t) #
+            on (m ... recipient .=. t ... id)
+      )
 ```
 
-Likewise, filtering/modifying records
-
-```sql
-UPDATE users SET name = 'Gary Stu' WHERE name = 'Mary Sue'
-
-SELECT name, joined FROM users WHERE id <> 23 AS u
-```
+Connect to the database
 
 ```purescript
-update users # set (name /\ 'Gary Stu') # wher (name .=. 'Mary Sue')
+connectionInfo :: Configuration
+connectionInfo = (Driver.defaultConfiguration "database") {
+      user = Just "user"
+}
 
-select (name /\ joined) # from users # wher (id .<>. 23) # as u
+example :: Aff Unit
+example = do
+      pool <- liftEffect $ Pool.newPool connectionInfo -- connection pool from PostgreSQL
+      Driver.withConnection pool case _ of
+            Left error -> pure unit -- or some more sensible handling
+            Right connection -> runSql connection
 ```
 
-... and so on and so forth. That is one of the goals of the EDSL: translating queries from PureScript to SQL is direct, with no need for guesswork.
 
-However, not all queries can be expressed with the EDSL, specially ones that would result in syntax or type errors during runtime. In fact, that's another goal of the EDSL: if a query type checks, it should sucessfully run without any errors. For that reason, besides catching many kinds of mistakes, the DSL does not allow ambiguous or error prone operations. For example:
 
-* Invalid or unmatching columns
 
-From user input or field names
-
-```purescript
-select (Proxy :: Proxy "brithday") # from users
-
-select name # from users # wher (id .=. name)
-
-select name # from users # wher (id .=. "23")
-```
-
-In insert/update lists
-
-```purescript
-insert # into users (id /\ name) # values (23 /\ "Mary Sue") -- cannot insert identity column
-
-insert # into users joined # values (canonicalDate year month day) -- name is a required field
-```
-
-* Invalid column subqueries
-
-Subqueries can only be used as columns if they return a single result column
-
-```purescript
-select (select (id /\ name) # from users # wher (id .=. 23)) # from users -- type error
-```
-
-* Selecting from subqueries must always include an alias
-
-The equivalent of
-
-```sql
-SELECT * from (SELECT id, name FROM users)
-```
-
-doesn't type check. `as` is required to make this query valid
-
-```purescript
-select star # from (select (id /\ name) # from users # as u)
-```
-
-* More than one column with the same name
-
-```purescript
-select (id /\ (select id # from users # wher (id .=. 23))) # from users
-```
-
-doesn't type check. The solution again is to alias the column, e.g.,
-
-```purescript
-select (id /\ (select id # from users # wher (id .=. 23) # as u)) # from users
-```
-
-The last goal of the EDSL is to never require type annotations to type check valid queries. Query types can become quite verbose, but as a rule of thumb, combinators' input are restricted by type classes, they compose left to right and express next statements in their last type variable. For example, the type of `select` is
-
-```purescript
-select :: forall r s projection. ToSelect r s projection => r -> Select s projection E
-```
-
-`projection` tells the final output, devoid of table definitions like `Auto` or `Default`. So one of the above queries' type becomes
-
-```purescript
-Select (Tuple (Proxy "id") (Proxy "name"))
-  ( id :: Int
-  , name :: String
-  )
-  (From
-     (Table "users"
-        ( id :: Auto Int
-        , joined :: Default Date
-        , name :: String
-        )
-     )
-     ( id :: Auto Int
-     , joined :: Default Date
-     , name :: String
-     )
-     (Where (Op (Proxy "id") Int) E)
-  )
-select (id /\ name) # from users # wher (id .=. 3)
-```
-
-#### Running queries
-
-Database access is done through a query mapper. All this means is that the projection type of a query is matched with the actual data returned by the database. Rows are turned into records with columns as fields. For example, in the case of a query like
-
-```purescript
-select (id /\ (joined # as u)) # from users
-```
-
-Droplet infers that the output type is `( id :: Int, u :: Date )`. Queries with no projection, e.g. `update`, simply return the empty row type `()`.
-
-The query mapper also does its best to reject invalid or ambiguous queries. Case in point:
-
-* Syntatically invalid naked selects
-
-It is reasonable to write
-
-```purescript
-selectIdName = select (id /\ name)
-```
-
-to compose later in queries that reference the same columns, but it is not valid SQL on its own.
-
-* User inputed values in queries
-
-Whenever a value is used within a query, it is automatically parsed into a parameter
-
-```purescript
-select name # from users # wher (id .=. 23)
-```
-
-generates
-
-```sql
-SELECT name FROM users WHERE id = $1
-```
-
-using PostgreSQL server parameters. This is done to avoid SQL injection. For prepared statements, see `Dropelet.prepare`.
-
-* Unnamed columns
-
-Literal values, like numbers or dates, must be aliased. Same for functions like `COUNT` or `MAX`
-
-```purescript
-select 3 # from users -- type error
-
-select (3 # as u) # from users -- valid
-```
 
 ### Licensing
 
