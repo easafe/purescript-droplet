@@ -2,9 +2,13 @@
 
 Composable, type-safe EDSL and query mapper for PureScript targeting PostgreSQL
 
-### Getting started
+### Documentation
 
-Droplet's is a bit different from other PureScript (or Haskell) SQL libraries. There is no monads, functions to yield columns, or a higher level API abstracting away from the generated SQL query. Instead, the EDSL is made out exclusively of combinators (nearly) identical to their SQL statement counterparts. Likewise, the output of a query is automatically inferred from its projection with almost no need for type annotations or boilerplate type class instances.
+See the [project page](https://droplet.asafe.dev/) or [pursuit](https://pursuit.purescript.org/packages/purescript-droplet)
+
+### Quick start
+
+Droplet is a bit different from other PureScript (or Haskell) SQL libraries. There is no monads, functions to yield columns, or a higher level API abstracting away from the generated SQL query. Instead, the EDSL is made out exclusively of combinators (nearly) identical to their SQL statement counterparts. Likewise, the output of a query is automatically inferred from its projection with almost no need for type annotations or boilerplate type class instances.
 
 As an example, let's create a user table for some imaginary application
 
@@ -212,7 +216,10 @@ select 3 # from users -- type error
 select (3 # as u) # from users -- valid
 ```
 
-
 ### Licensing
 
 Wrapper code around [pg](https://github.com/brianc/node-postgres) was adapted from [purescript-postgresql-client](https://github.com/rightfold/purescript-postgresql-client) so its license has been included in [PURESCRIPT-POSTGRESQL-CLIENT-LICENSE](PURESCRIPT-POSTGRESQL-CLIENT-LICENSE)
+
+### Funding
+
+If this project is useful for you, consider [throwing a buck](https://asafe.dev/donate) to keep development possible
