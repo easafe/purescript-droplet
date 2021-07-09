@@ -1,8 +1,8 @@
 module Test.OrderBy where
 
-import Droplet.Language
-import Prelude
-import Test.Types
+import Droplet.Language (as, asc, desc, from, join, on, orderBy, select, wher, (...), (.<>.), (.=.))
+import Prelude (discard, (#), ($))
+import Test.Types (id, messages, n, name, t, u, users)
 
 import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Query as Query
@@ -29,4 +29,16 @@ tests =
                   let q = select id # from users # orderBy (id # desc)
                   TM.notParameterized """SELECT id FROM users ORDER BY id DESC""" $ Query.query q
                   TM.result q [{id: 2}, {id: 1}]
-
+            TU.suite "path" do
+                  TU.test "field name" do
+                        let q = select id # from (users # as u) # orderBy (u ... id)
+                        TM.notParameterized """SELECT id FROM users AS "u" ORDER BY "u".id""" $ Query.query q
+                        TM.result q [{id: 1}, {id : 2}]
+                  TU.test "asc" do
+                        let q = select id # from (select id # from users # as u) # orderBy (u ... id # asc)
+                        TM.notParameterized """SELECT id FROM (SELECT id FROM users) AS "u" ORDER BY "u".id ASC""" $ Query.query q
+                        TM.result q [{id: 1}, {id : 2}]
+                  TU.test "desc" do
+                        let q = select (3 # as id) # from (join (users # as u) (messages # as t) # on (t ... id .=. u ... id)) # orderBy (u ... id # desc)
+                        TM.notParameterized """SELECT 3 AS "id" FROM users AS "u" INNER JOIN messages AS "t" ON "t".id = "u".id ORDER BY "u".id DESC""" $ Query.query q
+                        TM.result q [{id: 3}, {id : 3}]

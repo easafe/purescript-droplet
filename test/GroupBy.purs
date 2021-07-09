@@ -1,8 +1,8 @@
 module Test.GroupBy where
 
-import Droplet.Language
+import Droplet.Language (as, count, from, groupBy, orderBy, select, (...))
 import Prelude
-import Test.Types
+import Test.Types (b, id, name, u, users)
 
 import Data.BigInt as BG
 import Data.Tuple.Nested ((/\))

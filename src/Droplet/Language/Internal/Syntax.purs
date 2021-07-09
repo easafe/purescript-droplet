@@ -1,14 +1,14 @@
 -- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
-import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, Empty, Joined, Path, Star, Table)
 import Prelude
 
 import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, Op)
+import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, Empty, Joined, Path, Star, Table)
 import Droplet.Language.Internal.Function (Aggregate)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
@@ -492,35 +492,69 @@ as _ q = toRest q $ As E
 
 data OrderBy f rest = OrderBy f rest
 
-data Sort (name :: Symbol) = Asc | Desc
+data Sort (f :: Type) = Asc | Desc
 
 
+-- | ORDER BY must be last statement
 class ToOrderBy (f :: Type) (q :: Type)
 
-instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields E))
+instance (
+      SourceAlias fr alias,
+      RowToList fields list,
+      QualifiedFields list alias qual,
+      Union projection fields pf,
+      Union qual pf all,
+      SortColumns f all
+) => ToOrderBy f (Select s projection (From fr fields E))
 
-instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (GroupBy fd E)))
+instance (
+      SourceAlias fr alias,
+      RowToList fields list,
+      QualifiedFields list alias qual,
+      Union projection fields pf,
+      Union qual pf all,
+      SortColumns f all
+) => ToOrderBy f (Select s projection (From fr fields (GroupBy fd E)))
 
-instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where cd E)))
+instance (
+      SourceAlias fr alias,
+      RowToList fields list,
+      QualifiedFields list alias qual,
+      Union projection fields pf,
+      Union qual pf all,
+      SortColumns f all
+) => ToOrderBy f (Select s projection (From fr fields (Where cd E)))
 
-instance (Union projection fields all, ToOrderByFields f all) => ToOrderBy f (Select s projection (From fr fields (Where cd (GroupBy fd E))))
+instance (
+      SourceAlias fr alias,
+      RowToList fields list,
+      QualifiedFields list alias qual,
+      Union projection fields pf,
+      Union qual pf all,
+      SortColumns f all
+) => ToOrderBy f (Select s projection (From fr fields (Where cd (GroupBy fd E))))
 
 
-class ToOrderByFields (f :: Type) (fields :: Row Type) | f -> fields
+class SortColumns (f :: Type) (fields :: Row Type) | f -> fields
 
-instance Cons name t e fields => ToOrderByFields (Proxy name) fields
+instance Cons name t e fields => SortColumns (Proxy name) fields
 
-instance Cons name t e fields  => ToOrderByFields (Sort name) fields
+--not allowing non local qualified fields yet
+instance (AppendPath alias name fullPath, Cons fullPath t e fields) => SortColumns (Path alias name) fields
 
-instance (ToOrderByFields a fields, ToOrderByFields b fields) => ToOrderByFields (a /\ b) fields
+instance Cons name t e fields => SortColumns (Sort (Proxy name)) fields
+
+instance (AppendPath alias name fullPath, Cons fullPath t e fields) => SortColumns (Sort (Path alias name)) fields
+
+instance (SortColumns a fields, SortColumns b fields) => SortColumns (a /\ b) fields
 
 
 -- | ASC
-asc :: forall name. Proxy name -> Sort name
+asc :: forall name. name -> Sort name
 asc _ = Asc
 
 -- | DESC
-desc :: forall name. Proxy name -> Sort name
+desc :: forall name. name -> Sort name
 desc _ = Desc
 
 -- | ORDER BY statement

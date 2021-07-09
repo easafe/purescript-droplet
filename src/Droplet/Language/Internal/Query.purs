@@ -549,8 +549,13 @@ class NameList fieldNames where
 instance IsSymbol name => NameList (Proxy name) where
       nameList name = DS.reflectSymbol name
 
-instance IsSymbol name => NameList (Sort name) where
+instance IsSymbol name => NameList (Sort (Proxy name)) where
       nameList s = DS.reflectSymbol (Proxy :: Proxy name) <> case s of
+            Desc -> descKeyword
+            Asc -> ascKeyword
+
+instance (IsSymbol alias, IsSymbol name) => NameList (Sort (Path alias name)) where
+      nameList s = quotePath (Proxy :: Proxy alias) (Proxy :: Proxy name) <> case s of
             Desc -> descKeyword
             Asc -> ascKeyword
 
