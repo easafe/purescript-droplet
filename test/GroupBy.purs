@@ -24,8 +24,8 @@ tests =
                   TM.result q [{b : BG.fromInt 1, name: "josh"}, {b: BG.fromInt 1, name: "mary"}]
             TU.suite "path" do
                   TU.test "single field" do
-                        let q = select id # from (users # as u) # groupBy (u ... id) # orderBy id
-                        TM.notParameterized """SELECT id FROM users AS "u" GROUP BY "u".id ORDER BY id""" $ Query.query q
+                        let q = select id # from (select id # from users # as u) # groupBy (u ... id) # orderBy id
+                        TM.notParameterized """SELECT id FROM (SELECT id FROM users) AS "u" GROUP BY "u".id ORDER BY id""" $ Query.query q
                         TM.result q [{id: 1}, {id: 2}]
                   TU.test "many fields" do
                         let q = select (id /\ u ... name) # from (users # as u) # groupBy (u ... name /\ id) # orderBy id

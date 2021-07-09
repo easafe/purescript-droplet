@@ -106,7 +106,7 @@ insert # into users joined # values (canonicalDate year month day) -- name is a 
 Subqueries can only be used as columns if they return a single result column
 
 ```purescript
-select (select (id /\ name) # from users # where id .=. 23) # from users -- type error
+select (select (id /\ name) # from users # wher (id .=. 23)) # from users -- type error
 ```
 
 * Selecting from subqueries must always include an alias
@@ -126,13 +126,13 @@ select star # from (select (id /\ name) # from users # as u)
 * More than one column with the same name
 
 ```purescript
-select (id /\ (select id # from users # where id .=. 23)) # from users
+select (id /\ (select id # from users # wher (id .=. 23))) # from users
 ```
 
 doesn't type check. The solution again is to alias the column, e.g.,
 
 ```purescript
-select (id /\ (select id # from users # where id .=. 23 # as u)) # from users
+select (id /\ (select id # from users # wher (id .=. 23) # as u)) # from users
 ```
 
 The last goal of the EDSL is to never require type annotations to type check valid queries. Query types can become quite verbose, but as a rule of thumb, combinators' input are restricted by type classes, they compose left to right and express next statements in their last type variable. For example, the type of `select` is
@@ -191,7 +191,7 @@ to compose later in queries that reference the same columns, but it is not valid
 Whenever a value is used within a query, it is automatically parsed into a parameter
 
 ```purescript
-select name # from users # where (id .=. 23)
+select name # from users # wher (id .=. 23)
 ```
 
 generates

@@ -3,7 +3,7 @@
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
 module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class ToOrderByFields, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
-import Droplet.Language.Internal.Definition
+import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, Empty, Joined, Path, Star, Table)
 import Prelude
 
 import Data.Maybe (Maybe)
@@ -401,7 +401,6 @@ instance GroupBySource f fields => ToGroupBy (Select s p (From f fd E)) s fields
 instance GroupBySource f fields => ToGroupBy (Select s p (From f fd (Where cond E))) s fields
 
 
---refactor: this can be made simpler (it could be removed fields in From included alaises but this complicates Translate)
 class GroupBySource (f :: Type) (fields :: Row Type) | f -> fields
 --refactor: could be the same as tojoin if joins accepted non aliased tables
 instance GroupBySource (Table name fields) fields
@@ -414,7 +413,12 @@ instance (
 
 instance GroupBySource (Join k fields q r rest) fields
 
-instance GroupBySource (Select s projection (From f fd rest)) projection
+instance (
+      QueryMustBeAliased rest alias,
+      RowToList projection list,
+      QualifiedFields list alias aliased,
+      Union aliased projection all
+) => GroupBySource (Select s projection (From f fd rest)) all
 
 
 class GroupByFields (f :: Type) (fields :: Row Type) (grouped :: Row Type) | f -> fields grouped
@@ -970,7 +974,8 @@ instance (
       Union head tail fields
 ) => QualifiedFields (RL.Cons name t rest) alias fields
 
---refactor: this class is only needed for ToQuery (Select s projection (From f fields rest)) final, which might be able to do it in another way, and thus remove this
+
+-- | Optionally add source field alias
 class ToPath (alias :: Symbol) (path :: Symbol) | alias -> path
 
 instance ToPath Empty Empty
