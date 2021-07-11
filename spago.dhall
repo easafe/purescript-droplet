@@ -23,6 +23,7 @@ You can edit this file as you like.
   , "integers"
   , "maybe"
   , "newtype"
+  , "now"
   , "nullable"
   , "partial"
   , "prelude"

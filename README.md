@@ -160,7 +160,25 @@ example = do
             Right connection -> runSql connection
 ```
 
+Run queries
 
+```purescript
+runSql :: Connection -> Aff Unit
+runSql connection = do
+      now <- liftEffect Now.nowDate
+      mRow <- Driver.single connection mary -- run a query that returns a single row
+      gRow <- Driver.single connection $ gary now
+      case mRow, gRow of
+            Right (Just {id: mId}), Right (Just {id: gId}) -> void do
+                  mErr <- Driver.execute connection $ chat mId gId -- run a query that doesn't produce an output
+                  gErr <- Driver.execute connection $ chat gId mId
+
+                  mMessages <- Driver.query connection $ selectUserMessages mId -- run a query that returns rows
+                  gMessages <- Driver.query connection $ selectUserMessages gId -- rows are always records, the keys are the projected columns
+                  Driver.query connection joinUserMessages
+
+            _, _ -> pure unit
+```
 
 
 
