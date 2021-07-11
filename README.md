@@ -36,7 +36,6 @@ create table messages (
     constraint sender_user foreign key (sender) references users(id),
     constraint recipient_user foreign key (recipient) references users(id)
 );
-
 ```
 
 Define some types for your SQL
@@ -88,14 +87,14 @@ u = Proxy
 
 m :: Proxy "m"
 m = Proxy
+
+t :: Proxy "t"
+t = Proxy
 ```
 
 Prepare some queries
 
 ```purescript
-
--- INSERT
-
 mary :: _
 mary =
     insert #
@@ -113,8 +112,6 @@ gary bday =
 chat :: Int -> Int -> _
 chat from to = insert # into messages (sender /\ recipient) # values (from /\ to) -- `date` has a default value
 
-
--- SELECT
 
 selectMessages :: _
 selectMessages =
