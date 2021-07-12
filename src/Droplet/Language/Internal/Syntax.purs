@@ -1,7 +1,7 @@
--- | This module defines the entire SQL EDSL, mostly because it'd be a pain to split it
+-- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class ToRest, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, toRest, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Prelude
 
@@ -255,8 +255,8 @@ instance (
 -- | - `SELECT column FROM table alias JOIN other_table other_alias` should be `select column # from ((table # as alias) `join` (other_table # as other_alias))`)
 -- |
 -- | To aid composition, SELECT projections are only validated on FROM
-from :: forall f q fields sql. ToFrom f q fields => ToRest q (From f fields E) sql => f -> q -> sql
-from f q = toRest q $ From f E
+from :: forall f q fields sql. ToFrom f q fields => Resume q (From f fields E) sql => f -> q -> sql
+from f q = resume q $ From f E
 
 
 
@@ -383,8 +383,8 @@ instance ToCondition c fields Empty => ToWhere c (Delete (From f fields E))
 
 
 -- | WHERE statement
-wher :: forall c q sql. ToWhere c q => ToRest q (Where c E) sql => c -> q -> sql
-wher c q = toRest q $ Where c E
+wher :: forall c q sql. ToWhere c q => Resume q (Where c E) sql => c -> q -> sql
+wher c q = resume q $ Where c E
 
 
 
@@ -456,9 +456,9 @@ groupBy :: forall f s q sql grouped fields.
       ToGroupBy q s fields =>
       GroupByFields f fields grouped =>
       ValidGroupByProjection s grouped =>
-      ToRest q (GroupBy f E) sql =>
+      Resume q (GroupBy f E) sql =>
       f -> q -> sql
-groupBy f q = toRest q $ GroupBy f E
+groupBy f q = resume q $ GroupBy f E
 
 
 
@@ -483,8 +483,8 @@ instance ToAs (Select s p (From f fields rest)) alias
 
 
 -- | AS statement
-as :: forall q alias sql. ToAs q alias => ToRest q (As alias E) sql => Proxy alias -> q -> sql
-as _ q = toRest q $ As E
+as :: forall q alias sql. ToAs q alias => Resume q (As alias E) sql => Proxy alias -> q -> sql
+as _ q = resume q $ As E
 
 
 
@@ -558,8 +558,8 @@ desc :: forall name. name -> Sort name
 desc _ = Desc
 
 -- | ORDER BY statement
-orderBy :: forall f q sql. ToOrderBy f q => ToRest q (OrderBy f E) sql => f -> q -> sql
-orderBy f q = toRest q $ OrderBy f E
+orderBy :: forall f q sql. ToOrderBy f q => Resume q (OrderBy f E) sql => f -> q -> sql
+orderBy f q = resume q $ OrderBy f E
 
 
 
@@ -582,8 +582,8 @@ instance ToLimit (Select s projection (From fr fields (Where cd (GroupBy fg (Ord
 -- | LIMIT statement
 -- |
 -- | Note: LIMIT must always follow after ORDER BY
-limit :: forall q sql. ToLimit q => ToRest q (Limit E) sql => Int -> q -> sql
-limit n q = toRest q $ Limit n E
+limit :: forall q sql. ToLimit q => Resume q (Limit E) sql => Int -> q -> sql
+limit n q = resume q $ Limit n E
 
 
 
@@ -818,8 +818,8 @@ instance Cons name t e fields => ToReturningFields (Proxy name) fields
 instance (ToReturningFields a fields, ToReturningFields b fields) => ToReturningFields (a /\ b) fields
 
 
-returning :: forall f q sql. ToReturning f q => ToRest q (Returning f) sql => f -> q -> sql
-returning f q = toRest q $ Returning f
+returning :: forall f q sql. ToReturning f q => Resume q (Returning f) sql => f -> q -> sql
+returning f q = resume q $ Returning f
 
 
 
@@ -1048,60 +1048,60 @@ instance (Append alias Dot path, Append path name fullPath) => AppendPath alias 
 
 
 
----------------------------Rest machinery------------------------------------------
+---------------------------Resume machinery------------------------------------------
 
--- | (Most) SQL statement constructors accept a `rest` type parameter that refers to next statements
+-- | Most SQL statement constructors accept a `rest` type parameter that refers to next statements
 -- |
 -- | Such parameter is initially filled with `E`, meaning that the query ends there
 -- |
 -- | This type class replaces the (nested) final `E` for the next statement
-class ToRest a b c | a -> b, a b -> c where
-      toRest :: a -> b -> c
+class Resume a b c | a -> b, a b -> c where
+      resume :: a -> b -> c
 
-instance ToRest rest b c => ToRest (Select s p rest) b (Select s p c) where
-      toRest (Select s rest) b = Select s $ toRest rest b
+instance Resume rest b c => Resume (Select s p rest) b (Select s p c) where
+      resume (Select s rest) b = Select s $ resume rest b
 
-else instance ToRest rest b c => ToRest (From f fd rest) b (From f fd c) where
-      toRest (From f rest) b = From f $ toRest rest b
+else instance Resume rest b c => Resume (From f fd rest) b (From f fd c) where
+      resume (From f rest) b = From f $ resume rest b
 
-else instance ToRest rest b c => ToRest (Where cd rest) b (Where cd c) where
-      toRest (Where f rest) b = Where f $ toRest rest b
+else instance Resume rest b c => Resume (Where cd rest) b (Where cd c) where
+      resume (Where f rest) b = Where f $ resume rest b
 
-else instance ToRest rest b c => ToRest (GroupBy f rest) b (GroupBy f c) where
-      toRest (GroupBy f rest) b = GroupBy f $ toRest rest b
+else instance Resume rest b c => Resume (GroupBy f rest) b (GroupBy f c) where
+      resume (GroupBy f rest) b = GroupBy f $ resume rest b
 
-else instance ToRest rest b c => ToRest (OrderBy f rest) b (OrderBy f c) where
-      toRest (OrderBy f rest) b = OrderBy f $ toRest rest b
+else instance Resume rest b c => Resume (OrderBy f rest) b (OrderBy f c) where
+      resume (OrderBy f rest) b = OrderBy f $ resume rest b
 
-else instance ToRest rest b c => ToRest (Limit rest) b (Limit c) where
-      toRest (Limit n rest) b = Limit n $ toRest rest b
+else instance Resume rest b c => Resume (Limit rest) b (Limit c) where
+      resume (Limit n rest) b = Limit n $ resume rest b
 
-else instance ToRest rest b c => ToRest (Update n f rest) b (Update n f c) where
-      toRest (Update rest) b = Update $ toRest rest b
+else instance Resume rest b c => Resume (Update n f rest) b (Update n f c) where
+      resume (Update rest) b = Update $ resume rest b
 
-else instance ToRest rest b c => ToRest (Insert rest) b (Insert c) where
-      toRest (Insert rest) b = Insert $ toRest rest b
+else instance Resume rest b c => Resume (Insert rest) b (Insert c) where
+      resume (Insert rest) b = Insert $ resume rest b
 
-else instance ToRest rest b c => ToRest (Into n f fd rest) b (Into n f fd c) where
-      toRest (Into f rest) b = Into f $ toRest rest b
+else instance Resume rest b c => Resume (Into n f fd rest) b (Into n f fd c) where
+      resume (Into f rest) b = Into f $ resume rest b
 
-else instance ToRest rest b c => ToRest (Values v rest) b (Values v c) where
-      toRest (Values v rest) b = Values v $ toRest rest b
+else instance Resume rest b c => Resume (Values v rest) b (Values v c) where
+      resume (Values v rest) b = Values v $ resume rest b
 
-else instance ToRest rest b c => ToRest (Set p rest) b (Set p c) where
-      toRest (Set p rest) b = Set p $ toRest rest b
+else instance Resume rest b c => Resume (Set p rest) b (Set p c) where
+      resume (Set p rest) b = Set p $ resume rest b
 
-else instance ToRest rest b c => ToRest (Delete rest) b (Delete c) where
-      toRest (Delete rest) b = Delete $ toRest rest b
+else instance Resume rest b c => Resume (Delete rest) b (Delete c) where
+      resume (Delete rest) b = Delete $ resume rest b
 
-else instance ToRest (As alias E) b (As alias b) where
-      toRest (As _) b = As b
+else instance Resume (As alias E) b (As alias b) where
+      resume (As _) b = As b
 
-else instance ToRest E b b where
-      toRest _ b = b
+else instance Resume E b b where
+      resume _ b = b
 
-else instance ToRest b a c => ToRest a b c where
-      toRest a b = toRest b a
+else instance Resume b a c => Resume a b c where
+      resume a b = resume b a
 
 
 -- | Marks the query end

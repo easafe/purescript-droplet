@@ -1,7 +1,191 @@
 ---
 layout: default
-title: EDSL
+title: eDSL
 ---
+
+## Introduction
+
+Before looking at the eDSL (embedded Domain Specific Language) syntax, let's talk about types
+
+* Database types
+
+In order to write queries, we have to define type for database objects. As an example, types for the schema defined in [getting started](/index) could be written as follows
+
+```haskell
+-- `users` table
+type Users = (
+    id :: Auto Int,
+    name :: String,
+    birthday :: Maybe Date
+)
+
+users :: Table "users" Users
+users = Table
+
+-- `messages` table
+type Messages = (
+    id :: Auto Int,
+    sender :: Int,
+    recipient :: Int,
+    date :: Default DateTime
+)
+
+messages :: Table "messages" Messages
+messages = Table
+```
+
+`Users` refers to the table columns, whereas `users` ties it together with the table name onto the data type `Table`. `Auto` and `Default` refer to identity and default columns. Expectedly, `Maybe` signals nullable columns.
+
+Since the columns are at type level, we need `Proxy`s to represent their names
+
+```haskell
+id :: Proxy "id"
+id = Proxy
+
+name :: Proxy "name"
+name = Proxy
+
+date :: Proxy "date"
+date = Proxy
+
+birthday :: Proxy "birthday"
+birthday = Proxy
+
+sender :: Proxy "sender"
+sender = Proxy
+
+recipient :: Proxy "recipient"
+recipient = Proxy
+```
+
+and aliases, as well
+
+```haskell
+m :: Proxy "m"
+m = Proxy
+
+u :: Proxy "u"
+u = Proxy
+
+t :: Proxy "t"
+t = Proxy
+```
+
+* Statement types
+
+The eDSL is designed to be composable, and resemble SQL syntax as much as possible with the generated code being a direct equivalent. For these reasons, function types are somewhat opaque. On the other hand, data types (such as for SELECT, WHERE or JOIN) become quite verbose quite fast. Luckily, when writing queries, type annotations are optional: the type checker should be able to infer the type of valid queries without any hints. That being said, specially when debugging type errors in your queries, it might be useful to know some of the conventions employed in the eDSL.
+
+```haskell
+-- select :: forall s projection. ToSelect s => s -> Select s projection E
+-- from :: forall f q fields sql. ToFrom f q fields => Resume q (From f fields E) sql => f -> q -> sql
+-- wher :: forall c q sql. ToWhere c q => Resume q (Where c E) sql => c -> q -> sql
+
+exampleQuery :: Select (Proxy "name")
+  ( name :: String
+  )
+  (From
+     (Table "users"
+        Users
+     )
+     Users
+     (Where (Op (Proxy "id") Int) E)
+  )
+exampleQuery = select name # from users # wher (id .=. 9)
+```
+
+It is not important to immediately understand all the types. The main draws are:
+
+1. Left association
+
+To aid composition, functions are designed to be take the current query as their last parameter. While it is possible to write `wher (id .=. 9) (from users (select name))`, we will stick with `#` in this guide
+
+2. `To` type classes
+
+Type classes in the form `ToFrom`, `ToWhere` etc, are used to tell which statements are allowed before (e.g., FROM can only follow after SELECT or DELETE). These type classes have no function members
+
+3. `Resume` type class
+
+eDSL functions mark the end of a statement with the `E` data type.  The type class `Resume` replaces it with a further statement, for example, `Select s projection E` => `Select s projection (From f fields E)`
+
+
+## SELECT
+
+SELECT is typed as
+
+```haskell
+select :: forall s projection. ToSelect s => s -> Select s projection E
+```
+
+### Projections
+
+`select` can project columns, aliased literals, sub queries and functions.
+
+```haskell
+selectColumn :: forall projection. Select (Proxy "id") projection E
+selectColumn = select id
+
+selectLiteral :: forall projection. Select (As "m" Int) projection E
+selectLiteral = select (3 # as m)
+
+selectStar :: forall projection. Select Star projection E
+selectStar = select star
+
+-- same as SELECT table alias.column name
+selectQualifiedColumn :: forall projection. Select (Path "u" "id") projection E
+selectQualifiedColumn = select (u ... id)
+```
+
+In the case of fully formed SELECT statements, `projection` becomes a `Row Type` of the output
+
+```haskell
+query1 :: Select (Proxy "id") (id :: Int) _
+query1 = select id # from users
+```
+
+Note that `select` on its own accepts any column name. Queries are checked after FROM is used.
+
+### FROM
+
+FROM statement keeps track of columns in scope. For this reason, its type is a bit more complex than SELECT
+
+```haskell
+from :: forall f q fields sql. ToFrom f q fields => Resume q (From f fields E) sql => f -> q -> sql
+```
+
+The type parameter `f`, indicating the source of columns, can be a
+
+* Table
+
+We can select tables as they are
+
+```haskell
+query1 :: Select (Proxy "id") (id :: Int) _
+query1 = select id # from users
+```
+
+or with a alias
+
+```haskell
+query2 :: Select (Proxy "id") (id :: Int) _
+query2 = select id # from (users # as u) -- SELECT id FROM users AS u
+
+query3 :: Select (Path "u" "id") ("u.id" :: Int) _
+query3 = select (u ... id) # from (users # as u) -- SELECT u.id FROM users AS u
+```
+
+* Sub query
+
+* Join
+
+
+## INSERT
+
+## UPDATE
+
+## DELETE
+
+## PREPARE
+
 
 <a href="/index" class="direction previous">Previous: Getting started</a>
 <a href="/mapper" class="direction">Next: Query Mapper</a>

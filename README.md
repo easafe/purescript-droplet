@@ -1,10 +1,10 @@
 ## purescript-droplet
 
-Composable, type-safe EDSL and query mapper for PureScript targeting PostgreSQL
+Composable, type-safe eDSL and query mapper for PureScript targeting PostgreSQL
 
-* EDSL made out of combinators (nearly) identital to their SQL counterparts
+* eDSL made out of combinators (nearly) identical to their SQL counterparts
 
-* Generated SQL matches EDSL one-to-one, and is guaranteed to be correct and unambiguous
+* Generated SQL matches eDSL one-to-one, and is guaranteed to be correct and unambiguous
 
 * Supports nearly all common SQL operations for SELECT, INSERT, UPDATE and DELETE, including joins, aggregations, subqueries, etc
 
