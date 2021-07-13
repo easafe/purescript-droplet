@@ -109,7 +109,7 @@ select :: forall s projection. ToSelect s => s -> Select s projection E
 
 ### Projections
 
-`select` can project columns, aliased literals, sub queries and functions.
+`select` can project columns, aliased literals, subqueries and functions.
 
 ```haskell
 selectColumn :: forall projection. Select (Proxy "id") projection E
@@ -124,6 +124,9 @@ selectStar = select star
 -- same as SELECT table alias.column name
 selectQualifiedColumn :: forall projection. Select (Path "u" "id") projection E
 selectQualifiedColumn = select (u ... id)
+
+selectManyColumns :: forall projection. Select (Tuple (Proxy "id") (Tuple (Proxy "name") (Tuple (As "u" Int) (Path "m" "id")))) projection E
+selectManyColumns = select (id /\ name /\ (5 # as u) /\ m ... id)
 ```
 
 In the case of fully formed SELECT statements, `projection` becomes a `Row Type` of the output
@@ -134,6 +137,8 @@ query1 = select id # from users
 ```
 
 Note that `select` on its own accepts any column name. Queries are checked after FROM is used.
+
+### Subqueries
 
 ### FROM
 
@@ -166,7 +171,7 @@ query3 = select (u ... id) # from (users # as u) -- SELECT u.id FROM users AS u
 
 * Sub query
 
-Sub queries must be aliased
+Subqueries in FROM must have an alias
 
 ```haskell
 query4 :: Select (Proxy "name") (name :: String) _
@@ -175,9 +180,28 @@ query4 = select name # from (select star # from users # as u) -- SELECT name FRO
 
 * Join
 
+To be parsed correctly, joins must be bracketed into FROM. Joined expressions can any valid FROM expression, that is, tables, sub queries, other joins, etc. Currently, all joined expressions must have an alias. A following ON clause is also mandatory.
+
 1. INNER JOIN
 
-2. LEFT JOIN
+Returns a cartesian product of both expressions
+
+```haskell
+query5 :: Select (Path "u" "name") ("u.name" :: String) _
+query5 = select ( u ... name) # from ((messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name FROM messages AS m INNER JOIN users AS u ON m.sender = u.id
+
+query6 :: Select (Tuple (Path "u" "name") (Path "m" "sender")) ("m.sender" :: Int, "u.name" :: String) _
+query6 = select ( u ... name /\ m ... sender) # from ((select sender # from messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM (SELECT sender FROM messages) AS m INNER JOIN users AS u ON m.sender = u.id
+```
+
+2. LEFT OUTER JOIN
+
+Returns a cartesian product of both expressions plus each row in the left hand expression that had no match on the right side. Right side columns will become `Maybe` in the projection type.
+
+```haskell
+query7 :: Select (Tuple (Path "u" "name") (Path "m" "sender")) ("m.sender" :: Int, "u.name" :: Maybe String) _
+query7 = select (u ... name /\ m ... sender) # from ((messages # as m) `leftJoin` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM messages AS m OUTER JOIN users AS u ON m.sender = u.id
+```
 
 ### WHERE
 
@@ -192,6 +216,10 @@ query4 = select name # from (select star # from users # as u) -- SELECT name FRO
 ## UPDATE
 
 ## DELETE
+
+## RETURNING
+
+## AS
 
 ## PREPARE
 
