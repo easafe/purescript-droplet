@@ -80,16 +80,7 @@ The eDSL is designed to be composable, and resemble SQL syntax as much as possib
 -- from :: forall f q fields sql. ToFrom f q fields => Resume q (From f fields E) sql => f -> q -> sql
 -- wher :: forall c q sql. ToWhere c q => Resume q (Where c E) sql => c -> q -> sql
 
-exampleQuery :: Select (Proxy "name")
-  ( name :: String
-  )
-  (From
-     (Table "users"
-        Users
-     )
-     Users
-     (Where (Op (Proxy "id") Int) E)
-  )
+exampleQuery :: Select (Proxy "name") (name :: String) (From (Table "users" Users) Users (Where (Op (Proxy "id") Int) E))
 exampleQuery = select name # from users # wher (id .=. 9)
 ```
 
@@ -175,8 +166,26 @@ query3 = select (u ... id) # from (users # as u) -- SELECT u.id FROM users AS u
 
 * Sub query
 
+Sub queries must be aliased
+
+```haskell
+query4 :: Select (Proxy "name") (name :: String) _
+query4 = select name # from (select star # from users # as u) -- SELECT name FROM (SELECT * FROM users) AS u
+```
+
 * Join
 
+1. INNER JOIN
+
+2. LEFT JOIN
+
+### WHERE
+
+### GROUP BY
+
+### ORDER BY
+
+### LIMIT
 
 ## INSERT
 
