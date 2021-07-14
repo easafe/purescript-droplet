@@ -514,3 +514,8 @@ code.highlighter-rouge {
       border-radius: 3px;
       font-size: 1.1em;
 }
+
+code {
+      overflow-x: scroll;
+      display: block;
+}
