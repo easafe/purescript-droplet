@@ -1,7 +1,7 @@
 -- | Query language
 module Droplet.Language (module Exported) where
 
-import Droplet.Language.Internal.Syntax (As, Delete, E, From, Insert, Into, OrderBy, Plan, Prepare, Select, Set, Update, Returning, Limit, Values, Where, as, delete, from, insert, into, orderBy, join, leftJoin, groupBy, Join, On, prepare, select, set, asc, on, desc, update, limit, values, wher, returning) as Exported
+import Droplet.Language.Internal.Syntax (As, Delete, E, From, Insert, Into, OrderBy, Plan, Prepare, Select, Set, Update, Returning, Limit, Values, Where, as, delete, from, insert, into, orderBy, join, leftJoin, groupBy, Join, On, exists, prepare, select, set, asc, on, desc, update, limit, values, wher, returning) as Exported
 
 import Droplet.Language.Internal.Definition (class FromValue, class ToParameters, class ToValue, Auto(..), Default(..), Star(..), Table(..), star, fromValue, toValue, (...)) as Exported
 

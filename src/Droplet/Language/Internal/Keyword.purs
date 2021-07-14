@@ -34,6 +34,9 @@ onKeyword = " ON "
 groupByKeyword :: String
 groupByKeyword = " GROUP BY "
 
+existsKeyword :: String
+existsKeyword = "EXISTS "
+
 leftKeyword :: String
 leftKeyword = " LEFT "
 

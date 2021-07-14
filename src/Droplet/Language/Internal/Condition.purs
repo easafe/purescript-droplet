@@ -16,6 +16,7 @@ data Operator =
       GreaterThan |
       LesserThan |
       And |
+      Exists |
       Or
 
 derive instance Eq Operator
@@ -90,6 +91,9 @@ else instance (
 ) => ToComparison u (Path alias name) fields alias
 
 else instance ToValue u => ToComparison (Path table name) u fields alias
+
+-- | Exists
+else instance ToComparison Unit q fields alias
 
 else instance ToValue u => ToComparison u (Path table name) fields alias
 

@@ -65,6 +65,25 @@ tests = do
                               TM.result q [{id: 1}, {id: 2}]
 
                   TU.suite "mixed" do
+                        TU.test "column" do
+                              let q = select id # from users # wher (exists $ select id # from users)
+                              TM.notParameterized """SELECT id FROM users WHERE EXISTS (SELECT id FROM users)""" $ Query.query q
+                              TM.result q [{id: 1}, {id: 2}]
+                        TU.suite "path" do
+                              TU.test "outer" do
+                                    let q = select id # from (users # as u) # wher (exists $ select (u ... id) # from users)
+                                    TM.notParameterized """SELECT id FROM users AS "u" WHERE EXISTS (SELECT "u".id "u.id" FROM users)""" $ Query.query q
+                                    TM.result q [{id: 1}, {id: 2}]
+                              TU.test "outer where" do
+                                    let q = select id # from (users # as u) # wher (exists $ select (3 # as t) # from users # wher (id .=. u ... id))
+                                    TM.notParameterized """SELECT id FROM users AS "u" WHERE EXISTS (SELECT 3 AS "t" FROM users WHERE id = "u".id)""" $ Query.query q
+                                    TM.result q [{id: 1}, {id: 2}]
+                              TU.test "outer inner where" do
+                                    let q = select id # from (users # as u) # wher (exists $ select id # from (users # as t) # wher (t ... id .=. u ... id))
+                                    TM.notParameterized """SELECT id FROM users AS "u" WHERE EXISTS (SELECT id FROM users AS "t" WHERE "t".id = "u".id)""" $ Query.query q
+                                    TM.result q [{id: 1}, {id: 2}]
+
+                  TU.suite "mixed" do
                         TU.test "not bracketed" do
                               let q = select id # from users # wher (id .=. 333 .||. id .=. 33 .&&. id .=. 3)
                               TM.parameterized """SELECT id FROM users WHERE (id = $1 OR (id = $2 AND id = $3))""" $ Query.query q
@@ -72,6 +91,10 @@ tests = do
                         TU.test "bracketed" do
                               let q = select id # from users # wher ((id .=. 2 .||. id .=. 22) .&&. id .=. 2)
                               TM.parameterized """SELECT id FROM users WHERE ((id = $1 OR id = $2) AND id = $3)""" $ Query.query q
+                              TM.result q [{id: 2 }]
+                        TU.test "with exists" do
+                              let q = select id # from users # wher ((id .=. 2 .||. (exists $ select id # from users)) .&&. id .=. 2)
+                              TM.parameterized """SELECT id FROM users WHERE ((id = $1 OR EXISTS (SELECT id FROM users)) AND id = $2)""" $ Query.query q
                               TM.result q [{id: 2 }]
 
             TU.suite "subqueries" do

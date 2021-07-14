@@ -203,13 +203,15 @@ query7 :: Select (Tuple (Path "u" "name") (Path "m" "sender")) ("m.sender" :: In
 query7 = select (u ... name /\ m ... sender) # from ((messages # as m) `leftJoin` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM messages AS m OUTER JOIN users AS u ON m.sender = u.id
 ```
 
-### WHERE
-
 ### GROUP BY
 
 ### ORDER BY
 
 ### LIMIT
+
+## WHERE
+
+### EXISTS
 
 ## INSERT
 
