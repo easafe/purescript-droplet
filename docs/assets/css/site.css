@@ -515,7 +515,7 @@ code.highlighter-rouge {
       font-size: 1.1em;
 }
 
-code {
-      overflow-x: scroll;
+pre code {
+      overflow-x: auto;
       display: block;
 }
