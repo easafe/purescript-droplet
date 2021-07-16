@@ -100,5 +100,6 @@ connectionInfo :: Configuration
 connectionInfo = (DD.defaultConfiguration "droplet") {
             user = Just "droplet",
             host = Nothing,
+            password = Just "droplet",
             idleTimeoutMillis = Just 1000
       }
