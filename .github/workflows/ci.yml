@@ -46,7 +46,7 @@ jobs:
           path: |
             .spago
             output
-      - run: PGPASSWORD=droplet psql -U droplet -f test/sql/main.sql
+      - run: psql -f test/sql/main.sql postgresql://droplet:droplet@localhost:5432/droplet
       - run: npm install
       - run: spago build
       - run: spago test --no-install
