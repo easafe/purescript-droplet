@@ -211,6 +211,8 @@ query7 = select (u ... name /\ m ... sender) # from ((messages # as m) `leftJoin
 
 ## WHERE
 
+### IN
+
 ### EXISTS
 
 ## INSERT

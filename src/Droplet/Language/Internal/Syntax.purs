@@ -394,6 +394,7 @@ exists :: forall s projection f fields rest. Select s projection (From f fields 
 exists q = Op Exists unit q
 
 
+
 ----------------------------GROUP BY----------------------------
 
 data GroupBy f rest = GroupBy f rest

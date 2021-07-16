@@ -1,13 +1,14 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class ToComparison, Op(..), and, Operator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class Comparision, Op(..), in_, and, Operator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
 import Prelude
 
 import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, Path)
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy)
+
 
 -- | SQL logic/comparision operators
 data Operator =
@@ -16,8 +17,9 @@ data Operator =
       GreaterThan |
       LesserThan |
       And |
+      Or  |
       Exists |
-      Or
+      In -- only for arrays
 
 derive instance Eq Operator
 
@@ -32,72 +34,67 @@ class ToCondition (c :: Type) (fields :: Row Type) (alias :: Symbol)
 instance (ToCondition (Op a b) fields alias, ToCondition (Op c d) fields alias) => ToCondition (Op (Op a b) (Op c d)) fields alias
 
 -- | Comparisions
-else instance ToComparison a b fields alias => ToCondition (Op a b) fields alias
+else instance Comparision a b fields alias => ToCondition (Op a b) fields alias
 
 
 -- | Whether expressions can be compared
-class ToComparison (c :: Type) (t :: Type) (fields :: Row Type) (alias :: Symbol) | c t -> fields
+class Comparision (c :: Type) (t :: Type) (fields :: Row Type) (alias :: Symbol) | c t -> fields
 
-instance (
-      Cons name t d fields,
-      Cons otherName t e fields
-) => ToComparison (Proxy name) (Proxy otherName) fields alias
+instance (Cons name t d fields, Cons otherName t e fields) => Comparision (Proxy name) (Proxy otherName) fields alias
 
-else instance (
-      Cons name t d fields,
-      Cons otherName t e fields
-) => ToComparison (Path alias name) (Path alias otherName) fields alias
+else instance (Cons name t d fields, Cons otherName t e fields) => Comparision (Path alias name) (Path alias otherName) fields alias
 
-else instance (
-      Cons name t d fields,
-      Cons otherName t e fields
-) => ToComparison (Path alias name) (Proxy otherName) fields alias
+else instance (Cons name t d fields, Cons otherName t e fields) => Comparision (Path alias name) (Proxy otherName) fields alias
 
-else instance (
-      Cons name t d fields,
-      Cons otherName t e fields
-) => ToComparison (Proxy name) (Path alias otherName) fields alias
+else instance (Cons name t d fields, Cons otherName t e fields) => Comparision (Proxy name) (Path alias otherName) fields alias
 
-else instance Cons otherName t e fields => ToComparison (Path table name) (Proxy otherName) fields alias
+else instance Cons otherName t e fields => Comparision (Path table name) (Proxy otherName) fields alias
 
-else instance Cons name t d fields => ToComparison (Proxy name) (Path table otherName) fields alias
+else instance Cons name t d fields => Comparision (Proxy name) (Path table otherName) fields alias
 
-else instance ToComparison (Path table name) (Path alias otherName) fields alias
+else instance Comparision (Path table name) (Path alias otherName) fields alias
 
-else instance ToComparison (Path alias otherName) (Path table name)  fields alias
+else instance Comparision (Path alias otherName) (Path table name) fields alias
+
+-- | IN values
+else instance (Cons name t d fields, UnwrapDefinition t u) => Comparision (Proxy name) (Array u) fields alias
+
+else instance (Cons name t d fields, UnwrapDefinition t u) => Comparision (Path alias name) (Array u) fields alias
+
+else instance Comparision (Path table name) (Array u) fields alias
+
+-- | EXISTS
+else instance Comparision Unit q fields alias
 
 else instance (
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToComparison (Path alias name) u fields alias
+) => Comparision (Path alias name) u fields alias
 
 else instance (
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToComparison (Proxy name) u fields alias
+) => Comparision (Proxy name) u fields alias
 
 else instance (
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToComparison u (Proxy name) fields alias
+) => Comparision u (Proxy name) fields alias
 
 else instance (
       UnwrapDefinition t u,
       Cons name t d fields,
       ToValue u
-) => ToComparison u (Path alias name) fields alias
+) => Comparision u (Path alias name) fields alias
 
-else instance ToValue u => ToComparison (Path table name) u fields alias
+else instance ToValue u => Comparision (Path table name) u fields alias
 
--- | Exists
-else instance ToComparison Unit q fields alias
+else instance ToValue u => Comparision u (Path table name) fields alias
 
-else instance ToValue u => ToComparison u (Path table name) fields alias
-
-else instance ToValue s => ToComparison s s fields alias
+else instance ToValue s => Comparision s s fields alias
 
 
 equals :: forall field compared. field -> compared -> Op field compared
@@ -117,6 +114,9 @@ and first second = Op And first second
 
 or :: forall a b c d. Op a b -> Op c d -> Op (Op a b) (Op c d)
 or first second = Op Or first second
+
+in_ :: forall compared field. field -> compared -> Op field compared
+in_ field compared = Op In field compared
 
 infix 4 notEquals as .<>.
 infix 4 equals as .=.

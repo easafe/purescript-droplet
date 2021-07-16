@@ -64,7 +64,12 @@ tests = do
                               TM.parameterized """SELECT id FROM users WHERE ((name = $1 OR name = $2) OR surname <> $3)""" $ Query.query q
                               TM.result q [{id: 1}, {id: 2}]
 
-                  TU.suite "mixed" do
+                  TU.test "in" do
+                        let q = select id # from users # wher (id `in_` [3, 4, 5])
+                        TM.parameterized """SELECT id FROM users WHERE id IN ($1, $2, $3)""" $ Query.query q
+                        TM.result q []
+
+                  TU.suite "exists" do
                         TU.test "column" do
                               let q = select id # from users # wher (exists $ select id # from users)
                               TM.notParameterized """SELECT id FROM users WHERE EXISTS (SELECT id FROM users)""" $ Query.query q

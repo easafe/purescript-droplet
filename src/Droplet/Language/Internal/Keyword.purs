@@ -37,6 +37,9 @@ groupByKeyword = " GROUP BY "
 existsKeyword :: String
 existsKeyword = "EXISTS "
 
+inKeyword :: String
+inKeyword = " IN "
+
 leftKeyword :: String
 leftKeyword = " LEFT "
 

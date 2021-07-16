@@ -3,27 +3,28 @@
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
 module Droplet.Language.Internal.Query (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn,  class NameList, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, nameList, translateConditions, toFieldValuePairs, toFieldValues, translate, query, unsafeQuery) where
 
-import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), E, From(..), GroupBy(..), Inner, Insert(..), Into(..), Join(..), Limit(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Update(..), Values(..), Where(..))
-import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
-
 import Control.Monad.State (State)
 import Control.Monad.State as CMS
 import Data.Array ((..))
 import Data.Array as DA
 import Data.Maybe (Maybe(..))
+import Data.String as DST
 import Data.String.Regex as DSR
 import Data.String.Regex.Flags (global)
 import Data.String.Regex.Unsafe as DSRU
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
+import Data.Traversable as DT
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (Op(..), Operator(..))
 import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, Empty, Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..))
-import Droplet.Language.Internal.Keyword (andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, innerKeyword, insertKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Keyword (andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), E, From(..), GroupBy(..), Inner, Insert(..), Into(..), Join(..), Limit(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
+import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
@@ -499,6 +500,12 @@ instance Translate (Select s p (From f fd rest)) => TranslateConditions (Op Unit
             q <- translate s
             pure $ printOperator e <> openBracket <> q <> closeBracket
 
+else instance(TranslateConditions a, TranslateConditions b) => TranslateConditions (Op a (Array b)) where
+      translateConditions (Op e fd values) = do
+            q <- translateConditions fd
+            parameters <- DT.traverse translateConditions values
+            pure $ q <> printOperator e <> openBracket <> DST.joinWith ", " parameters <> closeBracket
+
 else instance (TranslateConditions a, TranslateConditions b) => TranslateConditions (Op a b) where
       translateConditions (Op operator a b) = do
             q <- translateConditions a
@@ -515,7 +522,6 @@ else instance IsSymbol name => TranslateConditions (Proxy name) where
 else instance (IsSymbol alias, IsSymbol name) => TranslateConditions (Path alias name) where
       translateConditions _ = pure $ quotePath (Proxy :: Proxy alias) (Proxy :: Proxy name)
 
-
 else instance ToValue v => TranslateConditions v where
       translateConditions p = do
             { parameters } <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters $ toValue p }
@@ -530,6 +536,7 @@ printOperator = case _ of
       And -> andKeyword
       Or -> orKeyword
       Exists -> existsKeyword
+      In -> inKeyword
 
 
 -- | GROUP BY
