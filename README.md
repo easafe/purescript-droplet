@@ -1,4 +1,4 @@
-## purescript-droplet ![build status](https://github.com/easafe/droplet/actions/workflows/ci.yml/badge.svg)
+## purescript-droplet ![build status](https://github.com/easafe/droplet/actions/workflows/CI.yml/badge.svg)
 
 Composable, type-safe eDSL and query mapper for PureScript targeting PostgreSQL
 
