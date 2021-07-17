@@ -40,6 +40,9 @@ existsKeyword = "EXISTS "
 inKeyword :: String
 inKeyword = " IN "
 
+notKeyword :: String
+notKeyword = "NOT "
+
 leftKeyword :: String
 leftKeyword = " LEFT "
 

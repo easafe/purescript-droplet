@@ -1,10 +1,11 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class Comparision, Op(..), in_, and, Operator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class Comparision, Op(..), in_, and, Exists(..), Not(..), not, Operator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
 import Prelude
 
+import Data.Maybe (Maybe(..))
 import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, Path)
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy)
@@ -18,13 +19,16 @@ data Operator =
       LesserThan |
       And |
       Or  |
-      Exists |
       In -- only for arrays
+
+data Exists = Exists
+
+data Not = Not
 
 derive instance Eq Operator
 
 -- | Wrapper for comparisions
-data Op b c = Op Operator b c
+data Op b c = Op (Maybe Operator) b c
 
 
 -- | SQL logical expressions
@@ -32,6 +36,12 @@ class ToCondition (c :: Type) (fields :: Row Type) (alias :: Symbol)
 
 -- | AND/OR
 instance (ToCondition (Op a b) fields alias, ToCondition (Op c d) fields alias) => ToCondition (Op (Op a b) (Op c d)) fields alias
+
+-- | EXISTS
+else instance ToCondition (Op Exists b) fields alias
+
+-- | NOT
+else instance ToCondition a fields alias => ToCondition (Op Not a) fields alias
 
 -- | Comparisions
 else instance Comparision a b fields alias => ToCondition (Op a b) fields alias
@@ -62,9 +72,6 @@ else instance (Cons name t d fields, UnwrapDefinition t u) => Comparision (Proxy
 else instance (Cons name t d fields, UnwrapDefinition t u) => Comparision (Path alias name) (Array u) fields alias
 
 else instance Comparision (Path table name) (Array u) fields alias
-
--- | EXISTS
-else instance Comparision Unit q fields alias
 
 else instance (
       UnwrapDefinition t u,
@@ -98,25 +105,28 @@ else instance ToValue s => Comparision s s fields alias
 
 
 equals :: forall field compared. field -> compared -> Op field compared
-equals field compared = Op Equals field compared
+equals field compared = Op (Just Equals) field compared
 
 notEquals :: forall compared field. field -> compared -> Op field compared
-notEquals field compared = Op NotEquals field compared
+notEquals field compared = Op (Just NotEquals) field compared
 
 greaterThan :: forall compared field. field -> compared -> Op field compared
-greaterThan field compared = Op GreaterThan field compared
+greaterThan field compared = Op (Just GreaterThan) field compared
 
 lesserThan :: forall compared field. field -> compared -> Op field compared
-lesserThan field compared = Op LesserThan field compared
+lesserThan field compared = Op (Just LesserThan) field compared
 
 and :: forall a b c d. Op a b -> Op c d -> Op (Op a b) (Op c d)
-and first second = Op And first second
+and first second = Op (Just And) first second
 
 or :: forall a b c d. Op a b -> Op c d -> Op (Op a b) (Op c d)
-or first second = Op Or first second
+or first second = Op (Just Or) first second
 
 in_ :: forall compared field. field -> compared -> Op field compared
-in_ field compared = Op In field compared
+in_ field compared = Op (Just In) field compared
+
+not :: forall compared field. Op field compared -> Op Not (Op field compared)
+not a = Op Nothing Not a
 
 infix 4 notEquals as .<>.
 infix 4 equals as .=.
@@ -124,4 +134,5 @@ infix 4 greaterThan as .>.
 infix 4 lesserThan as .<.
 infixl 3 and as .&&.
 infixl 2 or as .||.
+
 

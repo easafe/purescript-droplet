@@ -5,9 +5,9 @@ module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class So
 
 import Prelude
 
-import Data.Maybe (Maybe)
+import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
-import Droplet.Language.Internal.Condition (class ToCondition, Op(..), Operator(..))
+import Droplet.Language.Internal.Condition (class ToCondition, Exists(..), Op(..), Operator(..))
 import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, Empty, Joined, Path, Star, Table)
 import Droplet.Language.Internal.Function (Aggregate)
 import Droplet.Language.Internal.Keyword (Dot)
@@ -16,7 +16,7 @@ import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
-import Type.Proxy (Proxy)
+import Type.Proxy (Proxy(..))
 
 
 
@@ -390,8 +390,8 @@ wher c q = resume q $ Where c E
 
 ----------------------------EXISTS----------------------------
 
-exists :: forall s projection f fields rest. Select s projection (From f fields rest) -> Op Unit (Select s projection (From f fields rest))
-exists q = Op Exists unit q
+exists :: forall s projection f fields rest. Select s projection (From f fields rest) -> Op Exists (Select s projection (From f fields rest))
+exists q = Op Nothing Exists q
 
 
 

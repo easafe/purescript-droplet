@@ -1,7 +1,7 @@
 module Test.Where where
 
 import Droplet.Language
-import Prelude
+import Prelude hiding (not)
 import Test.Types
 
 import Data.Maybe (Maybe(..))
@@ -69,6 +69,24 @@ tests = do
                         TM.parameterized """SELECT id FROM users WHERE id IN ($1, $2, $3)""" $ Query.query q
                         TM.result q []
 
+                  TU.suite "not" do
+                        TU.test "operator" do
+                              let q = select id # from users # wher (not (id .<>. 5))
+                              TM.parameterized """SELECT id FROM users WHERE NOT id <> $1""" $ Query.query q
+                              TM.result q []
+                        TU.test "and" do
+                              let q = select id # from (users # as u) # wher (not (id .<>. 5) .&&. id .=. 1)
+                              TM.parameterized """SELECT id FROM users AS "u" WHERE (NOT id <> $1 AND id = $2)""" $ Query.query q
+                              TM.result q []
+                        TU.test "or" do
+                              let q = select id # from (users # as u) # wher (not (id .<>. 5 .||. id .=. 1))
+                              TM.parameterized """SELECT id FROM users AS "u" WHERE NOT (id <> $1 OR id = $2)""" $ Query.query q
+                              TM.result q []
+                        TU.test "exists" do
+                              let q = select id # from (users # as u) # wher (not $ exists $ select id # from users)
+                              TM.notParameterized """SELECT id FROM users AS "u" WHERE NOT EXISTS (SELECT id FROM users)""" $ Query.query q
+                              TM.result q []
+
                   TU.suite "exists" do
                         TU.test "column" do
                               let q = select id # from users # wher (exists $ select id # from users)
@@ -101,6 +119,10 @@ tests = do
                               let q = select id # from users # wher ((id .=. 2 .||. (exists $ select id # from users)) .&&. id .=. 2)
                               TM.parameterized """SELECT id FROM users WHERE ((id = $1 OR EXISTS (SELECT id FROM users)) AND id = $2)""" $ Query.query q
                               TM.result q [{id: 2 }]
+                        TU.test "with not" do
+                              let q = select id # from users # wher ((id .=. 2 .||. not (exists $ select id # from users)) .&&. not (id .=. 2))
+                              TM.parameterized """SELECT id FROM users WHERE ((id = $1 OR NOT EXISTS (SELECT id FROM users)) AND NOT id = $2)""" $ Query.query q
+                              TM.result q []
 
             TU.suite "subqueries" do
                   TU.test "scalar" do

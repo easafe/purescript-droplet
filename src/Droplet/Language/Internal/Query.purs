@@ -18,10 +18,10 @@ import Data.Traversable as DT
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
-import Droplet.Language.Internal.Condition (Op(..), Operator(..))
+import Droplet.Language.Internal.Condition (Exists(..), Not, Op(..), Operator(..))
 import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, Empty, Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..))
-import Droplet.Language.Internal.Keyword (andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Keyword (andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, updateKeyword, valuesKeyword, whereKeyword)
 import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), E, From(..), GroupBy(..), Inner, Insert(..), Into(..), Join(..), Limit(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
@@ -221,6 +221,8 @@ instance FilteredQuery cond outer => FilteredQuery (Where cond rest) outer
 
 else instance (FilteredQuery (Op a b) outer, FilteredQuery (Op c d) outer) => FilteredQuery (Op (Op a b) (Op c d)) outer
 
+else instance FilteredQuery (Op a b) outer => FilteredQuery (Op Not (Op a b)) outer
+
 -- | EXISTS
 else instance (
       -- exists support arbitrary queries, so we gotta repeat all of these....
@@ -233,7 +235,7 @@ else instance (
       Union outer souter os,
       Nub os allOut,
       FilteredQuery rest allOut
-) => FilteredQuery (Op Unit (Select s p (From f fields rest))) outer
+) => FilteredQuery (Op Exists (Select s p (From f fields rest))) outer
 
 else instance (
       AppendPath alias name fullPath,
@@ -495,10 +497,15 @@ instance (TranslateConditions c, Translate rest) => Translate (Where c rest) whe
 class TranslateConditions c where
       translateConditions :: c -> State QueryState String
 
-instance Translate (Select s p (From f fd rest)) => TranslateConditions (Op Unit (Select s p (From f fd rest))) where
-      translateConditions (Op e _ s) = do
+instance Translate (Select s p (From f fd rest)) => TranslateConditions (Op Exists (Select s p (From f fd rest))) where
+      translateConditions (Op _ _ s) = do
             q <- translate s
-            pure $ printOperator e <> openBracket <> q <> closeBracket
+            pure $ existsKeyword <> openBracket <> q <> closeBracket
+
+else instance TranslateConditions a => TranslateConditions (Op Not a) where
+      translateConditions (Op _ _ s) = do
+            q <- translateConditions s
+            pure $ notKeyword <> q
 
 else instance(TranslateConditions a, TranslateConditions b) => TranslateConditions (Op a (Array b)) where
       translateConditions (Op e fd values) = do
@@ -511,7 +518,7 @@ else instance (TranslateConditions a, TranslateConditions b) => TranslateConditi
             q <- translateConditions a
             otherQ <- translateConditions b
             pure $
-                  if operator == And || operator == Or then
+                  if operator == Just And || operator == Just Or then
                         openBracket <> q <> printOperator operator <> otherQ <> closeBracket
                    else
                         q <> printOperator operator <> otherQ
@@ -527,16 +534,17 @@ else instance ToValue v => TranslateConditions v where
             { parameters } <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters $ toValue p }
             pure $ "$" <> show (DA.length parameters)
 
-printOperator :: Operator -> String
+printOperator :: Maybe Operator -> String
 printOperator = case _ of
-      Equals -> equalsSymbol
-      NotEquals -> notEqualsSymbol
-      LesserThan -> lesserThanSymbol
-      GreaterThan -> greaterThanSymbol
-      And -> andKeyword
-      Or -> orKeyword
-      Exists -> existsKeyword
-      In -> inKeyword
+      Nothing -> ""
+      Just op -> case op of
+            Equals -> equalsSymbol
+            NotEquals -> notEqualsSymbol
+            LesserThan -> lesserThanSymbol
+            GreaterThan -> greaterThanSymbol
+            And -> andKeyword
+            Or -> orKeyword
+            In -> inKeyword
 
 
 -- | GROUP BY
