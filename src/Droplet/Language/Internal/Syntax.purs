@@ -1,13 +1,13 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
 
 import Prelude
 
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
-import Droplet.Language.Internal.Condition (class ToCondition, Exists(..), Op(..), Operator(..))
+import Droplet.Language.Internal.Condition (class ToCondition, Exists(..), Op(..))
 import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, Empty, Joined, Path, Star, Table)
 import Droplet.Language.Internal.Function (Aggregate)
 import Droplet.Language.Internal.Keyword (Dot)
@@ -16,7 +16,7 @@ import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
-import Type.Proxy (Proxy(..))
+import Type.Proxy (Proxy)
 
 
 
@@ -161,6 +161,8 @@ else instance (ToSelect r, ToSelect t) => ToSelect (r /\ t)
 
 else instance ToSelect Star
 
+else instance ToSelect (Distinct s)
+
 else instance ToSubExpression q => ToSelect q
 
 
@@ -192,6 +194,15 @@ instance Fail (Text "Subquery must return a single column") => ToSubExpression (
 -- | - Subqueries must return a single column
 select :: forall s projection. ToSelect s => s -> Select s projection E
 select s = Select s E
+
+
+
+-------------------------------DISTINCT----------------------------
+
+newtype Distinct s = Distinct s
+
+distinct :: forall s. ToSelect s => s -> Distinct s
+distinct = Distinct
 
 
 
@@ -454,6 +465,8 @@ instance Cons name t e grouped => ValidGroupByProjection (Proxy name) grouped
 else instance Cons name t e grouped => ValidGroupByProjection (As alias (Proxy name)) grouped
 
 else instance (ValidGroupByProjection a grouped, ValidGroupByProjection b grouped) => ValidGroupByProjection (a /\ b) grouped
+
+else instance ValidGroupByProjection s grouped => ValidGroupByProjection (Distinct s) grouped
 
 else instance ValidGroupByProjection q grouped
 
@@ -934,6 +947,9 @@ else instance (
       QueryOptionallyAliased rest name alias, --is query aliased? if so we have to use the alias instead of the column name
       Cons alias t () single
 ) => ToProjection (Select s p (From f fields rest)) fd a single
+
+-- | DISTINCT
+else instance ToProjection s fields alias projection => ToProjection (Distinct s) fields alias projection
 
 -- | Any valid instance should be recognizable
 else instance Fail (Text "Cannot recognize projection") => ToProjection x f a p

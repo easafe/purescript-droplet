@@ -18,13 +18,13 @@ import Data.Traversable as DT
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
-import Droplet.Language.Internal.Condition (Exists(..), Not, Op(..), Operator(..))
+import Droplet.Language.Internal.Condition (Exists, Not, Op(..), Operator(..))
 import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, Empty, Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..))
-import Droplet.Language.Internal.Keyword (andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, updateKeyword, valuesKeyword, whereKeyword)
-import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), E, From(..), GroupBy(..), Inner, Insert(..), Into(..), Join(..), Limit(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Keyword (andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), E, From(..), GroupBy(..), Inner, Insert(..), Into(..), Join(..), Limit(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
-import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
+import Prelude (class Show, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
@@ -95,6 +95,8 @@ class AggregatedQuery (s :: Type) (q :: Type)
 instance AggregatedQuery s rest => AggregatedQuery s (Where c rest)
 
 else instance AggregatedQuery s (GroupBy f rest)
+
+else instance AggregatedQuery s q => AggregatedQuery (Distinct s) q
 
 else instance (
       NoAggregations s no,
@@ -201,6 +203,8 @@ else instance (
       SingleQualifiedColumn list rest single
 ) => QualifiedProjection (Select s p (From f fields rest)) outer single
 
+else instance QualifiedProjection s outer projection => QualifiedProjection (Distinct s) outer projection
+
 else instance QualifiedProjection s outer ()
 
 
@@ -290,6 +294,8 @@ else instance (
       ToSingleColumn pro name t,
       Cons name t () single
 ) => ToNakedProjection (Select s p (From f fields rest)) single
+
+else instance ToNakedProjection s projection => ToNakedProjection (Distinct s) projection
 
 else instance ToProjection s () Empty projection => ToNakedProjection s projection
 
@@ -397,6 +403,11 @@ else instance (TranslateColumn s, TranslateColumn t) => TranslateColumn (Tuple s
             sQ <- translateColumn s
             tQ <- translateColumn t
             pure $ sQ <> comma <> tQ
+
+else instance TranslateColumn s => TranslateColumn (Distinct s) where
+      translateColumn (Distinct s) = do
+            q <- translateColumn s
+            pure $ distinctKeyword <> q
 
 else instance Translate q => TranslateColumn q where
       translateColumn s = do

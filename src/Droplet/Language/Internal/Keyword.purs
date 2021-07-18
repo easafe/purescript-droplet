@@ -7,6 +7,9 @@ type Dot = "."
 selectKeyword :: String
 selectKeyword = "SELECT "
 
+distinctKeyword :: String
+distinctKeyword = "DISTINCT "
+
 fromKeyword :: String
 fromKeyword = " FROM "
 

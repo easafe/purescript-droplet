@@ -20,6 +20,7 @@ import Test.Unit.Main as TUM
 import Test.Unsafe as TUS
 import Test.Update as TU
 import Test.Where as TW
+import Test.Distinct as TDS
 
 main :: Effect Unit
 main = TUM.runTest do
@@ -29,6 +30,7 @@ main = TUM.runTest do
       TD.tests
       TR.tests
       TF.tests
+      TDS.tests
       TJ.tests
       TW.tests
       TG.tests
