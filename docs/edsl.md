@@ -140,6 +140,8 @@ Note that `select` on its own accepts any column name. Queries are checked after
 
 ### Subqueries
 
+### DISTINCT
+
 ### FROM
 
 FROM statement keeps track of columns in scope. For this reason, its type is a bit more complex than SELECT
