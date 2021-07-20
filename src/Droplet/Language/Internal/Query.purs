@@ -19,7 +19,7 @@ import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (Exists, Not, Op(..), Operator(..))
-import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, Empty, Path, Star, Table, toParameters, toValue)
+import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Empty, Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..))
 import Droplet.Language.Internal.Keyword (andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, updateKeyword, valuesKeyword, whereKeyword)
 import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), E, From(..), GroupBy(..), Inner, Insert(..), Into(..), Join(..), Limit(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Update(..), Values(..), Where(..))
@@ -263,14 +263,16 @@ else instance (
 else instance (
       AppendPath alias name fullPath,
       Cons fullPath t e outer,
-      UnwrapDefinition t u
-) => FilteredQuery (Op (Path alias name) u) outer
+      UnwrapDefinition t u,
+      UnwrapNullable u v
+) => FilteredQuery (Op (Path alias name) v) outer
 
 else instance (
       AppendPath alias name fullPath,
       Cons fullPath t e outer,
-      UnwrapDefinition t u
-) => FilteredQuery (Op u (Path alias name)) outer
+      UnwrapDefinition t u,
+      UnwrapNullable u v
+) => FilteredQuery (Op v (Path alias name)) outer
 
 else instance FilteredQuery e outer
 

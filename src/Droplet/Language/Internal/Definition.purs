@@ -1,7 +1,7 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), Path) where
+module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), Path) where
 
 import Prelude
 
@@ -185,7 +185,7 @@ parseTime input errorMessage =
             _ -> Left errorMessage
 
 
--- | Conveniently remove type wrappers
+-- | Convenience to remove type wrappers
 class UnwrapDefinition (w :: Type) (t :: Type) | w -> t
 
 instance UnwrapDefinition (Auto t) t
@@ -195,6 +195,13 @@ else instance UnwrapDefinition (Default t) t
 else instance UnwrapDefinition t u => UnwrapDefinition (Joined t) u
 
 else instance UnwrapDefinition t t
+
+
+class UnwrapNullable (w :: Type) (t :: Type) | w -> t
+
+instance UnwrapNullable (Maybe t) t
+
+else instance UnwrapNullable t t
 
 
 class InvalidField (t :: Type)

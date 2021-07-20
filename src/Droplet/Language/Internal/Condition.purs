@@ -6,7 +6,7 @@ module Droplet.Language.Internal.Condition (class ToCondition, class Comparision
 import Prelude
 
 import Data.Maybe (Maybe(..))
-import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, Path)
+import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, class UnwrapNullable, Path)
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy)
 
@@ -67,34 +67,46 @@ else instance Comparision (Path table name) (Path alias otherName) fields alias
 else instance Comparision (Path alias otherName) (Path table name) fields alias
 
 -- | IN values
-else instance (Cons name t d fields, UnwrapDefinition t u) => Comparision (Proxy name) (Array u) fields alias
+else instance (
+      Cons name t d fields,
+      UnwrapDefinition t u,
+      UnwrapNullable u v
+) => Comparision (Proxy name) (Array v) fields alias
 
-else instance (Cons name t d fields, UnwrapDefinition t u) => Comparision (Path alias name) (Array u) fields alias
+else instance (
+      Cons name t d fields,
+      UnwrapDefinition t u,
+      UnwrapNullable u v
+) => Comparision (Path alias name) (Array v) fields alias
 
 else instance Comparision (Path table name) (Array u) fields alias
 
 else instance (
-      UnwrapDefinition t u,
       Cons name t d fields,
-      ToValue u
-) => Comparision (Path alias name) u fields alias
+      UnwrapDefinition t u,
+      UnwrapNullable u v,
+      ToValue v
+) => Comparision (Path alias name) v fields alias
 
 else instance (
-      UnwrapDefinition t u,
       Cons name t d fields,
-      ToValue u
-) => Comparision (Proxy name) u fields alias
+      UnwrapDefinition t u,
+      UnwrapNullable u v,
+      ToValue v
+) => Comparision (Proxy name) v fields alias
 
 else instance (
-      UnwrapDefinition t u,
       Cons name t d fields,
-      ToValue u
-) => Comparision u (Proxy name) fields alias
+      UnwrapDefinition t u,
+      UnwrapNullable u v,
+      ToValue v
+) => Comparision v (Proxy name) fields alias
 
 else instance (
-      UnwrapDefinition t u,
       Cons name t d fields,
-      ToValue u
+      UnwrapDefinition t u,
+      UnwrapNullable u v,
+      ToValue v
 ) => Comparision u (Path alias name) fields alias
 
 else instance ToValue u => Comparision (Path table name) u fields alias
