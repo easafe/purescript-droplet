@@ -18,10 +18,10 @@ import Data.Traversable as DT
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
-import Droplet.Language.Internal.Condition (Exists, Not, Op(..), Operator(..))
+import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, IsNotNull, Not, Op(..))
 import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Empty, Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..))
-import Droplet.Language.Internal.Keyword (andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Keyword (andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, updateKeyword, valuesKeyword, whereKeyword)
 import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), E, From(..), GroupBy(..), Inner, Insert(..), Into(..), Join(..), Limit(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
 import Prelude (class Show, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
@@ -227,7 +227,8 @@ else instance (FilteredQuery (Op a b) outer, FilteredQuery (Op c d) outer) => Fi
 
 else instance FilteredQuery (Op a b) outer => FilteredQuery (Op Not (Op a b)) outer
 
--- | EXISTS
+else instance (AppendPath alias name fullPath, Cons fullPath (Maybe t) e outer) => FilteredQuery (Op IsNotNull (Path alias name)) outer
+
 else instance (
       -- exists support arbitrary queries, so we gotta repeat all of these....
       AggregatedQuery s rest,
@@ -515,6 +516,11 @@ instance Translate (Select s p (From f fd rest)) => TranslateConditions (Op Exis
             q <- translate s
             pure $ existsKeyword <> openBracket <> q <> closeBracket
 
+else instance TranslateConditions a => TranslateConditions (Op IsNotNull a) where
+      translateConditions (Op _ _ s) = do
+            q <- translateConditions s
+            pure $ q <> isNotNullKeyword
+
 else instance TranslateConditions a => TranslateConditions (Op Not a) where
       translateConditions (Op _ _ s) = do
             q <- translateConditions s
@@ -547,7 +553,7 @@ else instance ToValue v => TranslateConditions v where
             { parameters } <- CMS.modify $ \s@{ parameters } -> s { parameters = DA.snoc parameters $ toValue p }
             pure $ "$" <> show (DA.length parameters)
 
-printOperator :: Maybe Operator -> String
+printOperator :: Maybe BinaryOperator -> String
 printOperator = case _ of
       Nothing -> ""
       Just op -> case op of

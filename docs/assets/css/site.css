@@ -172,7 +172,7 @@ a.direction, .menu a:not(.project-name) {
       color: #f92672
 }
 
-/* Operator */
+/* BinaryOperator */
 
 .highlight .p {
       color: #f8f8f2
@@ -358,7 +358,7 @@ a.direction, .menu a:not(.project-name) {
       color: #f92672
 }
 
-/* Operator.Word */
+/* BinaryOperator.Word */
 
 .highlight .w {
       color: #f8f8f2

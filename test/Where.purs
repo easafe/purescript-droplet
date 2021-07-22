@@ -69,6 +69,11 @@ tests = do
                         TM.parameterized """SELECT id FROM users WHERE id IN ($1, $2, $3)""" $ Query.query q
                         TM.result q []
 
+                  TU.test "is not null" do
+                        let q = select id # from tags # wher (_by # isNotNull)
+                        TM.notParameterized """SELECT id FROM tags WHERE by IS NOT NULL""" $ Query.query q
+                        TM.result q [{id : 1}]
+
                   TU.suite "not" do
                         TU.test "operator" do
                               let q = select id # from users # wher (not (id .<>. 5))

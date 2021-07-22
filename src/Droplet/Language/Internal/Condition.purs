@@ -1,7 +1,7 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class Comparision, Op(..), in_, and, Exists(..), Not(..), not, Operator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class Comparision, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
 import Prelude
 
@@ -11,8 +11,7 @@ import Prim.Row (class Cons)
 import Type.Proxy (Proxy)
 
 
--- | SQL logic/comparision operators
-data Operator =
+data BinaryOperator =
       Equals |
       NotEquals |
       GreaterThan |
@@ -25,10 +24,12 @@ data Exists = Exists
 
 data Not = Not
 
-derive instance Eq Operator
+data IsNotNull = IsNotNull
+
+derive instance Eq BinaryOperator
 
 -- | Wrapper for comparisions
-data Op b c = Op (Maybe Operator) b c
+data Op b c = Op (Maybe BinaryOperator) b c
 
 
 -- | SQL logical expressions
@@ -39,6 +40,13 @@ instance (ToCondition (Op a b) fields alias, ToCondition (Op c d) fields alias) 
 
 -- | EXISTS
 else instance ToCondition (Op Exists b) fields alias
+
+-- | IS NOT NULL
+else instance Cons name (Maybe t) d fields => ToCondition (Op IsNotNull (Proxy name)) fields alias
+
+else instance Cons name (Maybe t) d fields => ToCondition (Op IsNotNull (Path alias name)) fields alias
+
+else instance ToCondition (Op IsNotNull (Path table name)) fields alias
 
 -- | NOT
 else instance ToCondition a fields alias => ToCondition (Op Not a) fields alias
@@ -139,6 +147,9 @@ in_ field compared = Op (Just In) field compared
 
 not :: forall compared field. Op field compared -> Op Not (Op field compared)
 not a = Op Nothing Not a
+
+isNotNull :: forall field. field -> Op IsNotNull field
+isNotNull field = Op Nothing IsNotNull field
 
 infix 4 notEquals as .<>.
 infix 4 equals as .=.

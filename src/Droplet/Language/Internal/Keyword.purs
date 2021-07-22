@@ -10,6 +10,9 @@ selectKeyword = "SELECT "
 distinctKeyword :: String
 distinctKeyword = "DISTINCT "
 
+isNotNullKeyword :: String
+isNotNullKeyword = " IS NOT NULL"
+
 fromKeyword :: String
 fromKeyword = " FROM "
 
