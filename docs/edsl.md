@@ -5,11 +5,11 @@ title: eDSL
 
 ## Introduction
 
-Before looking at the eDSL (embedded Domain Specific Language) syntax, let's talk about types
+Before looking at the eDSL (embedded Domain Specific Language) syntax, let's talk about its types
 
 * Database types
 
-In order to write queries, we have to define type for database objects. As an example, types for the schema defined in [getting started](/index) could be written as follows
+In order to write queries, we have to define types for database objects. As an example, the schema defined in [getting started](/index) could be represented as
 
 ```haskell
 -- `users` table
@@ -71,7 +71,7 @@ t :: Proxy "t"
 t = Proxy
 ```
 
-* Statement types
+* Query types
 
 The eDSL is designed to be composable, and resemble SQL syntax as much as possible with the generated code being a direct equivalent. For these reasons, function types are somewhat opaque. On the other hand, data types (such as for SELECT, WHERE or JOIN) become quite verbose quite fast. Luckily, when writing queries, type annotations are optional: the type checker should be able to infer the type of valid queries without any hints. That being said, specially when debugging type errors in your queries, it might be useful to know some of the conventions employed in the eDSL.
 
@@ -96,7 +96,7 @@ Type classes in the form `ToFrom`, `ToWhere` etc, are used to tell which stateme
 
 3. `Resume` type class
 
-eDSL functions mark the end of a statement with the `E` data type.  The type class `Resume` replaces it with a further statement, for example, `Select s projection E` => `Select s projection (From f fields E)`
+eDSL functions mark the end of a statement with the `E` data type. The type class `Resume` replaces it with a further statement, for example, `Select s projection E` => `Select s projection (From f fields E)`
 
 
 ## SELECT
@@ -132,8 +132,8 @@ selectManyColumns = select (id /\ name /\ (5 # as u) /\ m ... id)
 In the case of fully formed SELECT statements, `projection` becomes a `Row Type` of the output
 
 ```haskell
-query1 :: Select (Proxy "id") (id :: Int) _
-query1 = select id # from users
+exampleProjection :: Select (Proxy "id") (id :: Int) _
+exampleProjection = select id # from users
 ```
 
 Note that `select` on its own accepts any column name. Queries are checked after FROM is used.
@@ -141,6 +141,21 @@ Note that `select` on its own accepts any column name. Queries are checked after
 ### Subqueries
 
 ### DISTINCT
+
+```haskell
+distinct :: forall s. ToSelect s => s -> Distinct s
+```
+
+DISTINCT is subject the same rules as SELECT.
+
+```haskell
+selectDistinctColumn :: Select (Distinct (Proxy "id")) (id :: Int) _
+selectDistinctColumn = select (distinct id) # from users
+
+selectDistinctColumns :: Select (Distinct (Tuple (Proxy "id") (Tuple (Proxy "name") (Proxy "birthday"))))  (birthday :: Maybe Date, id :: Int, name :: String) _
+selectDistinctColumns = select (distinct $ id /\ name /\ birthday) # from users
+```
+
 
 ### FROM
 
@@ -157,18 +172,18 @@ The type parameter `f`, indicating the source of columns, can be a
 We can select tables as they are
 
 ```haskell
-query1 :: Select (Proxy "id") (id :: Int) _
-query1 = select id # from users
+fromTable :: Select (Proxy "id") (id :: Int) _
+fromTable = select id # from users
 ```
 
 or with a alias
 
 ```haskell
-query2 :: Select (Proxy "id") (id :: Int) _
-query2 = select id # from (users # as u) -- SELECT id FROM users AS u
+fromTableAlias :: Select (Proxy "id") (id :: Int) _
+fromTableAlias = select id # from (users # as u) -- SELECT id FROM users AS u
 
-query3 :: Select (Path "u" "id") ("u.id" :: Int) _
-query3 = select (u ... id) # from (users # as u) -- SELECT u.id FROM users AS u
+fromTableAlias2 :: Select (Path "u" "id") ("u.id" :: Int) _
+fromTableAlias2 = select (u ... id) # from (users # as u) -- SELECT u.id FROM users AS u
 ```
 
 * Sub query
@@ -176,8 +191,8 @@ query3 = select (u ... id) # from (users # as u) -- SELECT u.id FROM users AS u
 Subqueries in FROM must have an alias
 
 ```haskell
-query4 :: Select (Proxy "name") (name :: String) _
-query4 = select name # from (select star # from users # as u) -- SELECT name FROM (SELECT * FROM users) AS u
+fromSubQuery :: Select (Proxy "name") (name :: String) _
+fromSubQuery = select name # from (select star # from users # as u) -- SELECT name FROM (SELECT * FROM users) AS u
 ```
 
 * Join
@@ -189,11 +204,11 @@ To be parsed correctly, joins must be bracketed into FROM. Joined expressions ca
 Returns a cartesian product of both expressions
 
 ```haskell
-query5 :: Select (Path "u" "name") ("u.name" :: String) _
-query5 = select ( u ... name) # from ((messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name FROM messages AS m INNER JOIN users AS u ON m.sender = u.id
+queryInnerJoin :: Select (Path "u" "name") ("u.name" :: String) _
+queryInnerJoin = select ( u ... name) # from ((messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name FROM messages AS m INNER JOIN users AS u ON m.sender = u.id
 
-query6 :: Select (Tuple (Path "u" "name") (Path "m" "sender")) ("m.sender" :: Int, "u.name" :: String) _
-query6 = select ( u ... name /\ m ... sender) # from ((select sender # from messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM (SELECT sender FROM messages) AS m INNER JOIN users AS u ON m.sender = u.id
+queryInnerJoin2 :: Select (Tuple (Path "u" "name") (Path "m" "sender")) ("m.sender" :: Int, "u.name" :: String) _
+queryInnerJoin2 = select ( u ... name /\ m ... sender) # from ((select sender # from messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM (SELECT sender FROM messages) AS m INNER JOIN users AS u ON m.sender = u.id
 ```
 
 2. LEFT OUTER JOIN
@@ -201,8 +216,8 @@ query6 = select ( u ... name /\ m ... sender) # from ((select sender # from mess
 Returns a cartesian product of both expressions plus each row in the left hand expression that had no match on the right side. Right side columns will become `Maybe` in the projection type.
 
 ```haskell
-query7 :: Select (Tuple (Path "u" "name") (Path "m" "sender")) ("m.sender" :: Int, "u.name" :: Maybe String) _
-query7 = select (u ... name /\ m ... sender) # from ((messages # as m) `leftJoin` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM messages AS m OUTER JOIN users AS u ON m.sender = u.id
+queryOuterJoin :: Select (Tuple (Path "u" "name") (Path "m" "sender")) ("m.sender" :: Int, "u.name" :: Maybe String) _
+queryOuterJoin = select (u ... name /\ m ... sender) # from ((messages # as m) `leftJoin` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM messages AS m OUTER JOIN users AS u ON m.sender = u.id
 ```
 
 ### GROUP BY
