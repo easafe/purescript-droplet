@@ -9,6 +9,7 @@ import Test.Distinct as TDS
 import Test.From as TF
 import Test.Function as TFC
 import Test.GroupBy as TG
+import Test.Offset as TOF
 import Test.Insert as TI
 import Test.Join as TJ
 import Test.Limit as TL
@@ -38,6 +39,7 @@ main = TUM.runTest do
       TG.tests
       TA.tests
       TS.tests
+      TOF.tests
       TO.tests
       TFC.tests
       TL.tests

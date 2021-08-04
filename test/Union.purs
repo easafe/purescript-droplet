@@ -1,8 +1,8 @@
 module Test.Union where
 
-import Droplet.Language
+import Droplet.Language (as, from, select, union, unionAll, wher, (.<>.), (.=.))
 import Prelude
-import Test.Types
+import Test.Types (b, id, messages, name, users)
 
 import Droplet.Language.Internal.Query as Query
 import Test.Model as TM

@@ -124,6 +124,9 @@ countFunctionName = "COUNT"
 limitKeyword :: String
 limitKeyword = " LIMIT "
 
+offsetKeyword :: String
+offsetKeyword = " OFFSET "
+
 dotSymbol :: String
 dotSymbol = "."
 

@@ -21,8 +21,8 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, IsNotNull, Not, Op(..))
 import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Empty, Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..))
-import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
-import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), E, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), E, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
 import Prelude (class Show, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
@@ -165,6 +165,8 @@ instance QueryMustNotBeAliased rest => QueryMustNotBeAliased (GroupBy f rest)
 instance QueryMustNotBeAliased rest => QueryMustNotBeAliased (OrderBy f rest)
 
 instance QueryMustNotBeAliased rest => QueryMustNotBeAliased (Limit rest)
+
+instance QueryMustNotBeAliased rest => QueryMustNotBeAliased (Offset rest)
 
 instance Fail (Text "AS statement cannot be top level") => QueryMustNotBeAliased (As alias E)
 
@@ -708,6 +710,13 @@ instance Translate rest => Translate (Limit rest) where
       translate (Limit n rest) = do
             q <- translate rest
             pure $ limitKeyword <> show n <> q
+
+
+-- | OFFSET
+instance Translate rest => Translate (Offset rest) where
+      translate (Offset n rest) = do
+            q <- translate rest
+            pure $ offsetKeyword <> show n <> q
 
 
 printAggregation :: forall inp fields out. NameList inp => Aggregate inp fields out -> String

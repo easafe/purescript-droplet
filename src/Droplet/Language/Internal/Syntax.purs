@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
+module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
 
 import Prelude
 
@@ -599,11 +599,19 @@ class ToLimit (q :: Type)
 
 instance ToLimit (Select s projection (From fr fields (OrderBy f E)))
 
+instance ToLimit (Select s projection (From fr fields (OrderBy f (Offset E))))
+
 instance ToLimit (Select s projection (From fr fields (GroupBy fg (OrderBy f E))))
+
+instance ToLimit (Select s projection (From fr fields (GroupBy fg (OrderBy f (Offset E)))))
 
 instance ToLimit (Select s projection (From fr fields (Where cd (OrderBy f E))))
 
+instance ToLimit (Select s projection (From fr fields (Where cd (OrderBy f (Offset E)))))
+
 instance ToLimit (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f E)))))
+
+instance ToLimit (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f (Offset E))))))
 
 
 -- | LIMIT statement
@@ -611,6 +619,38 @@ instance ToLimit (Select s projection (From fr fields (Where cd (GroupBy fg (Ord
 -- | Note: LIMIT must always follow after ORDER BY
 limit :: forall q sql. ToLimit q => Resume q (Limit E) sql => Int -> q -> sql
 limit n q = resume q $ Limit n E
+
+
+
+------------------------OFFSET---------------------------
+
+data Offset rest = Offset Int rest
+
+
+class ToOffset (q :: Type)
+
+instance ToOffset (Select s projection (From fr fields (OrderBy f E)))
+
+instance ToOffset (Select s projection (From fr fields (OrderBy f (Limit E))))
+
+instance ToOffset (Select s projection (From fr fields (GroupBy fg (OrderBy f E))))
+
+instance ToOffset (Select s projection (From fr fields (GroupBy fg (OrderBy f (Limit E)))))
+
+instance ToOffset (Select s projection (From fr fields (Where cd (OrderBy f E))))
+
+instance ToOffset (Select s projection (From fr fields (Where cd (OrderBy f (Limit E)))))
+
+instance ToOffset (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f E)))))
+
+instance ToOffset (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f (Limit E))))))
+
+
+-- | OFFSET statement
+-- |
+-- | Note: OFFSET must always follow after LIMIT or ORDER BY
+offset :: forall q sql. ToOffset q => Resume q (Offset E) sql => Int -> q -> sql
+offset n q = resume q $ Offset n E
 
 
 
@@ -1022,6 +1062,8 @@ instance QueryMustBeAliased rest alias => QueryMustBeAliased (OrderBy f rest) al
 
 instance QueryMustBeAliased rest alias => QueryMustBeAliased (Limit rest) alias
 
+instance QueryMustBeAliased rest alias => QueryMustBeAliased (Offset rest) alias
+
 instance Fail (Text "Expected query to end in AS statement") => QueryMustBeAliased E alias
 
 instance QueryMustBeAliased (As alias E) alias
@@ -1037,6 +1079,8 @@ instance QueryOptionallyAliased rest name alias => QueryOptionallyAliased (Group
 instance QueryOptionallyAliased rest name alias => QueryOptionallyAliased (OrderBy f rest) name alias
 
 instance QueryOptionallyAliased rest name alias => QueryOptionallyAliased (Limit rest) name alias
+
+instance QueryOptionallyAliased rest name alias => QueryOptionallyAliased (Offset rest) name alias
 
 instance QueryOptionallyAliased E name name
 
@@ -1124,6 +1168,9 @@ else instance Resume rest b c => Resume (OrderBy f rest) b (OrderBy f c) where
 
 else instance Resume rest b c => Resume (Limit rest) b (Limit c) where
       resume (Limit n rest) b = Limit n $ resume rest b
+
+else instance Resume rest b c => Resume (Offset rest) b (Offset c) where
+      resume (Offset n rest) b = Offset n $ resume rest b
 
 else instance Resume rest b c => Resume (Update n f rest) b (Update n f c) where
       resume (Update rest) b = Update $ resume rest b
