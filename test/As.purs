@@ -1,11 +1,10 @@
 module Test.As where
 
-import Droplet.Language
+import Droplet.Language (as, from, select, wher, (...), (.=.), (.||.))
 import Prelude
-import Test.Types
+import Test.Types (b, id, messages, n, name, t, u, users)
 
 import Data.Maybe (Maybe(..))
-import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Query as Query
 import Test.Model as TM
 import Test.Unit (TestSuite)

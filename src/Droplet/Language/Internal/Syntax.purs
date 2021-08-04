@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher)  where
+module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
 
 import Prelude
 
@@ -12,8 +12,7 @@ import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, 
 import Droplet.Language.Internal.Function (Aggregate)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
-import Prim.RowList (class RowToList, RowList)
-import Prim.RowList as RL
+import Prim.RowList (class RowToList, Nil, Cons, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
@@ -239,6 +238,14 @@ instance (
       UniqueColumnNames selected unique
 ) => ToFrom (Select t projection (From f fd rest)) (Select s unique E) projection
 
+-- | FROM (... UNION ...) AS alias
+-- instance (
+--       QueryMustBeAliased rest alias,
+--       ToProjection s projection alias selected,
+--       Nub selected unique,
+--       UniqueColumnNames selected unique
+-- ) => ToFrom (Select t projection (From f fd rest)) (Select s unique E) projection
+
 -- | FROM ... INNER JOIN ...
 instance (
       ToProjection s fields Inner selected,
@@ -306,20 +313,20 @@ instance ToJoin (Join k fields l r (On c rest)) fields
 -- | For ease of use, this class marks the nullable side fields with `Joined`, later on `ToProjection` will flatten it to `Maybe`
 class ToOuterFields (list :: RowList Type) (fields :: Row Type) | list -> fields
 
-instance ToOuterFields RL.Nil ()
+instance ToOuterFields Nil ()
 
 -- | Avoid nesting `Joined`s
 instance (
       Cons name (Joined t) () head,
       ToOuterFields rest tail,
       Union head tail all
-) => ToOuterFields (RL.Cons name (Joined t) rest) all
+) => ToOuterFields (Cons name (Joined t) rest) all
 
 else instance (
       Cons name (Joined t) () head,
       ToOuterFields rest tail,
       Union head tail all
-) => ToOuterFields (RL.Cons name t rest) all
+) => ToOuterFields (Cons name t rest) all
 
 
 -- | INNER JOIN statement
@@ -607,21 +614,40 @@ limit n q = resume q $ Limit n E
 
 
 
-------------------------COALESCE---------------------------
+------------------------UNION---------------------------
 
---a (special) function, but we have to define it here
--- data Coalesce q projection = Coalesce q
+data Union q r = Union Inclusion q r
 
--- class ToCoalesce t projection | t -> projection
+data Inclusion = All | Unique
 
--- instance ToProjection (Select s p (From f fields rest)) fields projection => ToCoalesce (Select s p (From f fields rest)) projection
 
--- instance => Cons alias Int () projection => ToCoalesce (As alias Int) projection
+class ToUnion (q :: Type) (r :: Type)
 
--- instance (ToCoalesce a projection, ToCoalesce b projection) => ToCoalesce (Tuple a b) projection
+instance (
+      RowToList some slist,
+      RowToList more mlist,
+      CompatibleProjection slist mlist
+) => ToUnion (Select s some (From f fd rt)) (Select t more (From g ge es))
 
--- coalesce :: forall q projection. ToCoalesce q projection => q -> Coalesce q projection
--- coalesce t = Coalesce t
+instance ToUnion (Select s p (From f fd rt)) (Select t q (From g ge es)) => ToUnion (Union (Select s p (From f fd rt)) sel) (Select t q (From g ge es))
+
+instance ToUnion (Select s p (From f fd rt)) (Select t q (From g ge es)) => ToUnion (Select s p (From f fd rt)) (Union (Select t q (From g ge es)) sel)
+
+
+class CompatibleProjection (pro :: RowList Type) (jection :: RowList Type)
+
+instance CompatibleProjection Nil Nil
+
+else instance CompatibleProjection some more => CompatibleProjection (Cons name t some) (Cons n t more)
+
+else instance Fail (Text "UNION column types and count must match") => CompatibleProjection a b
+
+
+union :: forall q r. ToUnion q r => q -> r -> Union q r
+union = Union Unique
+
+unionAll :: forall q r. ToUnion q r => q -> r -> Union q r
+unionAll = Union All
 
 
 
@@ -685,15 +711,15 @@ instance (
 --refactor: error messages are quite bad
 class RequiredFields (fieldList :: RowList Type) (required :: Row Type) | fieldList -> required
 
-instance RequiredFields RL.Nil ()
+instance RequiredFields Nil ()
 
-instance RequiredFields rest required => RequiredFields (RL.Cons n (Auto t) rest) required
+instance RequiredFields rest required => RequiredFields (Cons n (Auto t) rest) required
 
-else instance RequiredFields rest required => RequiredFields (RL.Cons n (Default t) rest) required
+else instance RequiredFields rest required => RequiredFields (Cons n (Default t) rest) required
 
-else instance RequiredFields rest required => RequiredFields (RL.Cons n (Maybe t) rest) required
+else instance RequiredFields rest required => RequiredFields (Cons n (Maybe t) rest) required
 
-else instance (RequiredFields rest tail, Cons name t () head, Lacks name tail, Union head tail required) => RequiredFields (RL.Cons name t rest) required
+else instance (RequiredFields rest tail, Cons name t () head, Lacks name tail, Union head tail required) => RequiredFields (Cons name t rest) required
 
 
 class InsertValues (fields :: Row Type) (fieldNames :: Type) (t :: Type) | fieldNames -> fields t
@@ -958,9 +984,9 @@ else instance Fail (Text "Cannot recognize projection") => ToProjection x f a p
 --not required but makes for clearer type errors
 class ToSingleColumn (fields :: RowList Type) (name :: Symbol) (t :: Type) | fields -> name t
 
-instance ToSingleColumn (RL.Cons name (Maybe t) RL.Nil) name (Maybe t)
+instance ToSingleColumn (Cons name (Maybe t) Nil) name (Maybe t)
 
-else instance ToSingleColumn (RL.Cons name t RL.Nil) name (Maybe t)
+else instance ToSingleColumn (Cons name t Nil) name (Maybe t)
 
 
 -- | Query projections should not repeat column names
@@ -1020,20 +1046,20 @@ instance QueryOptionallyAliased (As alias E) name alias
 -- | Recursively remove source field wrappers
 class UnwrapAll (list :: RowList Type) (projection :: Row Type) | list -> projection
 
-instance UnwrapAll RL.Nil ()
+instance UnwrapAll Nil ()
 
 instance (
       UnwrapDefinition t u,
       Cons name u () head,
       UnwrapAll rest tail,
       Union head tail projection
-) => UnwrapAll (RL.Cons name t rest) projection
+) => UnwrapAll (Cons name t rest) projection
 
 
 -- | Computes all source fields with their alias
 class QualifiedFields (list :: RowList Type) (alias :: Symbol) (fields :: Row Type) | list alias -> fields
 
-instance QualifiedFields RL.Nil alias ()
+instance QualifiedFields Nil alias ()
 
 instance (
       ToPath alias path,
@@ -1041,7 +1067,7 @@ instance (
       Cons fullPath t () head,
       QualifiedFields rest alias tail,
       Union head tail fields
-) => QualifiedFields (RL.Cons name t rest) alias fields
+) => QualifiedFields (Cons name t rest) alias fields
 
 
 -- | Optionally add source field alias

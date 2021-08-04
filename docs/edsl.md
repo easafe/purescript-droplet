@@ -193,6 +193,8 @@ Subqueries in FROM must have an alias
 ```haskell
 fromSubQuery :: Select (Proxy "name") (name :: String) _
 fromSubQuery = select name # from (select star # from users # as u) -- SELECT name FROM (SELECT * FROM users) AS u
+
+--example with union
 ```
 
 * Join
@@ -225,6 +227,8 @@ queryOuterJoin = select (u ... name /\ m ... sender) # from ((messages # as m) `
 ### ORDER BY
 
 ### LIMIT
+
+### UNION
 
 ## WHERE
 

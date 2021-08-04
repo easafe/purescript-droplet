@@ -13,6 +13,12 @@ distinctKeyword = "DISTINCT "
 isNotNullKeyword :: String
 isNotNullKeyword = " IS NOT NULL"
 
+unionKeyword :: String
+unionKeyword = " UNION "
+
+allKeyword :: String
+allKeyword = "ALL "
+
 fromKeyword :: String
 fromKeyword = " FROM "
 

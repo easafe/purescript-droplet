@@ -21,8 +21,8 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, IsNotNull, Not, Op(..))
 import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Empty, Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..))
-import Droplet.Language.Internal.Keyword (andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, updateKeyword, valuesKeyword, whereKeyword)
-import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), E, From(..), GroupBy(..), Inner, Insert(..), Into(..), Join(..), Limit(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), E, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
 import Prelude (class Show, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
@@ -69,6 +69,14 @@ else instance (
       UniqueColumnNames projection unique,
       Translate (Select s p E)
 ) => ToQuery (Select s p E) unique where
+      toQuery q = translate q
+
+-- | UNION
+else instance (
+      ToQuery q final,
+      ToQuery r p,
+      Translate (Union q r)
+) => ToQuery (Union q r) final where
       toQuery q = translate q
 
 -- | INSERT
@@ -572,6 +580,17 @@ instance (NameList f, Translate rest) => Translate (GroupBy f rest) where
             q <- translate rest
             pure $ groupByKeyword <> nameList fields <> q
 
+-- | UNION
+instance (Translate s, Translate r) => Translate (Union s r) where
+      translate (Union inclusion s r) = do
+            q <- translate s
+            otherQ <- translate r
+            pure $ openBracket <> q <> unionKeyword <> printInclusion inclusion <> otherQ <> closeBracket
+
+printInclusion :: Inclusion -> String
+printInclusion = case _ of
+      All -> allKeyword
+      Unique -> ""
 
 -- | INSERT
 instance (
@@ -593,7 +612,6 @@ instance (
                   q <>
                   closeBracket <>
                   otherQ
-
 
 -- | Names (possibly) separated by comma
 -- |
@@ -713,10 +731,7 @@ query qr = Query plan q parameters
 unsafeQuery :: forall projection parameters pra.
       RowToList parameters pra =>
       ToParameters parameters pra =>
-      Maybe Plan ->
-      String ->
-      Record parameters ->
-      Query projection
+      Maybe Plan -> String -> Record parameters -> Query projection
 unsafeQuery plan q p = Query plan dollaredQ parameterValues
       where parameterPairs = toParameters (Proxy :: Proxy pra) p
             parameterNames = DTP.fst <$> parameterPairs
