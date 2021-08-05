@@ -21,4 +21,7 @@ tests =
                   let q = select (count id # as u) # from users
                   TM.notParameterized """SELECT COUNT(id) AS "u" FROM users""" $ Query.query q
                   TM.result q [{ u : DB.fromInt 2}]
-
+            TU.test "path" do
+                  let q = select (count (u ... id) # as u) # from (users # as u)
+                  TM.notParameterized """SELECT COUNT("u".id) AS "u" FROM users AS "u"""" $ Query.query q
+                  TM.result q [{ u : DB.fromInt 2}]

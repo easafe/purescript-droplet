@@ -9,7 +9,7 @@ import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, Exists(..), Op(..))
 import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, Empty, Joined, Path, Star, Table)
-import Droplet.Language.Internal.Function (Aggregate)
+import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, Nil, Cons, RowList)
@@ -154,7 +154,7 @@ else instance ToSelect (As alias (Proxy name))
 
 else instance ToSelect (As alias (Path table name))
 
-else instance ToSelect (As alias (Aggregate inp fields out))
+else instance ToSelect (As alias (Aggregate inp fields ks out))
 
 else instance (ToSelect r, ToSelect t) => ToSelect (r /\ t)
 
@@ -180,7 +180,7 @@ instance ToSubExpression (Select (As alias (Proxy name)) projection rest)
 
 instance ToSubExpression (Select (As alias (Path table name)) projection rest)
 
-instance ToSubExpression (Select (As alias (Aggregate inp fields out)) projection rest)
+instance ToSubExpression (Select (As alias (Aggregate inp fields ks out)) projection rest)
 
 instance Fail (Text "Subquery must return a single column") => ToSubExpression (Select (a /\ b) projection rest)
 
@@ -504,7 +504,7 @@ instance ToAs (Proxy name) alias
 
 instance ToAs (Path table name) alias
 
-instance ToAs (Aggregate inp fields out) alias
+instance ToAs (Aggregate inp fields ks out) alias
 
 instance ToAs (Select s p (From f fields rest)) alias
 
@@ -561,6 +561,8 @@ instance (
       SortColumns f all
 ) => ToOrderBy f (Select s projection (From fr fields (Where cd (GroupBy fd E))))
 
+instance ToOrderBy f (Aggregate)
+
 
 class SortColumns (f :: Type) (fields :: Row Type) | f -> fields
 
@@ -587,7 +589,6 @@ desc _ = Desc
 -- | ORDER BY statement
 orderBy :: forall f q sql. ToOrderBy f q => Resume q (OrderBy f E) sql => f -> q -> sql
 orderBy f q = resume q $ OrderBy f E
-
 
 
 ------------------------LIMIT---------------------------
@@ -956,7 +957,7 @@ else instance (AppendPath table name fullPath, Cons fullPath (Path table name) (
 else instance Cons alias Int () projection => ToProjection (As alias Int) fields a projection
 
 -- | Aliased aggregation
-else instance Cons alias t () projection => ToProjection (As alias (Aggregate inp fields t)) fields a projection
+else instance Cons alias t () projection => ToProjection (As alias (Aggregate inp fields ks t)) fields a projection
 
 -- | Aliased column
 else instance (

@@ -116,9 +116,9 @@ else instance (
 -- | Are all columns not aggregated?
 class NoAggregations (q :: Type) (is :: Boolean) | q -> is
 
-instance NoAggregations (Aggregate i f o) False
+instance NoAggregations (Aggregate i f ks o) False
 
-else instance NoAggregations (As n (Aggregate i f o)) False
+else instance NoAggregations (As n (Aggregate i f ks o)) False
 
 else instance (
       NoAggregations a isa,
@@ -132,9 +132,9 @@ else instance NoAggregations s True
 -- | Are all columns aggregated?
 class OnlyAggregations (q :: Type) (is :: Boolean) | q -> is
 
-instance OnlyAggregations (Aggregate i f o) True
+instance OnlyAggregations (Aggregate i f ks o) True
 
-else instance OnlyAggregations (As n (Aggregate i f o)) True
+else instance OnlyAggregations (As n (Aggregate i f ks o)) True
 
 else instance (
       OnlyAggregations a isa,
@@ -193,6 +193,12 @@ else instance (
       UnwrapDefinition u v,
       Cons alias v () projection
 ) => QualifiedProjection (As alias (Path table name)) outer projection
+
+else instance (
+      AppendPath table name fullPath,
+      Cons fullPath t e outer,
+      Cons alias out () projection
+) => QualifiedProjection (As alias (Aggregate (Path table name) fd ks out)) outer projection
 
 else instance (
       QualifiedProjection s outer some,
@@ -396,7 +402,7 @@ else instance TranslateColumn Star where
 else instance IsSymbol name => TranslateColumn (As name Int) where
       translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy :: Proxy name)
 
-else instance (IsSymbol name, NameList inp) => TranslateColumn (As name (Aggregate inp fields out)) where
+else instance (IsSymbol name, NameList inp) => TranslateColumn (As name (Aggregate inp fields ks out)) where
       translateColumn (As agg) = pure $ printAggregation agg <> asKeyword <> quote (Proxy :: Proxy name)
 
 else instance (IsSymbol name, IsSymbol alias) => TranslateColumn (As alias (Proxy name)) where
@@ -719,9 +725,10 @@ instance Translate rest => Translate (Offset rest) where
             pure $ offsetKeyword <> show n <> q
 
 
-printAggregation :: forall inp fields out. NameList inp => Aggregate inp fields out -> String
+printAggregation :: forall inp fields ks out. NameList inp => Aggregate inp fields ks out -> String
 printAggregation = case _ of
       Count f -> countFunctionName <> openBracket <> nameList f <> closeBracket
+      StringAgg f -> "not imple" -- string_aggFunctionName <> openBracket <> nameList f <> closeBracket
 
 quote :: forall alias. IsSymbol alias => Proxy alias -> String
 quote name = quoteSymbol <> DS.reflectSymbol name <> quoteSymbol
