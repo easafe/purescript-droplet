@@ -130,5 +130,11 @@ offsetKeyword = " OFFSET "
 dotSymbol :: String
 dotSymbol = "."
 
+string_aggFunctionName :: String
+string_aggFunctionName = "string_agg"
+
+simpleQuoteSymbol :: String
+simpleQuoteSymbol = "'"
+
 quoteSymbol :: String
 quoteSymbol = """""""

@@ -9,7 +9,7 @@ import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, Exists(..), Op(..))
 import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, Empty, Joined, Path, Star, Table)
-import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate)
+import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, Ob)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, Nil, Cons, RowList)
@@ -154,7 +154,7 @@ else instance ToSelect (As alias (Proxy name))
 
 else instance ToSelect (As alias (Path table name))
 
-else instance ToSelect (As alias (Aggregate inp fields ks out))
+else instance ToSelect (As alias (Aggregate inp s fields ks out))
 
 else instance (ToSelect r, ToSelect t) => ToSelect (r /\ t)
 
@@ -180,7 +180,7 @@ instance ToSubExpression (Select (As alias (Proxy name)) projection rest)
 
 instance ToSubExpression (Select (As alias (Path table name)) projection rest)
 
-instance ToSubExpression (Select (As alias (Aggregate inp fields ks out)) projection rest)
+instance ToSubExpression (Select (As alias (Aggregate inp s fields ks out)) projection rest)
 
 instance Fail (Text "Subquery must return a single column") => ToSubExpression (Select (a /\ b) projection rest)
 
@@ -504,7 +504,7 @@ instance ToAs (Proxy name) alias
 
 instance ToAs (Path table name) alias
 
-instance ToAs (Aggregate inp fields ks out) alias
+instance ToAs (Aggregate inp s fields ks out) alias
 
 instance ToAs (Select s p (From f fields rest)) alias
 
@@ -561,7 +561,7 @@ instance (
       SortColumns f all
 ) => ToOrderBy f (Select s projection (From fr fields (Where cd (GroupBy fd E))))
 
-instance ToOrderBy f (Aggregate)
+-- instance ToOrderBy f (Aggregate g s fields Ob out)
 
 
 class SortColumns (f :: Type) (fields :: Row Type) | f -> fields
@@ -957,7 +957,7 @@ else instance (AppendPath table name fullPath, Cons fullPath (Path table name) (
 else instance Cons alias Int () projection => ToProjection (As alias Int) fields a projection
 
 -- | Aliased aggregation
-else instance Cons alias t () projection => ToProjection (As alias (Aggregate inp fields ks t)) fields a projection
+else instance Cons alias t () projection => ToProjection (As alias (Aggregate inp s fields ks t)) fields a projection
 
 -- | Aliased column
 else instance (

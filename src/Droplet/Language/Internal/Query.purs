@@ -21,10 +21,10 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, IsNotNull, Not, Op(..))
 import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Empty, Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..))
-import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, simpleQuoteSymbol, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), E, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
-import Prelude (class Show, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
+import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
@@ -116,9 +116,9 @@ else instance (
 -- | Are all columns not aggregated?
 class NoAggregations (q :: Type) (is :: Boolean) | q -> is
 
-instance NoAggregations (Aggregate i f ks o) False
+instance NoAggregations (Aggregate i s f ks o) False
 
-else instance NoAggregations (As n (Aggregate i f ks o)) False
+else instance NoAggregations (As n (Aggregate i s f ks o)) False
 
 else instance (
       NoAggregations a isa,
@@ -132,9 +132,9 @@ else instance NoAggregations s True
 -- | Are all columns aggregated?
 class OnlyAggregations (q :: Type) (is :: Boolean) | q -> is
 
-instance OnlyAggregations (Aggregate i f ks o) True
+instance OnlyAggregations (Aggregate i s f ks o) True
 
-else instance OnlyAggregations (As n (Aggregate i f ks o)) True
+else instance OnlyAggregations (As n (Aggregate i s f ks o)) True
 
 else instance (
       OnlyAggregations a isa,
@@ -195,10 +195,11 @@ else instance (
 ) => QualifiedProjection (As alias (Path table name)) outer projection
 
 else instance (
+      Fail (Text "assss"),
       AppendPath table name fullPath,
       Cons fullPath t e outer,
       Cons alias out () projection
-) => QualifiedProjection (As alias (Aggregate (Path table name) fd ks out)) outer projection
+) => QualifiedProjection (As alias (Aggregate (Path table name) s fd ks out)) outer projection
 
 else instance (
       QualifiedProjection s outer some,
@@ -402,7 +403,7 @@ else instance TranslateColumn Star where
 else instance IsSymbol name => TranslateColumn (As name Int) where
       translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy :: Proxy name)
 
-else instance (IsSymbol name, NameList inp) => TranslateColumn (As name (Aggregate inp fields ks out)) where
+else instance (IsSymbol name, NameList inp, NameList s) => TranslateColumn (As name (Aggregate inp s fields ks out)) where
       translateColumn (As agg) = pure $ printAggregation agg <> asKeyword <> quote (Proxy :: Proxy name)
 
 else instance (IsSymbol name, IsSymbol alias) => TranslateColumn (As alias (Proxy name)) where
@@ -649,6 +650,11 @@ instance NameList Star where
 instance (NameList f, NameList rest) => NameList (Tuple f rest) where
       nameList (Tuple f rest) = nameList f <> comma <> nameList rest
 
+instance NameList String where
+      nameList s = simpleQuoteSymbol <> s <> simpleQuoteSymbol
+
+instance NameList Unit where
+      nameList _ = ""
 
 class ToFieldValues fieldValues where
       toFieldValues :: fieldValues -> State QueryState String
@@ -725,10 +731,10 @@ instance Translate rest => Translate (Offset rest) where
             pure $ offsetKeyword <> show n <> q
 
 
-printAggregation :: forall inp fields ks out. NameList inp => Aggregate inp fields ks out -> String
+printAggregation :: forall inp s fields ks out. NameList inp => NameList (inp /\ s) => Aggregate inp s fields ks out -> String
 printAggregation = case _ of
       Count f -> countFunctionName <> openBracket <> nameList f <> closeBracket
-      StringAgg f -> "not imple" -- string_aggFunctionName <> openBracket <> nameList f <> closeBracket
+      StringAgg f s -> string_aggFunctionName <> openBracket <> nameList (f /\ s) <> closeBracket
 
 quote :: forall alias. IsSymbol alias => Proxy alias -> String
 quote name = quoteSymbol <> DS.reflectSymbol name <> quoteSymbol

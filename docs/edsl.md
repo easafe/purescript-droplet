@@ -140,6 +140,8 @@ Note that `select` on its own accepts any column name. Queries are checked after
 
 ### Subqueries
 
+### Functions
+
 ### DISTINCT
 
 ```haskell
