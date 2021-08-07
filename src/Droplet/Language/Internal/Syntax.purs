@@ -561,7 +561,7 @@ instance (
       SortColumns f all
 ) => ToOrderBy f (Select s projection (From fr fields (Where cd (GroupBy fd E))))
 
--- instance ToOrderBy f (Aggregate g s fields Ob out)
+instance ToOrderBy f (Aggregate g s fields Ob out)
 
 
 class SortColumns (f :: Type) (fields :: Row Type) | f -> fields

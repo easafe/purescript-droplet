@@ -195,7 +195,6 @@ else instance (
 ) => QualifiedProjection (As alias (Path table name)) outer projection
 
 else instance (
-      Fail (Text "assss"),
       AppendPath table name fullPath,
       Cons fullPath t e outer,
       Cons alias out () projection
