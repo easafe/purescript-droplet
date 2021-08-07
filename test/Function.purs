@@ -26,7 +26,7 @@ tests = do
                   let q = select (count (u ... id) # as u) # from (users # as u)
                   TM.notParameterized """SELECT COUNT("u".id) AS "u" FROM users AS "u"""" $ Query.query q
                   TM.result q [{ u : DB.fromInt 2}]
-      TU.suiteOnly "string_agg" do
+      TU.suite "string_agg" do
             TU.test "field" do
                   let q = select (string_agg name ", " # as u) # from users
                   TM.notParameterized """SELECT string_agg(name, ', ') AS "u" FROM users""" $ Query.query q
@@ -35,7 +35,12 @@ tests = do
                   let q = select (string_agg (u ... name) ", " # as u) # from (users # as u)
                   TM.notParameterized """SELECT string_agg("u".name, ', ') AS "u" FROM users AS "u"""" $ Query.query q
                   TM.result q [{ u : Just "josh, mary"}]
-            -- TU.test "order by" do
-            --       let q = select (count (u ... id) # as u) # from (users # as u)
-            --       TM.notParameterized """SELECT COUNT("u".id) AS "u" FROM users AS "u"""" $ Query.query q
-            --       TM.result q [{ u : DB.fromInt 2}]
+            TU.suiteOnly "order by" do
+                  TU.test "field" do
+                        let q = select (string_agg name (", " # orderBy id) # as u) # from users
+                        TM.notParameterized """SELECT string_agg(name, ', ' ORDER BY id) AS "u" FROM users""" $ Query.query q
+                        TM.result q [{ u : Just "josh, mary"}]
+                  TU.test "path" do
+                        let q = select (string_agg (u ... name) (", " # orderBy (u ... id)) # as u) # from (users # as u)
+                        TM.notParameterized """SELECT string_agg("u".name, ', ' ORDER BY "u".id) AS "u" FROM users AS "u"""" $ Query.query q
+                        TM.result q [{ u : Just "josh, mary"}]

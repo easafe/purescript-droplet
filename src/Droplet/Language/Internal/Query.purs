@@ -19,12 +19,12 @@ import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, IsNotNull, Not, Op(..))
-import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Empty, Path, Star, Table, toParameters, toValue)
+import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, E(..), Empty, Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..))
 import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, simpleQuoteSymbol, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
-import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), E, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
-import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
+import Prelude (class Show, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
@@ -116,9 +116,9 @@ else instance (
 -- | Are all columns not aggregated?
 class NoAggregations (q :: Type) (is :: Boolean) | q -> is
 
-instance NoAggregations (Aggregate i s f ks o) False
+instance NoAggregations (Aggregate i rest fields o) False
 
-else instance NoAggregations (As n (Aggregate i s f ks o)) False
+else instance NoAggregations (As n (Aggregate i rest f o)) False
 
 else instance (
       NoAggregations a isa,
@@ -132,9 +132,9 @@ else instance NoAggregations s True
 -- | Are all columns aggregated?
 class OnlyAggregations (q :: Type) (is :: Boolean) | q -> is
 
-instance OnlyAggregations (Aggregate i s f ks o) True
+instance OnlyAggregations (Aggregate i rest f o) True
 
-else instance OnlyAggregations (As n (Aggregate i s f ks o)) True
+else instance OnlyAggregations (As n (Aggregate i rest f o)) True
 
 else instance (
       OnlyAggregations a isa,
@@ -196,9 +196,19 @@ else instance (
 
 else instance (
       AppendPath table name fullPath,
+      AppendPath tb nm ftn,
+      Cons fullPath t e outer,
+      Cons ftn s g outer,
+      Cons alias out () projection
+) => QualifiedProjection (As alias (Aggregate (Path table name) (OrderBy (Path tb nm) rd) fd out)) outer projection
+
+else instance (AppendPath tb nm ftn,  Cons ftn s g outer) => QualifiedProjection (As alias (Aggregate (Proxy name) (OrderBy (Path tb nm) rd) fd out)) outer projection
+
+else instance (
+      AppendPath table name fullPath,
       Cons fullPath t e outer,
       Cons alias out () projection
-) => QualifiedProjection (As alias (Aggregate (Path table name) s fd ks out)) outer projection
+) => QualifiedProjection (As alias (Aggregate (Path table name) rest fd out)) outer projection
 
 else instance (
       QualifiedProjection s outer some,
@@ -402,8 +412,10 @@ else instance TranslateColumn Star where
 else instance IsSymbol name => TranslateColumn (As name Int) where
       translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy :: Proxy name)
 
-else instance (IsSymbol name, NameList inp, NameList s) => TranslateColumn (As name (Aggregate inp s fields ks out)) where
-      translateColumn (As agg) = pure $ printAggregation agg <> asKeyword <> quote (Proxy :: Proxy name)
+else instance (IsSymbol name, NameList inp, NameList rest) => TranslateColumn (As name (Aggregate inp rest fields out)) where
+      translateColumn (As agg) = do
+            q <- printAggregation agg
+            pure $ q <> asKeyword <> quote (Proxy :: Proxy name)
 
 else instance (IsSymbol name, IsSymbol alias) => TranslateColumn (As alias (Proxy name)) where
       translateColumn _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
@@ -586,7 +598,8 @@ printOperator = case _ of
 instance (NameList f, Translate rest) => Translate (GroupBy f rest) where
       translate (GroupBy fields rest) = do
             q <- translate rest
-            pure $ groupByKeyword <> nameList fields <> q
+            nf <- nameList fields
+            pure $ groupByKeyword <> nf <> q
 
 -- | UNION
 instance (Translate s, Translate r) => Translate (Union s r) where
@@ -609,11 +622,12 @@ instance (
 ) => Translate (Insert (Into name fields fieldNames (Values v rest))) where
       translate (Insert (Into fieldNames (Values v rest))) = do
             q <- toFieldValues v
+            nf <- nameList fieldNames
             otherQ <- translate rest
             pure $ insertKeyword <>
                   DS.reflectSymbol (Proxy :: Proxy name) <>
                   openBracket <>
-                  nameList fieldNames <>
+                  nf <>
                   closeBracket <>
                   valuesKeyword <>
                   openBracket <>
@@ -625,35 +639,45 @@ instance (
 -- |
 -- | Used by INSERT, ORDER BY and aggregate functions
 class NameList fieldNames where
-      nameList :: fieldNames -> String
+      nameList :: fieldNames -> State QueryState String
 
 instance IsSymbol name => NameList (Proxy name) where
-      nameList name = DS.reflectSymbol name
+      nameList name = pure $ DS.reflectSymbol name
 
 instance IsSymbol name => NameList (Sort (Proxy name)) where
-      nameList s = DS.reflectSymbol (Proxy :: Proxy name) <> case s of
+      nameList s = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> case s of
             Desc -> descKeyword
             Asc -> ascKeyword
 
 instance (IsSymbol alias, IsSymbol name) => NameList (Sort (Path alias name)) where
-      nameList s = quotePath (Proxy :: Proxy alias) (Proxy :: Proxy name) <> case s of
+      nameList s = pure $ quotePath (Proxy :: Proxy alias) (Proxy :: Proxy name) <> case s of
             Desc -> descKeyword
             Asc -> ascKeyword
 
 instance (IsSymbol alias, IsSymbol name) => NameList (Path alias name) where
-      nameList _ =  quote (Proxy :: Proxy alias) <> dotSymbol <> DS.reflectSymbol (Proxy :: Proxy name)
+      nameList _ =  pure $ quote (Proxy :: Proxy alias) <> dotSymbol <> DS.reflectSymbol (Proxy :: Proxy name)
 
 instance NameList Star where
-      nameList _ = starSymbol
+      nameList _ = pure starSymbol
 
 instance (NameList f, NameList rest) => NameList (Tuple f rest) where
-      nameList (Tuple f rest) = nameList f <> comma <> nameList rest
+      nameList (Tuple f rest) = do
+            nf <- nameList f
+            nrest <- nameList rest
+            pure $ nf <> comma <> nrest
 
 instance NameList String where
-      nameList s = simpleQuoteSymbol <> s <> simpleQuoteSymbol
+      nameList s = pure $ simpleQuoteSymbol <> s <> simpleQuoteSymbol
 
-instance NameList Unit where
-      nameList _ = ""
+instance NameList E where
+      nameList _ = pure ""
+
+instance (NameList s, Translate (OrderBy f E)) => NameList (OrderBy f s) where
+      nameList (OrderBy f s) = do
+            ns <- nameList s
+            q <- translate (OrderBy f E)
+            pure $ ns <> q
+
 
 class ToFieldValues fieldValues where
       toFieldValues :: fieldValues -> State QueryState String
@@ -706,14 +730,17 @@ instance Translate (From f fields rest) => Translate (Delete (From f fields rest
 
 -- | RETURNING
 instance (NameList fieldNames) => Translate (Returning fieldNames) where
-      translate (Returning fieldNames) = pure $ returningKeyword <> nameList fieldNames
+      translate (Returning fieldNames) = do
+            nf <- nameList fieldNames
+            pure $ returningKeyword <> nf
 
 
 -- | ORDER BY
 instance (NameList f, Translate rest) => Translate (OrderBy f rest) where
       translate (OrderBy f rest) = do
             q <- translate rest
-            pure $ orderKeyword <> byKeyword <> nameList f <> q
+            nf <- nameList f
+            pure $ orderKeyword <> byKeyword <> nf <> q
 
 
 -- | LIMIT
@@ -730,10 +757,14 @@ instance Translate rest => Translate (Offset rest) where
             pure $ offsetKeyword <> show n <> q
 
 
-printAggregation :: forall inp s fields ks out. NameList inp => NameList (inp /\ s) => Aggregate inp s fields ks out -> String
+printAggregation :: forall inp fields rest out. NameList inp => NameList (inp /\ rest) => Aggregate inp rest fields out -> State QueryState String
 printAggregation = case _ of
-      Count f -> countFunctionName <> openBracket <> nameList f <> closeBracket
-      StringAgg f s -> string_aggFunctionName <> openBracket <> nameList (f /\ s) <> closeBracket
+      Count f -> do
+            nf <- nameList f
+            pure $ countFunctionName <> openBracket <> nf <> closeBracket
+      StringAgg f rest -> do
+            nf <- nameList (f /\ rest)
+            pure $ string_aggFunctionName <> openBracket <> nf <> closeBracket
 
 quote :: forall alias. IsSymbol alias => Proxy alias -> String
 quote name = quoteSymbol <> DS.reflectSymbol name <> quoteSymbol

@@ -1,21 +1,22 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), E, From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
+module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
 
 import Prelude
 
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, Exists(..), Op(..))
-import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, Empty, Joined, Path, Star, Table)
-import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, Ob)
+import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, E(..), Empty, Joined, Path, Star, Table)
+import Droplet.Language.Internal.Function (class TextColumn, class ToStringAgg, Aggregate(..))
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, Nil, Cons, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
+import Unsafe.Coerce as UC
 
 
 
@@ -154,7 +155,7 @@ else instance ToSelect (As alias (Proxy name))
 
 else instance ToSelect (As alias (Path table name))
 
-else instance ToSelect (As alias (Aggregate inp s fields ks out))
+else instance ToSelect (As alias (Aggregate inp rest fields out))
 
 else instance (ToSelect r, ToSelect t) => ToSelect (r /\ t)
 
@@ -180,7 +181,7 @@ instance ToSubExpression (Select (As alias (Proxy name)) projection rest)
 
 instance ToSubExpression (Select (As alias (Path table name)) projection rest)
 
-instance ToSubExpression (Select (As alias (Aggregate inp s fields ks out)) projection rest)
+instance ToSubExpression (Select (As alias (Aggregate inp r fields out)) projection rest)
 
 instance Fail (Text "Subquery must return a single column") => ToSubExpression (Select (a /\ b) projection rest)
 
@@ -504,9 +505,11 @@ instance ToAs (Proxy name) alias
 
 instance ToAs (Path table name) alias
 
-instance ToAs (Aggregate inp s fields ks out) alias
+instance ToAs (Aggregate inp rest fields out) alias
 
 instance ToAs (Select s p (From f fields rest)) alias
+
+-- instance ToAs (Order)
 
 
 -- | AS statement
@@ -561,7 +564,9 @@ instance (
       SortColumns f all
 ) => ToOrderBy f (Select s projection (From fr fields (Where cd (GroupBy fd E))))
 
-instance ToOrderBy f (Aggregate g s fields Ob out)
+instance ToOrderBy (Proxy name) String
+
+instance ToOrderBy (Path alias name) String
 
 
 class SortColumns (f :: Type) (fields :: Row Type) | f -> fields
@@ -589,6 +594,12 @@ desc _ = Desc
 -- | ORDER BY statement
 orderBy :: forall f q sql. ToOrderBy f q => Resume q (OrderBy f E) sql => f -> q -> sql
 orderBy f q = resume q $ OrderBy f E
+
+
+instance (Cons name t e fields, Cons fd g h fields) => ToStringAgg (Proxy name) (OrderBy (Proxy fd) String) fields
+
+instance Cons name t e fields => ToStringAgg (Proxy name) (OrderBy (Path alias fd) String) fields
+
 
 
 ------------------------LIMIT---------------------------
@@ -957,7 +968,7 @@ else instance (AppendPath table name fullPath, Cons fullPath (Path table name) (
 else instance Cons alias Int () projection => ToProjection (As alias Int) fields a projection
 
 -- | Aliased aggregation
-else instance Cons alias t () projection => ToProjection (As alias (Aggregate inp s fields ks t)) fields a projection
+else instance Cons alias t () projection => ToProjection (As alias (Aggregate inp rest fields t)) fields a projection
 
 -- | Aliased column
 else instance (
@@ -1199,7 +1210,3 @@ else instance Resume E b b where
 
 else instance Resume b a c => Resume a b c where
       resume a b = resume b a
-
-
--- | Marks the query end
-data E = E
