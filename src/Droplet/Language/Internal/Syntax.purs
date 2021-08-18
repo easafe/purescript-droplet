@@ -312,16 +312,26 @@ instance (
       Union projection aliased fields
 ) => ToJoin (Select s projection (From f fd rest)) fields (Cons alias alias Nil)
 
--- | JOIN ... ON
-instance ToJoin (Join k fields l r (On c rest)) fields Nil
 
+-- | JOIN ... ON
 instance (
       ToJoin l left las,
       ToJoin r right ras,
       Union left right all,
       Nub all fields,
       RowListAppend las ras aliases
-) => ToJoin (Join k fd l r E) fields aliases
+) => ToJoin (Join Inner fd l r (On c rest)) fields aliases
+
+-- | JOIN ... ON
+instance (
+      ToJoin l left las,
+      ToJoin r right ras,
+      RowToList right list,
+      ToOuterFields list out,
+      Union left out all,
+      Nub all fields,
+      RowListAppend las ras aliases
+) => ToJoin (Join Outer fd l r (On c rest)) fields aliases
 
 
 -- | OUTER JOINs make one side nullable, as a corresponding record may not be found
@@ -368,7 +378,7 @@ join l r = Join l r E
 -- | JOIN sources are the same as FROM
 leftJoin :: forall r l las ras list out aliases unique rf lf right left all fields source.
       ToJoin l left las =>
-      ToJoin r right ras=>
+      ToJoin r right ras =>
       UniqueSources left right =>
       RowListAppend las ras aliases =>
       RowListNub aliases unique =>
@@ -377,16 +387,14 @@ leftJoin :: forall r l las ras list out aliases unique rf lf right left all fiel
       Nub all source =>
       Union left lf source =>
       Union right rf source =>
-      RowToList rf list =>
+      RowToList lf list =>
       ToOuterFields list out =>
-      Union lf out fields =>
+      Union rf out fields =>
       l -> r -> Join Outer fields l r E
 leftJoin l r = Join l r E
 
 
 -- | Comparision logic for ON statements
--- |
--- | Note: as of now, only qualifieds fields (e.g., table.column) can be used
 class OnCondition (c :: Type) (fields :: Row Type)
 
 instance (OnCondition (Op a b) fields, OnCondition (Op c d) fields) => OnCondition (Op (Op a b) (Op c d)) fields
