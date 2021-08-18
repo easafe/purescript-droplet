@@ -295,8 +295,14 @@ data On c rest = On c rest
 -- | Given a source `q`, compute its (qualified) fields
 class ToJoin (q :: Type) (aliased :: Row Type) | q -> aliased
 
+instance ToJoin (Table name fields) fields
+
 -- | Aliased tables
-instance (RowToList fields list, QualifiedFields list alias aliased) => ToJoin (As alias (Table name fields)) aliased
+instance (
+      RowToList source list,
+      QualifiedFields list alias aliased,
+      Union aliased source fields
+) => ToJoin (As alias (Table name source)) fields
 
 -- | Aliased subqueries
 instance (
@@ -307,6 +313,13 @@ instance (
 
 -- | JOIN ... ON
 instance ToJoin (Join k fields l r (On c rest)) fields
+
+instance (
+      ToJoin l left,
+      ToJoin r right,
+      Union left right all,
+      Nub all fields
+) => ToJoin (Join k fd l r E) fields
 
 
 -- | OUTER JOINs make one side nullable, as a corresponding record may not be found
@@ -333,26 +346,32 @@ else instance (
 -- | INNER JOIN statement
 -- |
 -- | JOIN sources are the same as FROM, with the exception that tables must be aliased
-join :: forall r l right left all fields.
+join :: forall r l right rf lf left all source fields.
       ToJoin l left =>
       ToJoin r right =>
       Union right left all =>
-      Nub all fields =>
-      UniqueAliases all fields =>
-      l -> r -> Join Inner all l r E
+      Nub all source =>
+      Union left lf source =>
+      Union right rf source =>
+      Union lf rf fields =>
+      -- UniqueAliases all source =>
+      l -> r -> Join Inner fields l r E
 join l r = Join l r E
 
 -- | LEFT OUTER JOIN statement
 -- |
 -- | JOIN sources are the same as FROM, with the exception that tables must be aliased
-leftJoin :: forall r l list out right left all fields.
+leftJoin :: forall r l list out rf lf right left all fields source.
       ToJoin l left =>
       ToJoin r right =>
-      RowToList right list =>
+      Union left right all =>
+      Nub all source =>
+      Union left lf source =>
+      Union right rf source =>
+      RowToList rf list =>
       ToOuterFields list out =>
-      Union left out all =>
-      Nub all fields =>
-      UniqueAliases all fields =>
+      Union lf out fields =>
+      -- UniqueAliases all fields =>
       l -> r -> Join Outer fields l r E
 leftJoin l r = Join l r E
 

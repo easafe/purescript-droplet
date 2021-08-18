@@ -47,6 +47,10 @@ tests = do
                         let q = select (u ... id /\ t ... id /\ b ... id /\ n ... id) # from ((((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id)) `join` (tags # as b) # on (b ... id .=. u ... id)) `join` (users # as n) # on (n ... id .=. t ... id .&&. n ... id .=. u ... id))
                         TM.notParameterized """SELECT "u".id "u.id", "t".id "t.id", "b".id "b.id", "n".id "n.id" FROM users AS "u" INNER JOIN messages AS "t" ON "u".id = "t".id INNER JOIN tags AS "b" ON "b".id = "u".id INNER JOIN users AS "n" ON ("n".id = "t".id AND "n".id = "u".id)""" $ Query.query q
                         TM.result q [{"b.id": 1, "t.id": 1, "u.id": 1, "n.id": 1 }]
+                  TU.test "subselect outer reference" do
+                        let q = ?f
+                        TM.notParameterized """""" $ Query.query q
+                        TM.result q ?g
 
             TU.suite "(left) outer" do
                   TU.test "path column" do
@@ -81,6 +85,3 @@ tests = do
                         let q = select (u ... id /\ t ... id /\ b ... id /\ n ... id) # from ((((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id)) `leftJoin` (tags # as b) # on (b ... id .=. u ... id)) `leftJoin` (users # as n) # on (n ... id .=. t ... id .&&. n ... id .=. u ... id))
                         TM.notParameterized """SELECT "u".id "u.id", "t".id "t.id", "b".id "b.id", "n".id "n.id" FROM users AS "u" LEFT JOIN messages AS "t" ON "u".id = "t".id LEFT JOIN tags AS "b" ON "b".id = "u".id LEFT JOIN users AS "n" ON ("n".id = "t".id AND "n".id = "u".id)""" $ Query.query q
                         TM.result q [{"b.id": Just 1, "t.id": Just 1, "u.id":  1, "n.id": Just 1 }, {"b.id": Nothing, "t.id": Just 2, "u.id":  2, "n.id": Just 2 }]
-
-
-

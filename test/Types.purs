@@ -13,6 +13,7 @@ type Users = (
     birthday :: Default Date,
     joined :: Default Date
 )
+
 type Messages = (
     id :: Auto Int,
     sender :: Int,
@@ -21,6 +22,7 @@ type Messages = (
     second_date :: Default DateTime,
     sent :: Boolean
 )
+
 type Tags = (
     id :: Auto Int,
     name :: String,
