@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
+module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
 
 import Prelude
 
@@ -9,14 +9,14 @@ import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, Exists(..), Op(..))
 import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, E(..), Empty, Joined, Path, Star, Table)
-import Droplet.Language.Internal.Function (class TextColumn, class ToStringAgg, Aggregate(..))
+import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
-import Prim.RowList (class RowToList, Nil, Cons, RowList)
+import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
-import Unsafe.Coerce as UC
+import Type.RowList (class RowListAppend, class RowListNub)
 
 
 
@@ -292,34 +292,36 @@ data Join (k :: Side) (fields :: Row Type) q r rest = Join q r rest
 data On c rest = On c rest
 
 
--- | Given a source `q`, compute its (qualified) fields
-class ToJoin (q :: Type) (aliased :: Row Type) | q -> aliased
+-- | Given a source `q`, compute its (non and qualified) fields
+class ToJoin (q :: Type) (fields :: Row Type) (aliases :: RowList Symbol) | q -> fields aliases
 
-instance ToJoin (Table name fields) fields
+instance ToJoin (Table name fields) fields Nil
 
 -- | Aliased tables
 instance (
       RowToList source list,
       QualifiedFields list alias aliased,
       Union aliased source fields
-) => ToJoin (As alias (Table name source)) fields
+) => ToJoin (As alias (Table name source)) fields (Cons alias alias Nil)
 
 -- | Aliased subqueries
 instance (
       QueryMustBeAliased rest alias,
       RowToList projection list,
-      QualifiedFields list alias aliased
-) => ToJoin (Select s projection (From f fields rest)) aliased
+      QualifiedFields list alias aliased,
+      Union projection aliased fields
+) => ToJoin (Select s projection (From f fd rest)) fields (Cons alias alias Nil)
 
 -- | JOIN ... ON
-instance ToJoin (Join k fields l r (On c rest)) fields
+instance ToJoin (Join k fields l r (On c rest)) fields Nil
 
 instance (
-      ToJoin l left,
-      ToJoin r right,
+      ToJoin l left las,
+      ToJoin r right ras,
       Union left right all,
-      Nub all fields
-) => ToJoin (Join k fd l r E) fields
+      Nub all fields,
+      RowListAppend las ras aliases
+) => ToJoin (Join k fd l r E) fields aliases
 
 
 -- | OUTER JOINs make one side nullable, as a corresponding record may not be found
@@ -345,25 +347,32 @@ else instance (
 
 -- | INNER JOIN statement
 -- |
--- | JOIN sources are the same as FROM, with the exception that tables must be aliased
-join :: forall r l right rf lf left all source fields.
-      ToJoin l left =>
-      ToJoin r right =>
+-- | JOIN sources are the same as FROM
+join :: forall r l aliases unique las ras right rf lf left all source fields.
+      ToJoin l left las =>
+      ToJoin r right ras =>
+      UniqueSources left right =>
+      RowListAppend las ras aliases =>
+      RowListNub aliases unique =>
+      UniqueAliases aliases unique =>
       Union right left all =>
       Nub all source =>
       Union left lf source =>
       Union right rf source =>
       Union lf rf fields =>
-      -- UniqueAliases all source =>
       l -> r -> Join Inner fields l r E
 join l r = Join l r E
 
 -- | LEFT OUTER JOIN statement
 -- |
--- | JOIN sources are the same as FROM, with the exception that tables must be aliased
-leftJoin :: forall r l list out rf lf right left all fields source.
-      ToJoin l left =>
-      ToJoin r right =>
+-- | JOIN sources are the same as FROM
+leftJoin :: forall r l las ras list out aliases unique rf lf right left all fields source.
+      ToJoin l left las =>
+      ToJoin r right ras=>
+      UniqueSources left right =>
+      RowListAppend las ras aliases =>
+      RowListNub aliases unique =>
+      UniqueAliases aliases unique =>
       Union left right all =>
       Nub all source =>
       Union left lf source =>
@@ -371,12 +380,10 @@ leftJoin :: forall r l list out rf lf right left all fields source.
       RowToList rf list =>
       ToOuterFields list out =>
       Union lf out fields =>
-      -- UniqueAliases all fields =>
       l -> r -> Join Outer fields l r E
 leftJoin l r = Join l r E
 
 
---refactor: it would be nice to be able to reuse ToCondition, but joins only allow alias.field for now
 -- | Comparision logic for ON statements
 -- |
 -- | Note: as of now, only qualifieds fields (e.g., table.column) can be used
@@ -1068,10 +1075,19 @@ class UniqueColumnNames (some :: Row Type) (more :: Row Type)
 instance UniqueColumnNames fields fields
 
 
--- | Joined tables should not repeat table aliases
-class UniqueAliases (some :: Row Type) (more :: Row Type)
+-- | Joined tables should not be the same
+class UniqueSources (some :: Row Type) (more :: Row Type)
 
-instance UniqueAliases fields fields
+instance (Fail (Text "Cannot JOIN source to itself")) => UniqueSources fields fields
+
+else instance UniqueSources some more
+
+
+--needs to be improved for clarity
+-- | Joined tables should not repeat table aliases
+class UniqueAliases (some :: RowList Symbol) (more :: RowList Symbol)
+
+instance UniqueAliases aliases aliases
 
 
 -- | Table/subquery alias or `Empty`
