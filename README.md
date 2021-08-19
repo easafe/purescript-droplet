@@ -128,7 +128,7 @@ joinUserMessages =
       select (
               u ... name /\ -- `...` is equivalent to table.column
               (t ... name # as recipient) /\ -- `name` is displayed as recipient
-              m ... date
+              date
             ) #
       from (
             ((messages # as m)
