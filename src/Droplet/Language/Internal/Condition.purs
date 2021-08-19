@@ -80,7 +80,7 @@ else instance Comparision (Array t) fields alias t
 else instance ToValue t => Comparision t fields alias t
 
 
--- | Helper to cut down on `Comparision` instances
+-- | Whether given types can be compared
 class ValidComparision (t :: Type) (u :: Type)
 
 instance ValidComparision t OuterScope
