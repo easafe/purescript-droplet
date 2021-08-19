@@ -239,27 +239,12 @@ instance (
       UniqueColumnNames selected unique
 ) => ToFrom (Select t projection (From f fd rest)) (Select s unique E) projection
 
--- | FROM (... UNION ...) AS alias
--- instance (
---       QueryMustBeAliased rest alias,
---       ToProjection s projection alias selected,
---       Nub selected unique,
---       UniqueColumnNames selected unique
--- ) => ToFrom (Select t projection (From f fd rest)) (Select s unique E) projection
-
--- | FROM ... INNER JOIN ...
+-- | FROM ... JOIN ...
 instance (
-      ToProjection s fields Inner selected,
+      ToProjection s fields Empty selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Join Inner fields l r (On c rest)) (Select s unique E) fields
-
--- | FROM ... OUTER JOIN ...
-instance (
-      ToProjection s fields Outer selected,
-      Nub selected unique,
-      UniqueColumnNames selected unique
-) => ToFrom (Join Outer fields l r (On c rest)) (Select s unique E) fields
+) => ToFrom (Join k fields l r (On c rest)) (Select s unique E) fields
 
 
 -- | FROM accepts the following sources
@@ -960,38 +945,22 @@ returning f q = resume q $ Returning f
 ------------------------Projection machinery---------------------------
 
 -- | Computes SELECT projection as a `Row Type`
-class ToProjection :: forall k. Type -> Row Type -> k -> Row Type -> Constraint
-class ToProjection s fields alias projection | s -> fields projection
+class ToProjection (s :: Type) (fields :: Row Type) (alias :: Symbol) (projection :: Row Type) | s -> fields projection
 
 -- | Columns
 instance (
-      UnwrapDefinition t u,
+      JoinedToMaybe t v,
+      UnwrapDefinition v u,
       Cons name t e fields,
       Cons name u () projection
 ) => ToProjection (Proxy name) fields alias projection
 
--- | Inner join path columns
-else instance (
-      AppendPath alias name fullPath,
-      Cons fullPath t e fields,
-      UnwrapDefinition t u,
-      Cons fullPath u () projection
-) => ToProjection (Path alias name) fields Inner projection
-
--- | Outer join path columns
-else instance (
-      AppendPath alias name fullPath,
-      Cons fullPath t e fields,
-      JoinedToMaybe t v,
-      UnwrapDefinition v u,
-      Cons fullPath u () projection
-) => ToProjection (Path alias name) fields Outer projection
-
 -- | Path column from current scope
 else instance (
-      UnwrapDefinition t u,
-      Cons name t e fields,
       AppendPath alias name fullPath,
+      Cons name t e fields,
+      JoinedToMaybe t v,
+      UnwrapDefinition v u,
       Cons fullPath u () projection
 ) => ToProjection (Path alias name) fields alias projection
 
@@ -1008,27 +977,11 @@ else instance Cons alias t () projection => ToProjection (As alias (Aggregate in
 
 -- | Aliased column
 else instance (
-      UnwrapDefinition t u,
       Cons name t e fields,
-      Cons alias u () projection
-) => ToProjection (As alias (Proxy name)) fields a projection
-
--- | Aliased inner join path column
-else instance (
-      AppendPath table name fullPath,
-      Cons fullPath t e fields,
-      UnwrapDefinition t u,
-      Cons alias u () projection
-) => ToProjection (As alias (Path table name)) fields Inner projection
-
--- | Aliased outer join path column
-else instance (
-      AppendPath table name fullPath,
-      Cons fullPath t e fields,
       JoinedToMaybe t v,
       UnwrapDefinition v u,
       Cons alias u () projection
-) => ToProjection (As alias (Path table name)) fields Outer projection
+) => ToProjection (As alias (Proxy name)) fields a projection
 
 -- | Aliased path column from current scope
 else instance (

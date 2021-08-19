@@ -201,7 +201,7 @@ fromSubQuery = select name # from (select star # from users # as u) -- SELECT na
 
 * Join
 
-To be parsed correctly, joins must be bracketed into FROM. Joined expressions can any valid FROM expression, that is, tables, sub queries, other joins, etc. Currently, all joined expressions must have an alias. A following ON clause is also mandatory.
+To be parsed correctly, joins must be bracketed into FROM. Joined expressions can any valid FROM expression, that is, tables, sub queries, other joins, etc. Currently, a following ON clause is mandatory.
 
 1. INNER JOIN
 

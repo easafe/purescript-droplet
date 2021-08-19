@@ -1,8 +1,8 @@
 module Test.Join where
 
-import Droplet.Language
-import Prelude hiding (join)
-import Test.Types
+import Droplet.Language (as, from, join, leftJoin, limit, on, orderBy, select, wher, (.&&.), (...), (.=.))
+import Prelude (discard, (#), ($))
+import Test.Types (b, id, messages, n, name, sender, sent, t, tags, u, users)
 
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
@@ -16,13 +16,13 @@ tests = do
       TU.suite "join" do
             TU.suite "inner" do
                   TU.test "path column" do
-                        let q = select (u ... id /\ t ... sender) # from ((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id))
-                        TM.notParameterized """SELECT "u".id "u.id", "t".sender "t.sender" FROM users AS "u" INNER JOIN messages AS "t" ON "u".id = "t".id""" $ Query.query q
-                        TM.result q [{"u.id": 1, "t.sender": 1}, {"u.id": 2, "t.sender": 2}]
+                        let q = select (u ... id /\ sender) # from ((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id))
+                        TM.notParameterized """SELECT "u".id "u.id", sender FROM users AS "u" INNER JOIN messages AS "t" ON "u".id = "t".id""" $ Query.query q
+                        TM.result q [{"u.id": 1, sender : 1}, {"u.id": 2, sender : 2}]
                   TU.test "unique columns" do
-                        let q = select (t ... sent /\ u ... name) # from ((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id))
-                        TM.notParameterized """SELECT "t".sent "t.sent", "u".name "u.name" FROM users AS "u" INNER JOIN messages AS "t" ON "u".id = "t".id""" $ Query.query q
-                        TM.result q [{"t.sent": true, "u.name": "josh"}, {"t.sent": true, "u.name": "mary"}]
+                        let q = select (sent /\ name) # from ((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id))
+                        TM.notParameterized """SELECT sent, name FROM users AS "u" INNER JOIN messages AS "t" ON "u".id = "t".id""" $ Query.query q
+                        TM.result q [{sent: true, name: "josh"}, {sent: true, name: "mary"}]
                   TU.test "aliased columns" do
                         let q = select (u ... id # as id) # from ((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id))
                         TM.notParameterized """SELECT "u".id AS "id" FROM users AS "u" INNER JOIN messages AS "t" ON "u".id = "t".id""" $ Query.query q
@@ -54,13 +54,13 @@ tests = do
 
             TU.suite "(left) outer" do
                   TU.test "path column" do
-                        let q = select (u ... id /\ t ... sender) # from ((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id))
-                        TM.notParameterized """SELECT "u".id "u.id", "t".sender "t.sender" FROM users AS "u" LEFT JOIN messages AS "t" ON "u".id = "t".id""" $ Query.query q
-                        TM.result q [{"u.id": 1, "t.sender": Just 1}, {"u.id": 2, "t.sender": Just 2}]
+                        let q = select (u ... id /\ sender) # from ((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id))
+                        TM.notParameterized """SELECT "u".id "u.id", sender FROM users AS "u" LEFT JOIN messages AS "t" ON "u".id = "t".id""" $ Query.query q
+                        TM.result q [{"u.id": 1, sender: Just 1}, {"u.id": 2, sender: Just 2}]
                   TU.test "unique columns" do
-                        let q = select (t ... sent /\ u ... name) # from ((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id))
-                        TM.notParameterized """SELECT "t".sent "t.sent", "u".name "u.name" FROM users AS "u" LEFT JOIN messages AS "t" ON "u".id = "t".id""" $ Query.query q
-                        TM.result q [{"t.sent": Just true, "u.name": "josh"}, {"t.sent": Just true, "u.name": "mary"}]
+                        let q = select (sent /\ name) # from ((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id))
+                        TM.notParameterized """SELECT sent, name FROM users AS "u" LEFT JOIN messages AS "t" ON "u".id = "t".id""" $ Query.query q
+                        TM.result q [{sent: Just true, name: "josh"}, {sent: Just true, name: "mary"}]
                   TU.test "aliased columns" do
                         let q = select (u ... id # as id) # from ((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id))
                         TM.notParameterized """SELECT "u".id AS "id" FROM users AS "u" LEFT JOIN messages AS "t" ON "u".id = "t".id""" $ Query.query q
