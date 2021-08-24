@@ -655,6 +655,8 @@ orderBy f q = resume q $ OrderBy f E
 
 instance (Cons name t e fields, Cons fd g h fields) => ToStringAgg (Proxy name) (OrderBy (Proxy fd) String) fields
 
+instance Cons name t e fields => ToStringAgg (Path table fd) (OrderBy (Proxy name) String) fields
+
 instance Cons name t e fields => ToStringAgg (Proxy name) (OrderBy (Path alias fd) String) fields
 
 instance ToStringAgg (Path table name) (OrderBy (Path alias fd) String) fields

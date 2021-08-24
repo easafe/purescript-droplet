@@ -18,6 +18,12 @@ See the [project page](https://droplet.asafe.dev/) for an in-depth look, or [pur
 
 ### Quick start
 
+Install
+
+```
+npm i big-integer pg
+```
+
 Write some SQL
 
 ```sql
@@ -125,20 +131,16 @@ selectUserMessages userId =
 
 joinUserMessages :: _
 joinUserMessages =
-      select (
-              u ... name /\ -- `...` is equivalent to table.column
+      select (u ... name /\ -- `...` is equivalent to table.column
               (t ... name # as recipient) /\ -- `name` is displayed as recipient
-              date
-            ) #
-      from (
-            ((messages # as m)
+              date) #
+      from (((messages # as m)
             `join`
             (users # as u) #
             on (m ... sender .=. u ... id))
             `join`
             (users # as t) #
-            on (m ... recipient .=. t ... id)
-      )
+            on (m ... recipient .=. t ... id))
 ```
 
 Connect to the database
