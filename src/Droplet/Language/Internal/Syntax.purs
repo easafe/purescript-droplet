@@ -1,16 +1,17 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
+module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparisionAlias, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
 
 import Prelude
 
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
-import Droplet.Language.Internal.Condition (class ToCondition, Exists(..), Op(..))
-import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, E(..), Empty, Joined, Path, Star, Table)
+import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
+import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, class UnwrapNullable, Auto, Default, E(..), Empty, Joined, Path, Star, Table)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate)
 import Droplet.Language.Internal.Keyword (Dot)
+import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
@@ -244,7 +245,7 @@ instance (
       ToProjection s fields Empty selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Join k fields l r (On c rest)) (Select s unique E) fields
+) => ToFrom (Join k fields l r a (On c rest)) (Select s unique E) fields
 
 
 -- | FROM accepts the following sources
@@ -272,7 +273,7 @@ data Side
 foreign import data Inner :: Side
 foreign import data Outer :: Side
 
-data Join (k :: Side) (fields :: Row Type) q r rest = Join q r rest
+data Join (k :: Side) (fields :: Row Type) q r (aliases :: RowList Symbol) rest = Join q r rest
 
 data On c rest = On c rest
 
@@ -305,9 +306,9 @@ instance (
       Union left right all,
       Nub all fields,
       RowListAppend las ras aliases
-) => ToJoin (Join Inner fd l r (On c rest)) fields aliases
+) => ToJoin (Join Inner fd l r a (On c rest)) fields aliases
 
--- | JOIN ... ON
+-- | outer JOIN ... ON
 instance (
       ToJoin l left las,
       ToJoin r right ras,
@@ -316,7 +317,7 @@ instance (
       Union left out all,
       Nub all fields,
       RowListAppend las ras aliases
-) => ToJoin (Join Outer fd l r (On c rest)) fields aliases
+) => ToJoin (Join Outer fd l r a (On c rest)) fields aliases
 
 
 -- | OUTER JOINs make one side nullable, as a corresponding record may not be found
@@ -355,7 +356,7 @@ join :: forall r l aliases unique las ras right rf lf left all source fields.
       Union left lf source =>
       Union right rf source =>
       Union lf rf fields =>
-      l -> r -> Join Inner fields l r E
+      l -> r -> Join Inner fields l r aliases E
 join l r = Join l r E
 
 -- | LEFT OUTER JOIN statement
@@ -375,32 +376,69 @@ leftJoin :: forall r l las ras list out aliases unique rf lf right left all fiel
       RowToList lf list =>
       ToOuterFields list out =>
       Union rf out fields =>
-      l -> r -> Join Outer fields l r E
+      l -> r -> Join Outer fields l r aliases E
 leftJoin l r = Join l r E
 
-
+--would be nice to have a unified (but not messy) way to reuse tocondition here
 -- | Comparision logic for ON statements
-class OnCondition (c :: Type) (fields :: Row Type)
+class OnCondition (c :: Type) (fields :: Row Type) (aliases :: RowList Symbol)
 
-instance (OnCondition (Op a b) fields, OnCondition (Op c d) fields) => OnCondition (Op (Op a b) (Op c d)) fields
+instance (OnCondition (Op a b) fields aliases, OnCondition (Op c d) fields aliases) => OnCondition (Op (Op a b) (Op c d)) fields aliases
 
-else instance OnComparision a b fields => OnCondition (Op a b) fields
+else instance (
+      OnComparision a fields aliases t,
+      OnComparision b fields aliases u,
+      ValidComparision t u
+) => OnCondition (Op a b) fields aliases
 
 
-class OnComparision (a :: Type) (b :: Type) (fields :: Row Type) | a b -> fields
+class OnComparision (a :: Type) (fields :: Row Type) (aliases :: RowList Symbol) (t :: Type) | a -> t
 
 instance (
+      Cons name t d fields,
       UnwrapDefinition t u,
-      UnwrapDefinition r u,
+      UnwrapNullable u v
+) => OnComparision (Proxy name) fields aliases v
+
+else instance (
+      RowListAppend (Cons alias alias Nil) aliases all,
+      RowListNub all unique,
+      OuterScopeAlias all unique y,
       AppendPath alias name fullPath,
+      OnComparisionAlias y fullPath fields t
+) => OnComparision (Path alias name) fields aliases t
+
+else instance OnComparision (Path alias name) fields aliases OuterScope
+
+else instance ToValue t => OnComparision t fields aliases t
+
+
+class OuterScopeAlias (all :: RowList Symbol) (unique :: RowList Symbol) (y :: Boolean) | all unique -> y
+
+instance OuterScopeAlias Nil Nil True
+
+else instance OuterScopeAlias (Cons alias alias some) Nil False
+
+else instance OuterScopeAlias Nil (Cons alias alias some) False
+
+else instance (OuterScopeAlias some more y) => OuterScopeAlias (Cons alias alias some) (Cons alias alias more) y
+
+else instance OuterScopeAlias (Cons alias alias some) (Cons otherAlias otherAlias more) False
+
+
+class OnComparisionAlias (unscoped :: Boolean) (fullPath :: Symbol) (fields :: Row Type) (t :: Type) | unscoped -> fullPath fields t
+
+instance OnComparisionAlias True fullPath fields OuterScope
+
+instance (
       Cons fullPath t d fields,
-      AppendPath otherAlias otherName otherFullPath,
-      Cons otherFullPath r e fields
-) => OnComparision (Path alias name) (Path otherAlias otherName) fields
+      UnwrapDefinition t u,
+      UnwrapNullable u v
+) => OnComparisionAlias False fullPath fields v
 
 
 -- | JOIN ... ON statement
-on :: forall k l r c fields. OnCondition c fields => c -> Join k fields l r E -> Join k fields l r (On c E)
+on :: forall k l r c fields aliases. OnCondition c fields aliases => c -> Join k fields l r aliases E -> Join k fields l r aliases (On c E)
 on c (Join q r _) = Join q r $ On c E
 
 
@@ -456,7 +494,7 @@ instance (
       Union aliased fields all
 ) => GroupBySource (As alias (Table name fields)) all
 
-instance GroupBySource (Join k fields q r rest) fields
+instance GroupBySource (Join k fields q r a rest) fields
 
 instance (
       QueryMustBeAliased rest alias,

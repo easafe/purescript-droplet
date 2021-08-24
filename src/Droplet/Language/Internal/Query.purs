@@ -53,8 +53,9 @@ instance (
       QueryMustNotBeAliased rest, --alias errors
       SourceAlias f alias,
       RowToList fields list,
-      QualifiedFields list alias outer, --From currently does not include fields with their source alias
+      QualifiedFields list alias outer,
       FilteredQuery rest outer, --where condition errors
+      FilteredQuery f outer, --on condition errors
       QualifiedProjection s outer qual, --qualified columns projection
       Union qual projection all,
       Nub all final,
@@ -63,7 +64,7 @@ instance (
       toQuery q = translate q
 
 -- | "Naked" queries in the shape of SELECT ...
-else instance (
+instance (
       ToNakedProjection s projection,
       Nub projection unique,
       UniqueColumnNames projection unique,
@@ -72,29 +73,37 @@ else instance (
       toQuery q = translate q
 
 -- | UNION
-else instance (
+instance (
       ToQuery q final,
       ToQuery r p,
       Translate (Union q r)
 ) => ToQuery (Union q r) final where
       toQuery q = translate q
 
--- | INSERT
-else instance (
+-- | INSERT ... RETURNING
+instance (
       ToProjection f fields Empty projection,
       Translate (Insert (Into name fields fieldNames (Values v (Returning f))))
 ) => ToQuery (Insert (Into name fields fieldNames (Values v (Returning f)))) projection where
       toQuery q = translate q
 
--- | Trivial instance for unsafe queries
-else instance ToQuery (Query projection) projection where
+-- | INSERT
+instance Translate (Insert (Into name fields fieldNames (Values v E))) => ToQuery (Insert (Into name fields fieldNames (Values v E))) () where
+      toQuery q = translate q
+
+-- | UPDATE
+instance Translate (Update table fields (Set values rest)) => ToQuery (Update table fields (Set values rest)) () where
+      toQuery q = translate q
+
+-- | DELETE
+instance Translate (Delete (From f fields rest)) => ToQuery (Delete (From f fields rest)) () where
+      toQuery q = translate q
+
+-- | Unsafe queries
+instance ToQuery (Query projection) projection where
       toQuery (Query p q parameters) = do
             CMS.put { plan: p, parameters, bracketed: false }
             pure q
-
--- | Queries that don't output data
-else instance Translate s => ToQuery s () where
-      toQuery q = translate q
 
 
 -- | Asserts that queries not using GROUP BY do not mix aggregated and non aggregated columns
@@ -224,6 +233,7 @@ else instance (
       Union outer inner all,
       Nub all nubbed,
       FilteredQuery rest nubbed,
+      FilteredQuery f nubbed,
       QualifiedProjection s nubbed projection,
       RowToList projection list,
       SingleQualifiedColumn list rest single
@@ -244,10 +254,12 @@ else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () sing
 else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () single) => SingleQualifiedColumn (RL.Cons name t RL.Nil) q single
 
 
--- | Checks for invalid qualified columns usage in WHERE clauses
+-- | Checks for invalid qualified columns usage in conditional clauses
 class FilteredQuery (q :: Type) (outer :: Row Type)
 
 instance FilteredQuery cond outer => FilteredQuery (Where cond rest) outer
+
+else instance FilteredQuery cond outer => FilteredQuery (Join k f q r a (On cond rest)) outer
 
 else instance (FilteredQuery (Op a b) outer, FilteredQuery (Op c d) outer) => FilteredQuery (Op (Op a b) (Op c d)) outer
 
@@ -271,20 +283,32 @@ else instance (
 else instance (
       AppendPath alias name fullPath,
       Cons fullPath t e outer,
+      UnwrapDefinition t v,
+      UnwrapNullable v w,
       AppendPath otherAlias otherName otherFullPath,
-      Cons otherFullPath t f outer
+      Cons otherFullPath u f outer,
+      UnwrapDefinition u z,
+      UnwrapNullable z w
 ) => FilteredQuery (Op (Path alias name) (Path otherAlias otherName)) outer
 
 else instance (
       AppendPath alias name fullPath,
       Cons fullPath t e outer,
-      Cons otherName t f outer
+      UnwrapDefinition t v,
+      UnwrapNullable v w,
+      Cons otherName u f outer,
+      UnwrapDefinition u z,
+      UnwrapNullable z w
 ) => FilteredQuery (Op (Path alias name) (Proxy otherName)) outer
 
 else instance (
       Cons name t f outer,
+      UnwrapDefinition t v,
+      UnwrapNullable v w,
       AppendPath alias otherName fullPath,
-      Cons fullPath t e outer
+      Cons fullPath u e outer,
+      UnwrapDefinition u z,
+      UnwrapNullable z w
 ) => FilteredQuery (Op (Proxy name) (Path alias otherName)) outer
 
 else instance (
@@ -452,7 +476,7 @@ instance (IsSymbol name, Translate rest) => Translate (From (Table name fields) 
             q <- translate rest
             pure $ fromKeyword <> DS.reflectSymbol (Proxy :: Proxy name) <> q
 
-else instance (Translate (Join k fields l r more), Translate rest) => Translate (From (Join k fields l r more) fields rest) where
+else instance (Translate (Join k fields l r a more), Translate rest) => Translate (From (Join k fields l r a more) fields rest) where
       translate (From j rest) = do
             q <- translate j
             otherQ <- translate rest
@@ -477,7 +501,7 @@ instance Translate (Select s ppp more) => TranslateSource (Select s ppp more) wh
 instance (IsSymbol name, IsSymbol alias) => TranslateSource (As alias (Table name fd)) where
       translateSource _ = pure $ DS.reflectSymbol (Proxy :: Proxy name) <> asKeyword <> quote (Proxy :: Proxy alias)
 
-instance (ToJoinType k, Translate (Join k fields l r rest)) => TranslateSource (Join k fields l r rest) where
+instance (ToJoinType k, Translate (Join k fields l r a rest)) => TranslateSource (Join k fields l r a rest) where
       translateSource j = translate j
 
 
@@ -487,7 +511,7 @@ instance (
       TranslateSource l,
       TranslateSource r,
       Translate rest
-) => Translate (Join k fields l r rest) where
+) => Translate (Join k fields l r a rest) where
       translate (Join l r rest) = do
             left <- translateSource l
             right <- translateSource r
