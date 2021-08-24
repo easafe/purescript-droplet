@@ -31,7 +31,6 @@ You can edit this file as you like.
   , "test-unit"
   , "transformers"
   , "tuples"
-  , "typelevel-lists"
   , "typelevel-prelude"
   , "unsafe-coerce"
   ]
