@@ -1,22 +1,23 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueAliases, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
+module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparisionAlias, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
 
 import Prelude
 
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
-import Droplet.Language.Internal.Condition (class ToCondition, Exists(..), Op(..))
-import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, Auto, Default, E(..), Empty, Joined, Path, Star, Table)
-import Droplet.Language.Internal.Function (class TextColumn, class ToStringAgg, Aggregate(..))
+import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
+import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, class UnwrapNullable, Auto, Default, E(..), Empty, Joined, Path, Star, Table)
+import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate)
 import Droplet.Language.Internal.Keyword (Dot)
+import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
-import Prim.RowList (class RowToList, Nil, Cons, RowList)
+import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
-import Unsafe.Coerce as UC
+import Type.RowList (class RowListAppend, class RowListNub)
 
 
 
@@ -239,27 +240,12 @@ instance (
       UniqueColumnNames selected unique
 ) => ToFrom (Select t projection (From f fd rest)) (Select s unique E) projection
 
--- | FROM (... UNION ...) AS alias
--- instance (
---       QueryMustBeAliased rest alias,
---       ToProjection s projection alias selected,
---       Nub selected unique,
---       UniqueColumnNames selected unique
--- ) => ToFrom (Select t projection (From f fd rest)) (Select s unique E) projection
-
--- | FROM ... INNER JOIN ...
+-- | FROM ... JOIN ...
 instance (
-      ToProjection s fields Inner selected,
+      ToProjection s fields Empty selected,
       Nub selected unique,
       UniqueColumnNames selected unique
-) => ToFrom (Join Inner fields l r (On c rest)) (Select s unique E) fields
-
--- | FROM ... OUTER JOIN ...
-instance (
-      ToProjection s fields Outer selected,
-      Nub selected unique,
-      UniqueColumnNames selected unique
-) => ToFrom (Join Outer fields l r (On c rest)) (Select s unique E) fields
+) => ToFrom (Join k fields l r a (On c rest)) (Select s unique E) fields
 
 
 -- | FROM accepts the following sources
@@ -287,26 +273,51 @@ data Side
 foreign import data Inner :: Side
 foreign import data Outer :: Side
 
-data Join (k :: Side) (fields :: Row Type) q r rest = Join q r rest
+data Join (k :: Side) (fields :: Row Type) q r (aliases :: RowList Symbol) rest = Join q r rest
 
 data On c rest = On c rest
 
 
--- | Given a source `q`, compute its (qualified) fields
-class ToJoin (q :: Type) (aliased :: Row Type) | q -> aliased
+-- | Given a source `q`, compute its (non and qualified) fields
+class ToJoin (q :: Type) (fields :: Row Type) (aliases :: RowList Symbol) | q -> fields aliases
+
+instance ToJoin (Table name fields) fields Nil
 
 -- | Aliased tables
-instance (RowToList fields list, QualifiedFields list alias aliased) => ToJoin (As alias (Table name fields)) aliased
+instance (
+      RowToList source list,
+      QualifiedFields list alias aliased,
+      Union aliased source fields
+) => ToJoin (As alias (Table name source)) fields (Cons alias alias Nil)
 
 -- | Aliased subqueries
 instance (
       QueryMustBeAliased rest alias,
       RowToList projection list,
-      QualifiedFields list alias aliased
-) => ToJoin (Select s projection (From f fields rest)) aliased
+      QualifiedFields list alias aliased,
+      Union projection aliased fields
+) => ToJoin (Select s projection (From f fd rest)) fields (Cons alias alias Nil)
+
 
 -- | JOIN ... ON
-instance ToJoin (Join k fields l r (On c rest)) fields
+instance (
+      ToJoin l left las,
+      ToJoin r right ras,
+      Union left right all,
+      Nub all fields,
+      RowListAppend las ras aliases
+) => ToJoin (Join Inner fd l r a (On c rest)) fields aliases
+
+-- | outer JOIN ... ON
+instance (
+      ToJoin l left las,
+      ToJoin r right ras,
+      RowToList right list,
+      ToOuterFields list out,
+      Union left out all,
+      Nub all fields,
+      RowListAppend las ras aliases
+) => ToJoin (Join Outer fd l r a (On c rest)) fields aliases
 
 
 -- | OUTER JOINs make one side nullable, as a corresponding record may not be found
@@ -332,56 +343,102 @@ else instance (
 
 -- | INNER JOIN statement
 -- |
--- | JOIN sources are the same as FROM, with the exception that tables must be aliased
-join :: forall r l right left all fields.
-      ToJoin l left =>
-      ToJoin r right =>
+-- | JOIN sources are the same as FROM
+join :: forall r l aliases unique las ras right rf lf left all source fields.
+      ToJoin l left las =>
+      ToJoin r right ras =>
+      UniqueSources left right =>
+      RowListAppend las ras aliases =>
+      RowListNub aliases unique =>
+      UniqueAliases aliases unique =>
       Union right left all =>
-      Nub all fields =>
-      UniqueAliases all fields =>
-      l -> r -> Join Inner all l r E
+      Nub all source =>
+      Union left lf source =>
+      Union right rf source =>
+      Union lf rf fields =>
+      l -> r -> Join Inner fields l r aliases E
 join l r = Join l r E
 
 -- | LEFT OUTER JOIN statement
 -- |
--- | JOIN sources are the same as FROM, with the exception that tables must be aliased
-leftJoin :: forall r l list out right left all fields.
-      ToJoin l left =>
-      ToJoin r right =>
-      RowToList right list =>
+-- | JOIN sources are the same as FROM
+leftJoin :: forall r l las ras list out aliases unique rf lf right left all fields source.
+      ToJoin l left las =>
+      ToJoin r right ras =>
+      UniqueSources left right =>
+      RowListAppend las ras aliases =>
+      RowListNub aliases unique =>
+      UniqueAliases aliases unique =>
+      Union left right all =>
+      Nub all source =>
+      Union left lf source =>
+      Union right rf source =>
+      RowToList lf list =>
       ToOuterFields list out =>
-      Union left out all =>
-      Nub all fields =>
-      UniqueAliases all fields =>
-      l -> r -> Join Outer fields l r E
+      Union rf out fields =>
+      l -> r -> Join Outer fields l r aliases E
 leftJoin l r = Join l r E
 
-
---refactor: it would be nice to be able to reuse ToCondition, but joins only allow alias.field for now
+--would be nice to have a unified (but not messy) way to reuse tocondition here
 -- | Comparision logic for ON statements
--- |
--- | Note: as of now, only qualifieds fields (e.g., table.column) can be used
-class OnCondition (c :: Type) (fields :: Row Type)
+class OnCondition (c :: Type) (fields :: Row Type) (aliases :: RowList Symbol)
 
-instance (OnCondition (Op a b) fields, OnCondition (Op c d) fields) => OnCondition (Op (Op a b) (Op c d)) fields
+instance (OnCondition (Op a b) fields aliases, OnCondition (Op c d) fields aliases) => OnCondition (Op (Op a b) (Op c d)) fields aliases
 
-else instance OnComparision a b fields => OnCondition (Op a b) fields
+else instance (
+      OnComparision a fields aliases t,
+      OnComparision b fields aliases u,
+      ValidComparision t u
+) => OnCondition (Op a b) fields aliases
 
 
-class OnComparision (a :: Type) (b :: Type) (fields :: Row Type) | a b -> fields
+class OnComparision (a :: Type) (fields :: Row Type) (aliases :: RowList Symbol) (t :: Type) | a -> t
 
 instance (
+      Cons name t d fields,
       UnwrapDefinition t u,
-      UnwrapDefinition r u,
+      UnwrapNullable u v
+) => OnComparision (Proxy name) fields aliases v
+
+else instance (
+      RowListAppend (Cons alias alias Nil) aliases all,
+      RowListNub all unique,
+      OuterScopeAlias all unique y,
       AppendPath alias name fullPath,
+      OnComparisionAlias y fullPath fields t
+) => OnComparision (Path alias name) fields aliases t
+
+else instance OnComparision (Path alias name) fields aliases OuterScope
+
+else instance ToValue t => OnComparision t fields aliases t
+
+
+class OuterScopeAlias (all :: RowList Symbol) (unique :: RowList Symbol) (y :: Boolean) | all unique -> y
+
+instance OuterScopeAlias Nil Nil True
+
+else instance OuterScopeAlias (Cons alias alias some) Nil False
+
+else instance OuterScopeAlias Nil (Cons alias alias some) False
+
+else instance (OuterScopeAlias some more y) => OuterScopeAlias (Cons alias alias some) (Cons alias alias more) y
+
+else instance OuterScopeAlias (Cons alias alias some) (Cons otherAlias otherAlias more) False
+
+
+class OnComparisionAlias (unscoped :: Boolean) (fullPath :: Symbol) (fields :: Row Type) (t :: Type) | unscoped -> fullPath fields t
+
+instance OnComparisionAlias True fullPath fields OuterScope
+
+instance (
       Cons fullPath t d fields,
-      AppendPath otherAlias otherName otherFullPath,
-      Cons otherFullPath r e fields
-) => OnComparision (Path alias name) (Path otherAlias otherName) fields
+      UnwrapDefinition t u,
+      UnwrapNullable u v
+) => OnComparisionAlias False fullPath fields v
 
 
 -- | JOIN ... ON statement
-on :: forall k l r c fields. OnCondition c fields => c -> Join k fields l r E -> Join k fields l r (On c E)
+on :: forall k l r c fields aliases. OnCondition c fields aliases => c -> Join k fields l r aliases E -> Join k fields l r aliases (On c E)
 on c (Join q r _) = Join q r $ On c E
 
 
@@ -437,7 +494,7 @@ instance (
       Union aliased fields all
 ) => GroupBySource (As alias (Table name fields)) all
 
-instance GroupBySource (Join k fields q r rest) fields
+instance GroupBySource (Join k fields q r a rest) fields
 
 instance (
       QueryMustBeAliased rest alias,
@@ -926,38 +983,22 @@ returning f q = resume q $ Returning f
 ------------------------Projection machinery---------------------------
 
 -- | Computes SELECT projection as a `Row Type`
-class ToProjection :: forall k. Type -> Row Type -> k -> Row Type -> Constraint
-class ToProjection s fields alias projection | s -> fields projection
+class ToProjection (s :: Type) (fields :: Row Type) (alias :: Symbol) (projection :: Row Type) | s -> fields projection
 
 -- | Columns
 instance (
-      UnwrapDefinition t u,
+      JoinedToMaybe t v,
+      UnwrapDefinition v u,
       Cons name t e fields,
       Cons name u () projection
 ) => ToProjection (Proxy name) fields alias projection
 
--- | Inner join path columns
-else instance (
-      AppendPath alias name fullPath,
-      Cons fullPath t e fields,
-      UnwrapDefinition t u,
-      Cons fullPath u () projection
-) => ToProjection (Path alias name) fields Inner projection
-
--- | Outer join path columns
-else instance (
-      AppendPath alias name fullPath,
-      Cons fullPath t e fields,
-      JoinedToMaybe t v,
-      UnwrapDefinition v u,
-      Cons fullPath u () projection
-) => ToProjection (Path alias name) fields Outer projection
-
 -- | Path column from current scope
 else instance (
-      UnwrapDefinition t u,
-      Cons name t e fields,
       AppendPath alias name fullPath,
+      Cons name t e fields,
+      JoinedToMaybe t v,
+      UnwrapDefinition v u,
       Cons fullPath u () projection
 ) => ToProjection (Path alias name) fields alias projection
 
@@ -974,27 +1015,11 @@ else instance Cons alias t () projection => ToProjection (As alias (Aggregate in
 
 -- | Aliased column
 else instance (
-      UnwrapDefinition t u,
       Cons name t e fields,
-      Cons alias u () projection
-) => ToProjection (As alias (Proxy name)) fields a projection
-
--- | Aliased inner join path column
-else instance (
-      AppendPath table name fullPath,
-      Cons fullPath t e fields,
-      UnwrapDefinition t u,
-      Cons alias u () projection
-) => ToProjection (As alias (Path table name)) fields Inner projection
-
--- | Aliased outer join path column
-else instance (
-      AppendPath table name fullPath,
-      Cons fullPath t e fields,
       JoinedToMaybe t v,
       UnwrapDefinition v u,
       Cons alias u () projection
-) => ToProjection (As alias (Path table name)) fields Outer projection
+) => ToProjection (As alias (Proxy name)) fields a projection
 
 -- | Aliased path column from current scope
 else instance (
@@ -1049,10 +1074,19 @@ class UniqueColumnNames (some :: Row Type) (more :: Row Type)
 instance UniqueColumnNames fields fields
 
 
--- | Joined tables should not repeat table aliases
-class UniqueAliases (some :: Row Type) (more :: Row Type)
+-- | Joined tables should not be the same
+class UniqueSources (some :: Row Type) (more :: Row Type)
 
-instance UniqueAliases fields fields
+instance (Fail (Text "Cannot JOIN source to itself")) => UniqueSources fields fields
+
+else instance UniqueSources some more
+
+
+--needs to be improved for clarity
+-- | Joined tables should not repeat table aliases
+class UniqueAliases (some :: RowList Symbol) (more :: RowList Symbol)
+
+instance UniqueAliases aliases aliases
 
 
 -- | Table/subquery alias or `Empty`

@@ -180,10 +180,3 @@ tests = do
                               let q = select (id /\ (select (u ... id) # from (users # as u) # wher (u ... id .<>. u ... id))) # from (users # as u)
                               TM.notParameterized """SELECT id, (SELECT "u".id "u.id" FROM users AS "u" WHERE "u".id <> "u".id) FROM users AS "u"""" $ Query.query q
                               TM.result q [{id: 1, "u.id": Nothing}, {id: 2, "u.id": Nothing}]
-
-
-
-
-
-
-

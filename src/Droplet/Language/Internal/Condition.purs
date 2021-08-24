@@ -1,7 +1,7 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class Comparision, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, OuterScope, class Comparision, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
 import Prelude
 
@@ -31,6 +31,8 @@ derive instance Eq BinaryOperator
 -- | Wrapper for comparisions
 data Op b c = Op (Maybe BinaryOperator) b c
 
+data OuterScope
+
 
 -- | SQL logical expressions
 class ToCondition (c :: Type) (fields :: Row Type) (alias :: Symbol)
@@ -52,76 +54,40 @@ else instance ToCondition (Op IsNotNull (Path table name)) fields alias
 else instance ToCondition a fields alias => ToCondition (Op Not a) fields alias
 
 -- | Comparisions
-else instance Comparision a b fields alias => ToCondition (Op a b) fields alias
+else instance (
+      Comparision a fields alias t,
+      Comparision b fields alias u,
+      ValidComparision t u
+) => ToCondition (Op a b) fields alias
 
 
--- | Whether expressions can be compared
-class Comparision (c :: Type) (t :: Type) (fields :: Row Type) (alias :: Symbol) | c t -> fields
+-- | Whether expression can be compared
+class Comparision (c :: Type) (fields :: Row Type) (alias :: Symbol) (t :: Type) | c -> fields t
 
-instance (Cons name t d fields, Cons otherName t e fields) => Comparision (Proxy name) (Proxy otherName) fields alias
+instance (Cons name t d fields, UnwrapDefinition t u) => Comparision (Proxy name) fields alias u
 
-else instance (Cons name t d fields, Cons otherName t e fields) => Comparision (Path alias name) (Path alias otherName) fields alias
+else instance (
+      Cons name t d fields,
+      UnwrapDefinition t u,
+      UnwrapNullable u v
+) => Comparision (Path alias name) fields alias v
 
-else instance (Cons name t d fields, Cons otherName t e fields) => Comparision (Path alias name) (Proxy otherName) fields alias
-
-else instance (Cons name t d fields, Cons otherName t e fields) => Comparision (Proxy name) (Path alias otherName) fields alias
-
-else instance Cons otherName t e fields => Comparision (Path table name) (Proxy otherName) fields alias
-
-else instance Cons name t d fields => Comparision (Proxy name) (Path table otherName) fields alias
-
-else instance Comparision (Path table name) (Path alias otherName) fields alias
-
-else instance Comparision (Path alias otherName) (Path table name) fields alias
+else instance Comparision (Path table name) fields alias OuterScope
 
 -- | IN values
-else instance (
-      Cons name t d fields,
-      UnwrapDefinition t u,
-      UnwrapNullable u v
-) => Comparision (Proxy name) (Array v) fields alias
+else instance Comparision (Array t) fields alias t
 
-else instance (
-      Cons name t d fields,
-      UnwrapDefinition t u,
-      UnwrapNullable u v
-) => Comparision (Path alias name) (Array v) fields alias
+else instance ToValue t => Comparision t fields alias t
 
-else instance Comparision (Path table name) (Array u) fields alias
 
-else instance (
-      Cons name t d fields,
-      UnwrapDefinition t u,
-      UnwrapNullable u v,
-      ToValue v
-) => Comparision (Path alias name) v fields alias
+-- | Whether given types can be compared
+class ValidComparision (t :: Type) (u :: Type)
 
-else instance (
-      Cons name t d fields,
-      UnwrapDefinition t u,
-      UnwrapNullable u v,
-      ToValue v
-) => Comparision (Proxy name) v fields alias
+instance ValidComparision t OuterScope
 
-else instance (
-      Cons name t d fields,
-      UnwrapDefinition t u,
-      UnwrapNullable u v,
-      ToValue v
-) => Comparision v (Proxy name) fields alias
+else instance ValidComparision OuterScope t
 
-else instance (
-      Cons name t d fields,
-      UnwrapDefinition t u,
-      UnwrapNullable u v,
-      ToValue v
-) => Comparision u (Path alias name) fields alias
-
-else instance ToValue u => Comparision (Path table name) u fields alias
-
-else instance ToValue u => Comparision u (Path table name) fields alias
-
-else instance ToValue s => Comparision s s fields alias
+else instance ValidComparision t t
 
 
 equals :: forall field compared. field -> compared -> Op field compared
@@ -157,5 +123,3 @@ infix 4 greaterThan as .>.
 infix 4 lesserThan as .<.
 infixl 3 and as .&&.
 infixl 2 or as .||.
-
-
