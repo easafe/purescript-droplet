@@ -211,7 +211,7 @@ else instance (
       Cons alias out () projection
 ) => QualifiedProjection (As alias (Aggregate (Path table name) (OrderBy (Path tb nm) rd) fd out)) outer projection
 
-else instance (AppendPath tb nm ftn,  Cons ftn s g outer) => QualifiedProjection (As alias (Aggregate (Proxy name) (OrderBy (Path tb nm) rd) fd out)) outer projection
+else instance (AppendPath tb nm ftn, Cons ftn s g outer) => QualifiedProjection (As alias (Aggregate (Proxy name) (OrderBy (Path tb nm) rd) fd out)) outer projection
 
 else instance (
       AppendPath table name fullPath,
@@ -227,9 +227,8 @@ else instance (
 
 else instance (
       SourceAlias f table,
-      QueryOptionallyAliased rest table tableAlias,
       RowToList fields fieldList,
-      QualifiedFields fieldList tableAlias inner,
+      QualifiedFields fieldList table inner,
       Union outer inner all,
       Nub all nubbed,
       FilteredQuery rest nubbed,

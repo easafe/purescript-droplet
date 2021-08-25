@@ -1,7 +1,7 @@
 module Test.Where where
 
 import Droplet.Language
-import Prelude hiding (not)
+import Prelude hiding (not, join)
 import Test.Types
 
 import Data.Maybe (Maybe(..))
@@ -150,6 +150,7 @@ tests = do
                         let q = select ((3 # as (Proxy :: Proxy "e")) /\ (select id # from users # wher (name .=. parameters.d) # as b) /\ (select id # from messages # wher (id .=. parameters.e) # as n)) # from users # wher (id .=. 1 .||. id .=. 2)
                         TM.parameterized """SELECT 3 AS "e", (SELECT id FROM users WHERE name = $1) AS "b", (SELECT id FROM messages WHERE id = $2) AS "n" FROM users WHERE (id = $3 OR id = $4)""" $ Query.query q
                         TM.result q [{e: 3, b: Just 2, n: Just 2 }, {e: 3, b: Just 2, n: Just 2 }]
+
             TU.suite "references" do
                   TU.test "named table" do
                         let q = select recipient # from (messages # as u) # wher (sender .=. 1)
@@ -180,3 +181,7 @@ tests = do
                               let q = select (id /\ (select (u ... id) # from (users # as u) # wher (u ... id .<>. u ... id))) # from (users # as u)
                               TM.notParameterized """SELECT id, (SELECT "u".id "u.id" FROM users AS "u" WHERE "u".id <> "u".id) FROM users AS "u"""" $ Query.query q
                               TM.result q [{id: 1, "u.id": Nothing}, {id: 2, "u.id": Nothing}]
+                        TU.testOnly "join" do
+                              let q = select ((select name # from users # wher (id .=. u ... _by)) # as b) # from (join (tags # as u) (messages # as b) # on (u ... id .=. b ... id)) # wher (u ... id .=. 34)
+                              TM.parameterized """SELECT (SELECT name FROM users WHERE id = "u".by) AS "b" FROM tags AS "u" INNER JOIN messages AS "b" ON "u".id = "b".id WHERE "u".id = $1""" $ Query.query q
+                              TM.result q []
