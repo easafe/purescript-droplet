@@ -211,7 +211,11 @@ else instance (
       Cons alias out () projection
 ) => QualifiedProjection (As alias (Aggregate (Path table name) (OrderBy (Path tb nm) rd) fd out)) outer projection
 
-else instance (AppendPath tb nm ftn, Cons ftn s g outer) => QualifiedProjection (As alias (Aggregate (Proxy name) (OrderBy (Path tb nm) rd) fd out)) outer projection
+else instance (
+      AppendPath table name fullPath,
+      Cons fullPath t d outer,
+      Cons alias out () projection
+) => QualifiedProjection (As alias (Aggregate (Proxy n) (OrderBy (Path table name) rd) fd out)) outer projection
 
 else instance (
       AppendPath table name fullPath,

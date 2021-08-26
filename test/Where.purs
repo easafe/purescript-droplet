@@ -181,7 +181,7 @@ tests = do
                               let q = select (id /\ (select (u ... id) # from (users # as u) # wher (u ... id .<>. u ... id))) # from (users # as u)
                               TM.notParameterized """SELECT id, (SELECT "u".id "u.id" FROM users AS "u" WHERE "u".id <> "u".id) FROM users AS "u"""" $ Query.query q
                               TM.result q [{id: 1, "u.id": Nothing}, {id: 2, "u.id": Nothing}]
-                        TU.testOnly "join" do
+                        TU.test "join" do
                               let q = select ((select name # from users # wher (id .=. u ... _by)) # as b) # from (join (tags # as u) (messages # as b) # on (u ... id .=. b ... id)) # wher (u ... id .=. 34)
                               TM.parameterized """SELECT (SELECT name FROM users WHERE id = "u".by) AS "b" FROM tags AS "u" INNER JOIN messages AS "b" ON "u".id = "b".id WHERE "u".id = $1""" $ Query.query q
                               TM.result q []
