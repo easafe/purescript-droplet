@@ -3,6 +3,8 @@ module Test.Types where
 import Data.Date (Date)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
+import Data.Tuple.Nested (type (/\))
+import Droplet.Language (FunctionSignature, function)
 import Droplet.Language.Internal.Definition (Auto, Default, Table(..))
 import Type.Proxy (Proxy(..))
 
@@ -86,3 +88,7 @@ t = Proxy
 
 u :: Proxy "u"
 u = Proxy
+
+
+date_part_age :: FunctionSignature (String /\ DateTime) Int
+date_part_age = function "date_part_age"

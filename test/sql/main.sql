@@ -38,4 +38,11 @@ end;
   $body$
   language plpgsql;
 
-
+create or replace function date_part_age(part text, tm timestamp with time zone)
+  returns integer as
+$body$
+begin
+     return date_part(part, age(now (), tm));
+end;
+  $body$
+  language plpgsql;
