@@ -3,7 +3,7 @@ module Droplet.Language.Internal.Function (class TextColumn, count, class ToCoun
 import Data.BigInt (BigInt)
 import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
-import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, Default, E, Path, Star)
+import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, class UnwrapNullable, Default, E, Path, Star)
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy)
 
@@ -49,8 +49,9 @@ instance (MatchArgumentList inp ar fields, MatchArgumentList ut gs fields) => Ma
 else instance (
       Cons name t d fields,
       UnwrapDefinition t u,
-      ToValue u
-) => MatchArgumentList u (Proxy name) fields
+      UnwrapNullable u v,
+      ToValue v
+) => MatchArgumentList v (Proxy name) fields
 
 else instance ToValue t => MatchArgumentList t t fields
 

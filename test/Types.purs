@@ -92,3 +92,6 @@ u = Proxy
 
 date_part_age :: FunctionSignature (String /\ DateTime) Int
 date_part_age = function "date_part_age"
+
+date_part_age' :: FunctionSignature (String /\ Date) Int
+date_part_age' = function "date_part_age"
