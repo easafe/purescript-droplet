@@ -18,7 +18,7 @@ import Data.Traversable as DT
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
-import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, IsNotNull, Not, Op(..))
+import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
 import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, E(..), Empty, Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..), UserDefinedFunction(..))
 import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
@@ -282,6 +282,13 @@ else instance (
       Nub os allOut,
       FilteredQuery rest allOut
 ) => FilteredQuery (Op Exists (Select s p (From f fields rest))) outer
+
+else instance (
+      AppendPath alias name fullPath,
+      Cons fullPath t e outer,
+      UnwrapDefinition t u,
+      UnwrapNullable u v
+) => FilteredQuery (Op In (Op (Path alias name) (Array v))) outer
 
 else instance (
       AppendPath alias name fullPath,
@@ -586,11 +593,11 @@ else instance TranslateConditions a => TranslateConditions (Op Not a) where
             q <- translateConditions s
             pure $ notKeyword <> q
 
-else instance(TranslateConditions a, TranslateConditions b) => TranslateConditions (Op a (Array b)) where
-      translateConditions (Op e fd values) = do
+else instance(TranslateConditions a, TranslateConditions b) => TranslateConditions (Op In (Op a (Array b))) where
+      translateConditions (Op _ _ (Op _ fd values)) = do
             q <- translateConditions fd
             parameters <- DT.traverse translateConditions values
-            pure $ q <> printOperator e <> openBracket <> DST.joinWith ", " parameters <> closeBracket
+            pure $ q <> inKeyword <> openBracket <> DST.joinWith ", " parameters <> closeBracket
 
 else instance (TranslateConditions a, TranslateConditions b) => TranslateConditions (Op a b) where
       translateConditions (Op operator a b) = do
@@ -623,7 +630,6 @@ printOperator = case _ of
             GreaterThan -> greaterThanSymbol
             And -> andKeyword
             Or -> orKeyword
-            In -> inKeyword
 
 
 -- | GROUP BY

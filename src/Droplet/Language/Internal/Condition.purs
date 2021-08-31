@@ -1,7 +1,7 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, OuterScope, class Comparision, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, OuterScope, In, class Comparision, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
 import Prelude
 
@@ -17,8 +17,9 @@ data BinaryOperator =
       GreaterThan |
       LesserThan |
       And |
-      Or  |
-      In -- only for arrays
+      Or
+
+data In = In -- only for arrays
 
 data Exists = Exists
 
@@ -53,6 +54,9 @@ else instance ToCondition (Op IsNotNull (Path table name)) fields alias
 -- | NOT
 else instance ToCondition a fields alias => ToCondition (Op Not a) fields alias
 
+-- | IN values
+else instance ToCondition (Op a b) fields alias => ToCondition (Op In (Op a (Array b))) fields alias
+
 -- | Comparisions
 else instance (
       Comparision a fields alias t,
@@ -73,9 +77,6 @@ else instance (
 ) => Comparision (Path alias name) fields alias v
 
 else instance Comparision (Path table name) fields alias OuterScope
-
--- | IN values
-else instance Comparision (Array t) fields alias t
 
 else instance ToValue t => Comparision t fields alias t
 
@@ -108,8 +109,8 @@ and first second = Op (Just And) first second
 or :: forall a b c d. Op a b -> Op c d -> Op (Op a b) (Op c d)
 or first second = Op (Just Or) first second
 
-in_ :: forall compared field. field -> compared -> Op field compared
-in_ field compared = Op (Just In) field compared
+in_ :: forall compared field. field -> compared -> Op In (Op field compared)
+in_ field compared = Op Nothing In (Op Nothing field compared)
 
 not :: forall compared field. Op field compared -> Op Not (Op field compared)
 not a = Op Nothing Not a
