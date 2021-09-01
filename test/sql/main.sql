@@ -46,3 +46,12 @@ begin
 end;
   $body$
   language plpgsql;
+
+create or replace function fire_missiles(a integer, b integer)
+  returns void as
+$body$
+begin
+
+end;
+  $body$
+  language plpgsql;

@@ -1,5 +1,7 @@
 module Test.Types where
 
+import Prelude
+
 import Data.Date (Date)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
@@ -95,3 +97,6 @@ date_part_age = function "date_part_age"
 
 date_part_age' :: FunctionSignature (String /\ Date) Int
 date_part_age' = function "date_part_age"
+
+fire_missiles :: FunctionSignature (Int /\ Int) Unit
+fire_missiles = function "fire_missiles"

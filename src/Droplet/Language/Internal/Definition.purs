@@ -136,6 +136,10 @@ instance FromValue Boolean where
 instance FromValue Number where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readNumber
 
+--tricky, since pg might return empty string for select some_side_effect_function()
+instance FromValue Unit where
+      fromValue _ = Right unit
+
 instance FromValue v => FromValue (Default v) where
       fromValue v = Default <$> fromValue v
 
