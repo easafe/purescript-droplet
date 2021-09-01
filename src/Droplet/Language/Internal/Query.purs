@@ -386,6 +386,11 @@ class TranslateNakedColumn q where
 instance IsSymbol name => TranslateNakedColumn (As name Int) where
       translateNakedColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy :: Proxy name)
 
+instance (IsSymbol name, ArgumentList args) => TranslateNakedColumn (As name (UserDefinedFunction inp args fields out)) where
+      translateNakedColumn (As func) =  do
+            q <- printUserFunction func
+            pure $ q <> asKeyword <> quote (Proxy :: Proxy name)
+
 instance (TranslateNakedColumn s, TranslateNakedColumn t) => TranslateNakedColumn (Tuple s t) where
       translateNakedColumn (Tuple s t) = do
             q <- translateNakedColumn s

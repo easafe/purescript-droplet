@@ -7,8 +7,10 @@ import Test.Types
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Query as Query
+import Effect.Class (liftEffect)
 import Test.Model as TM
 import Test.Unit (TestSuite)
+import Effect.Now as EN
 import Test.Unit as TU
 
 tests :: TestSuite
@@ -18,6 +20,10 @@ tests =
                   let q = select (3 # as n)
                   TM.notParameterized """SELECT 3 AS "n"""" $ Query.query q
                   TM.result q [{n : 3}]
+            TU.test "function" do
+                  let q = select (date_part_age ("year" /\ TM.makeDateTime 2000 1 1) # as u)
+                  TM.parameterized """SELECT date_part_age($1, $2) AS "u"""" $ Query.query q
+                  void $ TM.resultOnly q
             TU.test "subquery" do
                   let q = select (select (34 # as n) # from users # wher (name .=. name) # orderBy id # limit 1)
                   TM.notParameterized """SELECT (SELECT 34 AS "n" FROM users WHERE name = name ORDER BY id LIMIT 1)""" $ Query.query q

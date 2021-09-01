@@ -69,6 +69,23 @@ result' q o = do
                   truncateTables connection
                   TUA.equal (Right o) r
 
+resultOnly :: forall t51 t52 t53. ToQuery t51 t52 => RowToList t52 t53 => FromResult t53 (Record t52) => EqRecord t53 t52 => ShowRecordFields t53 t52 => t51 -> Aff (Array (Record t52))
+resultOnly q = do
+      pool <- liftEffect $ DD.newPool connectionInfo
+      DD.withConnection pool case _ of
+            Left error -> do
+                  TU.failure $ "Error connecting" <> show error
+                  pure []
+            Right connection -> do
+                  insertDefaultRecords
+                  r <- DD.query connection q
+                  truncateTables connection
+                  case r of
+                        Right o -> pure o
+                        Left e -> do
+                              TU.failure $ "Error running query: " <> show e
+                              pure []
+
 unsafeResult :: forall re parameters par result. RowToList result re  => RowToList parameters par => ToParameters parameters par => FromResult re (Record result) => EqRecord re result => ShowRecordFields re result => Maybe Plan -> String -> Record parameters -> Array (Record result) -> Aff Unit
 unsafeResult plan q parameters o = do
       pool <- liftEffect $ DD.newPool connectionInfo
