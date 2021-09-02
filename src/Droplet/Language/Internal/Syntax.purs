@@ -1,14 +1,14 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparisionAlias, class OnComparision, class AppendPath, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
+module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class OnComparisionAlias, class OnComparision, Join(..), Inclusion(..), Side, Inner, Outer, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
 
 import Prelude
 
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, class UnwrapNullable, Auto, Default, E(..), Empty, Joined, Path, Star, Table)
+import Droplet.Language.Internal.Definition (class AppendPath, class InvalidField, class ToValue, class UnwrapDefinition, class UnwrapNullable, Auto, Default, E(..), Empty, Joined, Path, Star, Table)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Boolean (False, True)
@@ -640,6 +640,10 @@ instance Cons name t e fields => SortColumns (Sort (Proxy name)) fields
 
 instance (AppendPath alias name fullPath, Cons fullPath t e fields) => SortColumns (Sort (Path alias name)) fields
 
+instance Fail (Text "Cannot sort by void function") => SortColumns (PgFunction input args fields Unit) fields
+
+else instance SortColumns (PgFunction input args fields output) fields
+
 instance (SortColumns a fields, SortColumns b fields) => SortColumns (a /\ b) fields
 
 
@@ -1188,12 +1192,6 @@ else instance JoinedToMaybe (Joined (Maybe t)) (Maybe t)
 else instance UnwrapDefinition t u => JoinedToMaybe (Joined t) (Maybe u)
 
 else instance JoinedToMaybe t t
-
-
--- | Simplify append qualifiying column names
-class AppendPath (alias :: Symbol) (name :: Symbol) (fullPath :: Symbol) | alias name -> fullPath
-
-instance (Append alias Dot path, Append path name fullPath) => AppendPath alias name fullPath
 
 
 

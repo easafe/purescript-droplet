@@ -1,7 +1,7 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path) where
+module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
 
 import Prelude
 
@@ -232,3 +232,9 @@ instance (
 ) => ToParameters record (RL.Cons name t rest) where
       toParameters _ record = (DS.reflectSymbol name /\ toValue (R.get name record)) : toParameters (Proxy :: Proxy rest) record
             where name = Proxy :: Proxy name
+
+
+-- | Simplify append qualifiying column names
+class AppendPath (alias :: Symbol) (name :: Symbol) (fullPath :: Symbol) | alias name -> fullPath
+
+instance (Append alias Dot path, Append path name fullPath) => AppendPath alias name fullPath

@@ -5,7 +5,7 @@ import Prelude
 import Data.BigInt (BigInt)
 import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
-import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, class UnwrapNullable, Default, E, Path, Star)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, Default, E, Path, Star)
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy)
 
@@ -46,7 +46,7 @@ instance TextColumn (Maybe String)
 
 instance TextColumn (Default String)
 
-
+--should support out of scope paths too
 class MatchArgumentList (input :: Type) (args :: Type) (fields :: Row Type)
 
 instance (MatchArgumentList inp ar fields, MatchArgumentList ut gs fields) => MatchArgumentList (inp /\ ut) (ar /\ gs) fields
@@ -58,6 +58,14 @@ else instance (
       ToValue v
 ) => MatchArgumentList v (Proxy name) fields
 
+else instance (
+      AppendPath alias name fullPath,
+      Cons fullPath t d fields,
+      UnwrapDefinition t u,
+      UnwrapNullable u v,
+      ToValue v
+) => MatchArgumentList v (Path alias name) fields
+
 else instance ToValue t => MatchArgumentList t t fields
 
 
@@ -68,7 +76,7 @@ count = Count
 string_agg :: forall f rest fields. ToStringAgg f rest fields => f -> rest -> Aggregate f rest fields (Maybe String)
 string_agg f rest = StringAgg f rest
 
-random :: FunctionSignature' Unit
+random :: FunctionSignature' Number
 random = function' "random"
 
 -- | Represents a function that takes arguments

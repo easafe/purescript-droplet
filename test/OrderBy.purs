@@ -1,12 +1,11 @@
 module Test.OrderBy where
 
-import Droplet.Language (as, asc, desc, from, join, on, orderBy, select, wher, (...), (.<>.), (.=.))
-import Prelude (discard, (#), ($))
-import Test.Types (id, messages, n, name, t, u, users)
-
 import Data.Tuple.Nested ((/\))
+import Droplet.Language (as, asc, desc, from, join, on, orderBy, random, select, wher, (...), (.<>.), (.=.))
 import Droplet.Language.Internal.Query as Query
+import Prelude (discard, void, (#), ($))
 import Test.Model as TM
+import Test.Types (date_part_age, id, date, messages, n, name, t, u, users)
 import Test.Unit (TestSuite)
 import Test.Unit as TU
 
@@ -29,6 +28,15 @@ tests =
                   let q = select id # from users # orderBy (id # desc)
                   TM.notParameterized """SELECT id FROM users ORDER BY id DESC""" $ Query.query q
                   TM.result q [{id: 2}, {id: 1}]
+            TU.suite "function"  do
+                  TU.test "regular" do
+                        let q = select (4 # as n) # from users # orderBy (date_part_age ("year" /\ TM.makeDateTime 2000 1 1))
+                        TM.parameterized """SELECT 4 AS "n" FROM users ORDER BY date_part_age($1, $2)""" $ Query.query q
+                        TM.result q [{n: 4}, {n: 4}]
+                  TU.test "no parameters" do
+                        let q = select (4 # as n) # from users # orderBy random
+                        TM.notParameterized """SELECT 4 AS "n" FROM users ORDER BY random()""" $ Query.query q
+                        void $ TM.resultOnly q
             TU.suite "path" do
                   TU.test "field name" do
                         let q = select id # from (users # as u) # orderBy (u ... id)
@@ -42,3 +50,7 @@ tests =
                         let q = select (3 # as id) # from (join (users # as u) (messages # as t) # on (t ... id .=. u ... id)) # orderBy (u ... id # desc)
                         TM.notParameterized """SELECT 3 AS "id" FROM users AS "u" INNER JOIN messages AS "t" ON "t".id = "u".id ORDER BY "u".id DESC""" $ Query.query q
                         TM.result q [{id: 3}, {id : 3}]
+                  TU.test "function" do
+                        let q = select (4 # as n) # from (messages # as u) # orderBy (date_part_age ("year" /\ u ... date))
+                        TM.parameterized """SELECT 4 AS "n" FROM messages AS "u" ORDER BY date_part_age($1, "u".date)""" $ Query.query q
+                        TM.result q [{n: 4}, {n: 4}]
