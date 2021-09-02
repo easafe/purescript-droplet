@@ -18,14 +18,19 @@ tests =
                   let q = select (3 # as n)
                   TM.notParameterized """SELECT 3 AS "n"""" $ Query.query q
                   TM.result q [{n : 3}]
-            TU.test "function" do
-                  let q = select (date_part_age ("year" /\ TM.makeDateTime 2000 1 1) # as u)
-                  TM.parameterized """SELECT date_part_age($1, $2) AS "u"""" $ Query.query q
-                  void $ TM.resultOnly q
-            TU.test "side effect function" do
-                  let q = select (fire_missiles (9 /\ 8) # as u)
-                  TM.parameterized """SELECT fire_missiles($1, $2) AS "u"""" $ Query.query q
-                  TM.result q [ {u : unit}]
+            TU.suite "function" do
+                  TU.test "regular" do
+                        let q = select (date_part_age ("year" /\ TM.makeDateTime 2000 1 1) # as u)
+                        TM.parameterized """SELECT date_part_age($1, $2) AS "u"""" $ Query.query q
+                        void $ TM.resultOnly q
+                  TU.test "side effect" do
+                        let q = select (fire_missiles (9 /\ 8) # as u)
+                        TM.parameterized """SELECT fire_missiles($1, $2) AS "u"""" $ Query.query q
+                        TM.result q [ {u : unit}]
+                  TU.test "side effect without parameters" do
+                        let q = select (random # as u)
+                        TM.notParameterized """SELECT random() AS "u"""" $ Query.query q
+                        void $ TM.resultOnly q
             TU.test "subquery" do
                   let q = select (select (34 # as n) # from users # wher (name .=. name) # orderBy id # limit 1)
                   TM.notParameterized """SELECT (SELECT 34 AS "n" FROM users WHERE name = name ORDER BY id LIMIT 1)""" $ Query.query q

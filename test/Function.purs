@@ -36,6 +36,10 @@ tests = do
                   let q = select (count (u ... id) # as u) # from (users # as u)
                   TM.notParameterized """SELECT COUNT("u".id) AS "u" FROM users AS "u"""" $ Query.query q
                   TM.result q [{ u : DB.fromInt 2}]
+      TU.test "function without parameters" do
+                  let q = select ((random # as u) /\ id) # from users
+                  TM.notParameterized """SELECT random() AS "u", id FROM users""" $ Query.query q
+                  void $ TM.resultOnly q
       TU.suite "string_agg" do
             TU.test "field" do
                   let q = select (string_agg name ", " # as u) # from users

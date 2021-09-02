@@ -20,11 +20,11 @@ import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
 import Droplet.Language.Internal.Definition (class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, E(..), Empty, Path, Star, Table, toParameters, toValue)
-import Droplet.Language.Internal.Function (Aggregate(..), UserDefinedFunction(..))
+import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
 import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Droplet.Language.Internal.Syntax (class AppendPath, class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
-import Prelude (class Show, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
+import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, RowList)
@@ -386,9 +386,9 @@ class TranslateNakedColumn q where
 instance IsSymbol name => TranslateNakedColumn (As name Int) where
       translateNakedColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy :: Proxy name)
 
-instance (IsSymbol name, ArgumentList args) => TranslateNakedColumn (As name (UserDefinedFunction inp args fields out)) where
+instance (IsSymbol name, ArgumentList args) => TranslateNakedColumn (As name (PgFunction inp args fields out)) where
       translateNakedColumn (As func) =  do
-            q <- printUserFunction func
+            q <- printFunction func
             pure $ q <> asKeyword <> quote (Proxy :: Proxy name)
 
 instance (TranslateNakedColumn s, TranslateNakedColumn t) => TranslateNakedColumn (Tuple s t) where
@@ -456,9 +456,9 @@ else instance (IsSymbol name, NameList inp, ArgumentList rest) => TranslateColum
             q <- printAggregation agg
             pure $ q <> asKeyword <> quote (Proxy :: Proxy name)
 
-else instance (IsSymbol name, ArgumentList args) => TranslateColumn (As name (UserDefinedFunction inp args fields out)) where
+else instance (IsSymbol name, ArgumentList args) => TranslateColumn (As name (PgFunction inp args fields out)) where
       translateColumn (As func) = do
-            q <- printUserFunction func
+            q <- printFunction func
             pure $ q <> asKeyword <> quote (Proxy :: Proxy name)
 
 else instance (IsSymbol name, IsSymbol alias) => TranslateColumn (As alias (Proxy name)) where
@@ -720,6 +720,10 @@ else instance (IsSymbol alias, IsSymbol name) => ArgumentList (Sort (Path alias 
             Desc -> descKeyword
             Asc -> ascKeyword
 
+--hack for functions that take no arguments
+else instance ArgumentList Unit where
+      argumentList _ = pure ""
+
 else instance ArgumentList E where
       argumentList _ = pure ""
 
@@ -816,8 +820,8 @@ printAggregation = case _ of
             nrest <- argumentList rest
             pure $ string_aggFunctionName <> openBracket <> nameList f <> comma <> nrest <> closeBracket
 
-printUserFunction :: forall inp fields args out. ArgumentList args => UserDefinedFunction inp args fields out -> State QueryState String
-printUserFunction (UserDefinedFunction name args) = do
+printFunction :: forall inp fields args out. ArgumentList args => PgFunction inp args fields out -> State QueryState String
+printFunction (PgFunction name args) = do
       nf <- argumentList args
       pure $ name <> openBracket <> nf <> closeBracket
 

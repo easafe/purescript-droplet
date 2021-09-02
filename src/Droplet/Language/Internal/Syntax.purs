@@ -9,7 +9,7 @@ import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
 import Droplet.Language.Internal.Definition (class InvalidField, class ToValue, class UnwrapDefinition, class UnwrapNullable, Auto, Default, E(..), Empty, Joined, Path, Star, Table)
-import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, UserDefinedFunction)
+import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Lacks, class Nub, class Union)
@@ -158,7 +158,7 @@ else instance ToSelect (As alias (Path table name))
 
 else instance ToSelect (As alias (Aggregate inp rest fields out))
 
-else instance ToSelect (As alias (UserDefinedFunction inp arg fields out))
+else instance ToSelect (As alias (PgFunction inp arg fields out))
 
 else instance (ToSelect r, ToSelect t) => ToSelect (r /\ t)
 
@@ -567,7 +567,7 @@ instance ToAs (Path table name) alias
 
 instance ToAs (Aggregate inp rest fields out) alias
 
-instance ToAs (UserDefinedFunction inp args fields out) alias
+instance ToAs (PgFunction inp args fields out) alias
 
 instance ToAs (Select s p (From f fields rest)) alias
 
@@ -1019,7 +1019,7 @@ else instance Cons alias Int () projection => ToProjection (As alias Int) fields
 else instance Cons alias t () projection => ToProjection (As alias (Aggregate inp rest fields t)) fields a projection
 
 -- | Aliased function
-else instance Cons alias t () projection => ToProjection (As alias (UserDefinedFunction inp args fields t)) fields a projection
+else instance Cons alias t () projection => ToProjection (As alias (PgFunction inp args fields t)) fields a projection
 
 -- | Aliased column
 else instance (

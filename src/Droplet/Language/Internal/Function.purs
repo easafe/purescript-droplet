@@ -1,4 +1,6 @@
-module Droplet.Language.Internal.Function (class TextColumn, count, class ToCount, Aggregate(..), string_agg, class ToStringAgg, UserDefinedFunction(..), function, class MatchArgumentList, FunctionSignature) where
+module Droplet.Language.Internal.Function (class TextColumn, count, class ToCount, random, Aggregate(..), function',  string_agg, class ToStringAgg, PgFunction(..), function, class MatchArgumentList, FunctionSignature, FunctionSignature') where
+
+import Prelude
 
 import Data.BigInt (BigInt)
 import Data.Maybe (Maybe)
@@ -12,9 +14,12 @@ data Aggregate input rest (fields :: Row Type) (output :: Type) =
       Count input |
       StringAgg input rest
 
-data UserDefinedFunction (input :: Type) args (fields :: Row Type) (output :: Type) = UserDefinedFunction String args
+data PgFunction (input :: Type) args (fields :: Row Type) (output :: Type) = PgFunction String args
 
-type FunctionSignature input output = forall args fields. MatchArgumentList input args fields => args -> UserDefinedFunction input args fields output
+type FunctionSignature input output = forall args fields. MatchArgumentList input args fields => args -> PgFunction input args fields output
+
+type FunctionSignature' output = forall fields. PgFunction Void Unit fields output
+
 
 class ToCount (f :: Type) (fields :: Row Type) | f -> fields
 
@@ -63,6 +68,13 @@ count = Count
 string_agg :: forall f rest fields. ToStringAgg f rest fields => f -> rest -> Aggregate f rest fields (Maybe String)
 string_agg f rest = StringAgg f rest
 
--- | Represents a user defined function
-function :: forall input output args fields. MatchArgumentList input args fields => String -> args -> UserDefinedFunction input args fields output
-function name args = UserDefinedFunction name args
+random :: FunctionSignature' Unit
+random = function' "random"
+
+-- | Represents a function that takes arguments
+function :: forall input output. String -> FunctionSignature input output
+function name args = PgFunction name args
+
+-- | Represents a function that takes no arguments
+function' :: forall output. String -> FunctionSignature' output
+function' name = PgFunction name unit
