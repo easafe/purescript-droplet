@@ -1009,15 +1009,15 @@ else instance
 
 -- | Aliased qualified column for join
 else instance
-      ( SymbolListSingleton alias single
+      ( SymbolListSingleton table single
       , RowListAppend single aliases all
       , RowListNub all unique
       , OuterScopeAlias all unique y
-      , AppendPath alias name fullPath
+      , AppendPath table name fullPath
       , QualifiedColumn y fullPath fields t
       , Cons alias t () projection
       ) ⇒
-      ToProjection (As alias (Path alias name)) fields (AList aliases) projection
+      ToProjection (As alias (Path table name)) fields (AList aliases) projection
 
 -- | Aliased qualified column from current scope
 else instance
