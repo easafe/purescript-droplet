@@ -116,26 +116,28 @@ SELECT
       [ LIMIT ]
 
 AS
-      integer | FROM output_name | WHERE output_name
+      integer | function | SELECT output_name
 
 FROM
-      table_name | AS
+      table_name | SELECT AS
 
 JOIN
-     AS ON { field | parameter } OPERATOR { field | parameter } | [ { and | or } ] | [...]
+     ON { field | parameter } OPERATOR { field | parameter } | [ { and | or } ] | [...]
 
 WHERE
       { field | parameter } OPERATOR { field | parameter } | [ { and | or } ] | [...]
 
 OPERATOR
-      = | <> |
+      = | <> | not | in | exists
 
 ORDER BY
-      field { ASC | DESC } | [, ...]
+      field { ASC | DESC } | function | [, ...]
 
 LIMIT
       number
 
+OFFSET
+      number
 
 -}
 
