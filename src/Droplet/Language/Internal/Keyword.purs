@@ -4,137 +4,137 @@ module Droplet.Language.Internal.Keyword where
 type Dot = "."
 
 --magic strings
-selectKeyword :: String
+selectKeyword ∷ String
 selectKeyword = "SELECT "
 
-distinctKeyword :: String
+distinctKeyword ∷ String
 distinctKeyword = "DISTINCT "
 
-isNotNullKeyword :: String
+isNotNullKeyword ∷ String
 isNotNullKeyword = " IS NOT NULL"
 
-unionKeyword :: String
+unionKeyword ∷ String
 unionKeyword = " UNION "
 
-allKeyword :: String
+allKeyword ∷ String
 allKeyword = "ALL "
 
-fromKeyword :: String
+fromKeyword ∷ String
 fromKeyword = " FROM "
 
-whereKeyword :: String
+whereKeyword ∷ String
 whereKeyword = " WHERE "
 
-andKeyword :: String
+andKeyword ∷ String
 andKeyword = " AND "
 
-orKeyword :: String
+orKeyword ∷ String
 orKeyword = " OR "
 
-asKeyword :: String
+asKeyword ∷ String
 asKeyword = " AS "
 
-innerKeyword :: String
+innerKeyword ∷ String
 innerKeyword = " INNER "
 
-joinKeyword :: String
+joinKeyword ∷ String
 joinKeyword = "JOIN "
 
-onKeyword :: String
+onKeyword ∷ String
 onKeyword = " ON "
 
-groupByKeyword :: String
+groupByKeyword ∷ String
 groupByKeyword = " GROUP BY "
 
-existsKeyword :: String
+existsKeyword ∷ String
 existsKeyword = "EXISTS "
 
-inKeyword :: String
+inKeyword ∷ String
 inKeyword = " IN "
 
-notKeyword :: String
+notKeyword ∷ String
 notKeyword = "NOT "
 
-leftKeyword :: String
+leftKeyword ∷ String
 leftKeyword = " LEFT "
 
-starSymbol :: String
+starSymbol ∷ String
 starSymbol = "*"
 
-comma :: String
+comma ∷ String
 comma = ", "
 
-openBracket :: String
+openBracket ∷ String
 openBracket = "("
 
-closeBracket :: String
+closeBracket ∷ String
 closeBracket = ")"
 
-equalsSymbol :: String
+equalsSymbol ∷ String
 equalsSymbol = " = "
 
-notEqualsSymbol :: String
+notEqualsSymbol ∷ String
 notEqualsSymbol = " <> "
 
-lesserThanSymbol :: String
+lesserThanSymbol ∷ String
 lesserThanSymbol = " < "
 
-greaterThanSymbol :: String
+greaterThanSymbol ∷ String
 greaterThanSymbol = " > "
 
-parameterSymbol :: String
+parameterSymbol ∷ String
 parameterSymbol = "$"
 
-insertKeyword :: String
+insertKeyword ∷ String
 insertKeyword = "INSERT INTO "
 
-valuesKeyword :: String
+valuesKeyword ∷ String
 valuesKeyword = " VALUES "
 
-updateKeyword :: String
+updateKeyword ∷ String
 updateKeyword = "UPDATE "
 
-setKeyword :: String
+setKeyword ∷ String
 setKeyword = " SET "
 
-deleteKeyword :: String
+deleteKeyword ∷ String
 deleteKeyword = "DELETE"
 
-atSymbol :: String
+atSymbol ∷ String
 atSymbol = "@"
 
-returningKeyword :: String
+returningKeyword ∷ String
 returningKeyword = " RETURNING "
 
-descKeyword :: String
+descKeyword ∷ String
 descKeyword = " DESC"
 
-ascKeyword :: String
+ascKeyword ∷ String
 ascKeyword = " ASC"
 
-orderKeyword :: String
+orderKeyword ∷ String
 orderKeyword = " ORDER "
 
-byKeyword :: String
+byKeyword ∷ String
 byKeyword = "BY "
 
-countFunctionName :: String
+countFunctionName ∷ String
 countFunctionName = "COUNT"
 
-limitKeyword :: String
+limitKeyword ∷ String
 limitKeyword = " LIMIT "
 
-offsetKeyword :: String
+offsetKeyword ∷ String
 offsetKeyword = " OFFSET "
 
-dotSymbol :: String
+dotSymbol ∷ String
 dotSymbol = "."
 
-string_aggFunctionName :: String
+string_aggFunctionName ∷ String
 string_aggFunctionName = "string_agg"
 
-simpleQuoteSymbol :: String
+simpleQuoteSymbol ∷ String
 simpleQuoteSymbol = "'"
 
-quoteSymbol :: String
+quoteSymbol ∷ String
 quoteSymbol = """""""

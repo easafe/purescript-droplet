@@ -24,7 +24,7 @@ import Test.Unsafe as TUS
 import Test.Update as TU
 import Test.Where as TW
 
-main :: Effect Unit
+main ∷ Effect Unit
 main = TUM.runTest do
       TUS.tests
       TI.tests

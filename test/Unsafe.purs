@@ -17,7 +17,7 @@ import Test.Unit (TestSuite)
 import Test.Unit as TU
 import Test.Unit.Assert as TUA
 
-tests :: TestSuite
+tests ∷ TestSuite
 tests = do
       TU.suite "unsafe queries" do
             TU.test "select" do
@@ -29,13 +29,13 @@ tests = do
                   TUA.equal pr.id <<< F.unsafeFromForeign $ PU.unsafePartial (DAP.head parameters)
                   TUA.equal pr.id2 <<< F.unsafeFromForeign $ PU.unsafePartial (DM.fromJust $ parameters !! 1)
                   TUA.equal pr.id3 <<< F.unsafeFromForeign $ PU.unsafePartial (DM.fromJust $ parameters !! 2)
-                  TM.unsafeResult plan q pr [ {name : "mary", id: 2} ]
+                  TM.unsafeResult plan q pr [ { name: "mary", id: 2 } ]
             TU.test "insert" do
                   let (plan /\ q) = Nothing /\ "insert into tags(name) values('hey')"
                   let Query _ dollaredQ parameters = Query.unsafeQuery plan q {}
                   TUA.equal "insert into tags(name) values('hey')" dollaredQ
                   TUA.equal 0 $ DA.length parameters
-                  TM.unsafeResult plan q {} ([] :: Array {})
+                  TM.unsafeResult plan q {} ([] ∷ Array {})
             TU.test "update" do
                   let (plan /\ q /\ pr) = Nothing /\ "UPDATE users SET name = @name WHERE id = @id" /\ { name: "Suzy", id: 23 }
                   let Query _ dollaredQ parameters = Query.unsafeQuery plan q pr
@@ -44,12 +44,12 @@ tests = do
                   TUA.equal 2 $ DA.length parameters
                   TUA.equal pr.id <<< F.unsafeFromForeign $ PU.unsafePartial (DAP.head parameters)
                   TUA.equal pr.name <<< F.unsafeFromForeign $ PU.unsafePartial (DM.fromJust $ parameters !! 1)
-                  TM.unsafeResult plan q pr ([] :: Array {})
+                  TM.unsafeResult plan q pr ([] ∷ Array {})
             TU.test "delete" do
                   let (plan /\ q /\ pr) = Nothing /\ "DELETE FROM users WHERE joined = @joined" /\ { joined: TM.makeDate 2000 1 1 }
                   let Query _ dollaredQ parameters = Query.unsafeQuery plan q pr
                   --parameters are replaced by field order
                   TUA.equal "DELETE FROM users WHERE joined = $1" dollaredQ
                   TUA.equal 1 $ DA.length parameters
-                  TM.unsafeResult plan q pr ([] :: Array {})
+                  TM.unsafeResult plan q pr ([] ∷ Array {})
 

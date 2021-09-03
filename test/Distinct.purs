@@ -10,7 +10,7 @@ import Test.Model as TM
 import Test.Unit (TestSuite)
 import Test.Unit as TU
 
-tests :: TestSuite
+tests ∷ TestSuite
 tests = do
       TU.suite "distinct" do
             TU.test "field" do
@@ -20,4 +20,4 @@ tests = do
             TU.test "fields" do
                   let q = select (distinct (id /\ name)) # from users
                   TM.notParameterized """SELECT DISTINCT id, name FROM users""" $ Query.query q
-                  TM.result q [{id: 1, name: "josh"}, {id: 2, name: "mary"}]
+                  TM.result q [ { id: 1, name: "josh" }, { id: 2, name: "mary" } ]

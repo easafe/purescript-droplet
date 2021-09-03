@@ -10,7 +10,7 @@ import Test.Model as TM
 import Test.Unit (TestSuite)
 import Test.Unit as TU
 
-tests :: TestSuite
+tests ∷ TestSuite
 tests = do
       TU.suite "insert" do
             TU.suite "values" do
