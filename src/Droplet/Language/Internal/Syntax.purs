@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SymbolListSingleton, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class QualifiedColumn, class OnComparision, Join(..), Inclusion(..), Side, Inner, Outer, SymbolList, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class ToUpdatePairs, AList, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
+module Droplet.Language.Internal.Syntax (class Resume, class UnwrapAll, class SymbolListSingleton, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class QualifiedColumn, class OnComparision, Join(..), Inclusion(..), Side, Inner, Outer, SymbolList, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class SourceFields, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
 
 import Prelude
 
@@ -208,41 +208,25 @@ data From f (fields ∷ Row Type) rest = From f rest
 -- | Acceptable sources for FROM statements
 class ToFrom (f ∷ Type) (q ∷ Type) (fields ∷ Row Type) | q f → fields
 
--- | FROM table
-instance
-      ( ToProjection s fields Empty selected
-      , Nub selected unique
-      , UniqueColumnNames selected unique
-      ) ⇒
-      ToFrom (Table name fields) (Select s unique E) fields
-
--- FROM table AS alias
-instance
-      ( ToProjection s fields alias selected
-      , Nub selected unique
-      , UniqueColumnNames selected unique
-      ) ⇒
-      ToFrom (As alias (Table name fields)) (Select s unique E) fields
-
 -- | (DELETE) FROM table
 instance ToFrom (Table name fields) (Delete E) fields
 
--- | FROM (SELECT ... FROM ...) AS alias
-instance
-      ( QueryMustBeAliased rest alias
-      , ToProjection s projection alias selected
-      , Nub selected unique
-      , UniqueColumnNames selected unique
-      ) ⇒
-      ToFrom (Select t projection (From f fd rest)) (Select s unique E) projection
-
 -- | FROM ... JOIN ...
-instance
-      ( ToProjection s fields (AList aliases) selected
+else instance
+      ( ToProjection s fields aliases selected
       , Nub selected unique
       , UniqueColumnNames selected unique
       ) ⇒
       ToFrom (Join k fields l r aliases (On c rest)) (Select s unique E) fields
+
+-- | Anything `SourceFields` can compute
+else instance
+      ( SourceFields f fields aliases
+      , ToProjection s fields aliases selected
+      , Nub selected unique
+      , UniqueColumnNames selected unique
+      ) ⇒
+      ToFrom f (Select s unique E) fields
 
 -- | FROM accepts the following sources
 -- |
@@ -271,29 +255,8 @@ data Join (k ∷ Side) (fields ∷ Row Type) q r (aliases ∷ SymbolList) rest =
 
 data On c rest = On c rest
 
--- | Given a source `q`, compute its (non and qualified) fields
+-- | Given a source `q`, compute its joined (non and qualified) fields
 class ToJoin (q ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) | q → fields aliases
-
-instance ToJoin (Table name fields) fields Nil
-
--- | Aliased tables
-instance
-      ( RowToList source list
-      , QualifiedFields list alias aliased
-      , Union aliased source fields
-      , SymbolListSingleton alias single
-      ) ⇒
-      ToJoin (As alias (Table name source)) fields single
-
--- | Aliased subqueries
-instance
-      ( QueryMustBeAliased rest alias
-      , RowToList projection list
-      , QualifiedFields list alias aliased
-      , Union projection aliased fields
-      , SymbolListSingleton alias single
-      ) ⇒
-      ToJoin (Select s projection (From f fd rest)) fields single
 
 -- | JOIN ... ON
 instance
@@ -306,7 +269,7 @@ instance
       ToJoin (Join Inner fd l r a (On c rest)) fields aliases
 
 -- | outer JOIN ... ON
-instance
+else instance
       ( ToJoin l left las
       , ToJoin r right ras
       , RowToList right list
@@ -316,6 +279,8 @@ instance
       , RowListAppend las ras aliases
       ) ⇒
       ToJoin (Join Outer fd l r a (On c rest)) fields aliases
+
+else instance SourceFields q fields aliases ⇒ ToJoin q fields aliases
 
 -- | OUTER JOINs make one side nullable, as a corresponding record may not be found
 -- |
@@ -935,34 +900,24 @@ returning f q = resume q $ Returning f
 
 ------------------------Projection machinery---------------------------
 
--- | Type wrapper for aliases
-data AList (aliases :: SymbolList)
-
 -- | A `RowList` of `Symbol`s
 type SymbolList = RowList Symbol
 
---we have extra instances for Join (with alias being a list) as it seems to be the easiest to not mark all qualified references as outer scope (as join can have a varying number of aliases)
 -- | Computes SELECT projection as a `Row Type`
-class ToProjection ∷
-      ∀ k.
-      Type →
-      Row Type →
-      -- `SymbolList` in case of joins; `Symbol` otherwise
-      k →
-      Row Type →
-      Constraint
-class ToProjection s fields alias projection | s → fields projection
+class ToProjection (s ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) (projection ∷ Row Type) | s → fields projection
 
 -- | Columns
 instance
-      ( JoinedToMaybe t v
+      ( Cons name t e fields
+      , JoinedToMaybe t v
       , UnwrapDefinition v u
-      , Cons name t e fields
       , Cons name u () projection
       ) ⇒
-      ToProjection (Proxy name) fields alias projection
+      ToProjection (Proxy name) fields aliases projection
 
--- | Qualified column from for join
+-- | Qualified column
+-- |
+-- | Outer scope columns are validated once the full query is known (i.e., before running it)
 else instance
       ( SymbolListSingleton alias single
       , RowListAppend single aliases all
@@ -972,31 +927,16 @@ else instance
       , QualifiedColumn y fullPath fields t
       , Cons fullPath t () projection
       ) ⇒
-      ToProjection (Path alias name) fields (AList aliases) projection
-
--- | Qualified column from current scope
-else instance
-      ( AppendPath alias name fullPath
-      , Cons name t e fields
-      , JoinedToMaybe t v
-      , UnwrapDefinition v u
-      , Cons fullPath u () projection
-      ) ⇒
-      ToProjection (Path alias name) fields alias projection
-
--- | Qualified column from outer scope
--- |
--- | This column is validated once the full query is known (i.e., before running it)
-else instance (AppendPath table name fullPath, Cons fullPath OuterScope () projection) ⇒ ToProjection (Path table name) fields alias projection
+      ToProjection (Path alias name) fields aliases projection
 
 -- | Aliased literal
-else instance Cons alias Int () projection ⇒ ToProjection (As alias Int) fields a projection
+else instance Cons alias Int () projection ⇒ ToProjection (As alias Int) fields aliases projection
 
 -- | Aliased aggregation
-else instance Cons alias t () projection ⇒ ToProjection (As alias (Aggregate inp rest fields t)) fields a projection
+else instance Cons alias t () projection ⇒ ToProjection (As alias (Aggregate inp rest fields t)) fields aliases projection
 
 -- | Aliased function
-else instance Cons alias t () projection ⇒ ToProjection (As alias (PgFunction inp args fields t)) fields a projection
+else instance Cons alias t () projection ⇒ ToProjection (As alias (PgFunction inp args fields t)) fields aliases projection
 
 -- | Aliased column
 else instance
@@ -1005,9 +945,11 @@ else instance
       , UnwrapDefinition v u
       , Cons alias u () projection
       ) ⇒
-      ToProjection (As alias (Proxy name)) fields a projection
+      ToProjection (As alias (Proxy name)) fields aliases projection
 
--- | Aliased qualified column for join
+-- | Aliased qualified column
+-- |
+-- | Outer scope columns are validated once the full query is known (i.e., before running it)
 else instance
       ( SymbolListSingleton table single
       , RowListAppend single aliases all
@@ -1017,48 +959,36 @@ else instance
       , QualifiedColumn y fullPath fields t
       , Cons alias t () projection
       ) ⇒
-      ToProjection (As alias (Path table name)) fields (AList aliases) projection
-
--- | Aliased qualified column from current scope
-else instance
-      ( UnwrapDefinition t u
-      , Cons name t e fields
-      , Cons alias u () projection
-      ) ⇒
-      ToProjection (As alias (Path table name)) fields table projection
-
--- | Aliased qualified column from outer scope
--- |
--- | This column is validated once the full query is known (i.e., before running it)
-else instance Cons alias OuterScope () projection ⇒ ToProjection (As alias (Path table name)) fields a projection
+      ToProjection (As alias (Path table name)) fields aliases projection
 
 -- | All columns from source
-else instance (RowToList fields list, UnwrapAll list projection) ⇒ ToProjection Star fields alias projection
+else instance (RowToList fields list, UnwrapAll list projection) ⇒ ToProjection Star fields aliases projection
 
 -- | Column list
 else instance
-      ( ToProjection s fields alias some
-      , ToProjection t fields alias more
+      ( ToProjection s fields aliases some
+      , ToProjection t fields aliases more
       , Union some more projection
       ) ⇒
-      ToProjection (s /\ t) fields alias projection
+      ToProjection (s /\ t) fields aliases projection
 
 -- | Subquery as column
 else instance
-      ( SourceAlias f table
-      , --does source has an alias? we need it to figure out which qualified fields can be validated here
-        ToProjection s fields table projection
-      , RowToList projection list
+      ( --does source has an alias? we need it to figure out which qualified fields can be validated here
+        SourceAlias f table
+      , SymbolListSingleton table single
+      , ToProjection s fields single pro
+      , RowToList pro list
+      --is column already Maybe or needs to be made into Maybe? subquery can only return a single column
       , ToSingleColumn list name t
-      , --is column already Maybe or needs to be made into Maybe? subquery can only return a single column
-        QueryOptionallyAliased rest name alias
-      , --is query aliased? if so we have to use the alias instead of the column name
-        Cons alias t () single
+      --is query aliased? if so we have to use the alias instead of the column name
+      , QueryOptionallyAliased rest name alias
+      , Cons alias t () projection
       ) ⇒
-      ToProjection (Select s p (From f fields rest)) fd a single
+      ToProjection (Select s p (From f fields rest)) fd aliases projection
 
 -- | DISTINCT
-else instance ToProjection s fields alias projection ⇒ ToProjection (Distinct s) fields alias projection
+else instance ToProjection s fields alias projection ⇒ ToProjection (Distinct s) fields aliases projection
 
 -- | Any valid instance should be recognizable
 else instance Fail (Text "Cannot recognize projection") ⇒ ToProjection x f a p
@@ -1202,9 +1132,34 @@ else instance UnwrapDefinition t u ⇒ JoinedToMaybe (Joined t) (Maybe u)
 else instance JoinedToMaybe t t
 
 -- | Creates a `SymbolList` single with a single entry
-class SymbolListSingleton (alias :: Symbol) (list :: SymbolList) | alias → list
+class SymbolListSingleton (alias ∷ Symbol) (list ∷ SymbolList) | alias → list
 
 instance SymbolListSingleton alias (Cons alias alias Nil)
+
+-- | Given a source `f`, compute its (non and qualified) fields
+class SourceFields (f ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) | f → fields aliases
+
+-- | Tables
+instance SourceFields (Table name fields) fields Nil
+
+-- | Aliased tables
+instance
+      ( RowToList source list
+      , QualifiedFields list alias aliased
+      , Union aliased source fields
+      , SymbolListSingleton alias single
+      ) ⇒
+      SourceFields (As alias (Table name source)) fields single
+
+-- | Aliased subqueries
+instance
+      ( QueryMustBeAliased rest alias
+      , RowToList projection list
+      , QualifiedFields list alias aliased
+      , Union projection aliased fields
+      , SymbolListSingleton alias single
+      ) ⇒
+      SourceFields (Select s projection (From f fd rest)) fields single
 
 ---------------------------Resume machinery------------------------------------------
 

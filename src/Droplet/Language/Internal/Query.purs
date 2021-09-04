@@ -19,15 +19,15 @@ import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
-import Droplet.Language.Internal.Definition (class AppendPath, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, E(..), Empty, Path, Star, Table, toParameters, toValue)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, E(..), Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
 import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
-import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QualifiedFields, class QueryOptionallyAliased, class SourceAlias, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
-import Prim.RowList (class RowToList, RowList)
+import Prim.RowList (class RowToList, Nil, RowList)
 import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
 import Type.Data.Boolean (class And)
@@ -48,18 +48,15 @@ class ToQuery (q ∷ Type) (projection ∷ Row Type) | q → projection where
 
 -- | Fully formed queries in the shape of SELECT ... FROM ...
 instance
-      ( AggregatedQuery s rest
-      , --aggregation errors
-        QueryMustNotBeAliased rest
-      , --alias errors
-        SourceAlias f alias
-      , RowToList fields list
-      , QualifiedFields list alias outer
-      , FilteredQuery rest outer
-      , --where condition errors
-        FilteredQuery f outer
+      ( --aggregation errors
+        AggregatedQuery s rest
+      , QueryMustNotBeAliased rest
       , --on condition errors
-        QualifiedProjection s outer qual
+        FilteredQuery f fields
+      --condition errors
+      , FilteredQuery rest fields
+      , --alias errors
+        QualifiedProjection s fields qual
       , --qualified columns projection
         Union qual projection all
       , Nub all final
@@ -89,7 +86,7 @@ instance
 
 -- | INSERT ... RETURNING
 instance
-      ( ToProjection f fields Empty projection
+      ( ToProjection f fields Nil projection
       , Translate (Insert (Into name fields fieldNames (Values v (Returning f))))
       ) ⇒
       ToQuery (Insert (Into name fields fieldNames (Values v (Returning f)))) projection where
@@ -241,10 +238,7 @@ else instance
       QualifiedProjection (s /\ t) outer projection
 
 else instance
-      ( SourceAlias f table
-      , RowToList fields fieldList
-      , QualifiedFields fieldList table inner
-      , Union outer inner all
+      ( Union outer fields all
       , Nub all nubbed
       , FilteredQuery rest nubbed
       , FilteredQuery f nubbed
@@ -267,6 +261,7 @@ else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () sing
 
 else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () single) ⇒ SingleQualifiedColumn (RL.Cons name t RL.Nil) q single
 
+-- | would be nice to dry this like tocondition, but gotta find a way to only check `Path`s
 -- | Checks for invalid qualified columns usage in conditional clauses
 class FilteredQuery (q ∷ Type) (outer ∷ Row Type)
 
@@ -286,10 +281,7 @@ else instance
         AggregatedQuery s rest
       , QueryMustNotBeAliased rest
       , QualifiedProjection s outer o
-      , SourceAlias f alias
-      , RowToList fields list
-      , QualifiedFields list alias souter
-      , Union outer souter os
+      , Union outer fields os
       , Nub os allOut
       , FilteredQuery rest allOut
       ) ⇒
@@ -366,12 +358,9 @@ instance
       ToNakedProjection (s /\ t) projection
 
 else instance
-      ( ToProjection (Select s p (From f fields rest)) () Empty projection
-      , --let ToProjection figure out alias and outer since this is necessarily a subquery
-        SourceAlias f table
-      , RowToList fields list
-      , QualifiedFields list table outer
-      , QualifiedProjection s outer refs
+      ( --let ToProjection figure out alias and outer since this is necessarily a subquery
+        ToProjection (Select s p (From f fields rest)) () Nil projection
+      , QualifiedProjection s fields refs
       , RowToList projection pro
       , ToSingleColumn pro name t
       , Cons name t () single
@@ -380,7 +369,7 @@ else instance
 
 else instance ToNakedProjection s projection ⇒ ToNakedProjection (Distinct s) projection
 
-else instance ToProjection s () Empty projection ⇒ ToNakedProjection s projection
+else instance ToProjection s () Nil projection ⇒ ToNakedProjection s projection
 
 -- | Print SQL statements
 class Translate q where
