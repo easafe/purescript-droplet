@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class IncludeColumn, class Resume, class StarProjection, class SymbolListSingleton, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class QualifiedColumn, class OnComparision, Join(..), Inclusion(..), Side, Inner, Outer, SymbolList, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class IncludeAllColumns, class SourceFields, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
+module Droplet.Language.Internal.Syntax (class IncludeColumn, class UnwrapAll, class Resume, class StarProjection, class SymbolListSingleton, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class QualifiedColumn, class OnComparision, Join(..), Inclusion(..), Side, Inner, Outer, SymbolList, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class IncludeAllColumns, class SourceFields, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
 
 import Prelude
 
@@ -1089,15 +1089,20 @@ instance QueryOptionallyAliased (As alias E) name alias
 -- | SELECT * FROM should display columns unqualified as long as they are not ambiguous
 class StarProjection (list ∷ RowList Type) (fields ∷ Row Type) (aliases ∷ SymbolList) (projection ∷ Row Type) | list → projection
 
+--very slow and kind of clunky, but an easy way to unqualify and select distinct columns
+-- the trick is that the union of the original fields with all columns qualified by all aliases will yield only unqualified columns
 instance
       ( IncludeAllColumns list aliases included
       , ListToRow included extended
       , Union fields extended all
       , Nub all nubbed
-      , Union extended projection nubbed
+      , Union extended unqualified nubbed
+      , RowToList unqualified ulist
+      , UnwrapAll ulist projection
       ) ⇒
       StarProjection list fields aliases projection
 
+-- | Recursively call `IncludeColumn` on the given list
 class IncludeAllColumns (list ∷ RowList Type) (aliases ∷ SymbolList) (all ∷ RowList Type) | list → all
 
 instance IncludeAllColumns Nil aliases Nil
@@ -1109,11 +1114,25 @@ instance
       ) ⇒
       IncludeAllColumns (Cons name t rest) aliases all
 
+-- | Build a `RowList` of the given name and type qualified with each alias
 class IncludeColumn (name ∷ Symbol) (t ∷ Type) (aliases ∷ SymbolList) (included ∷ RowList Type) | name → included
 
 instance IncludeColumn name t Nil Nil
 
 instance (AppendPath alias name fullPath, IncludeColumn name t rest included) ⇒ IncludeColumn name t (Cons alias alias rest) (Cons fullPath t included)
+
+-- | Recursively remove source field wrappers
+class UnwrapAll (list ∷ RowList Type) (projection ∷ Row Type) | list → projection
+
+instance UnwrapAll Nil ()
+
+instance
+      ( UnwrapDefinition t u
+      , Cons name u () head
+      , UnwrapAll rest tail
+      , Union head tail projection
+      ) ⇒
+      UnwrapAll (Cons name t rest) projection
 
 -- | Computes all source fields with their alias
 class QualifiedFields (list ∷ RowList Type) (alias ∷ Symbol) (fields ∷ Row Type) | list alias → fields
