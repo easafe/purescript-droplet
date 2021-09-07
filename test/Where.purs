@@ -100,15 +100,15 @@ tests = do
                         TU.suite "path" do
                               TU.test "outer" do
                                     let q = select id # from (users # as u) # wher (exists $ select (u ... id) # from users)
-                                    TM.notParameterized """SELECT id FROM users AS "u" WHERE EXISTS (SELECT "u".id "u.id" FROM users)""" $ Query.query q
+                                    TM.notParameterized """SELECT id FROM users AS "u" WHERE EXISTS (SELECT "u"."id" "u.id" FROM users)""" $ Query.query q
                                     TM.result q [ { id: 1 }, { id: 2 } ]
                               TU.test "outer where" do
                                     let q = select id # from (users # as u) # wher (exists $ select (3 # as t) # from users # wher (id .=. u ... id))
-                                    TM.notParameterized """SELECT id FROM users AS "u" WHERE EXISTS (SELECT 3 AS "t" FROM users WHERE id = "u".id)""" $ Query.query q
+                                    TM.notParameterized """SELECT id FROM users AS "u" WHERE EXISTS (SELECT 3 AS "t" FROM users WHERE id = "u"."id")""" $ Query.query q
                                     TM.result q [ { id: 1 }, { id: 2 } ]
                               TU.test "outer inner where" do
                                     let q = select id # from (users # as u) # wher (exists $ select id # from (users # as t) # wher (t ... id .=. u ... id))
-                                    TM.notParameterized """SELECT id FROM users AS "u" WHERE EXISTS (SELECT id FROM users AS "t" WHERE "t".id = "u".id)""" $ Query.query q
+                                    TM.notParameterized """SELECT id FROM users AS "u" WHERE EXISTS (SELECT id FROM users AS "t" WHERE "t"."id" = "u"."id")""" $ Query.query q
                                     TM.result q [ { id: 1 }, { id: 2 } ]
 
                   TU.suite "mixed" do
@@ -158,30 +158,30 @@ tests = do
                         TM.result q [ { recipient: 2 } ]
                   TU.test "named table alias" do
                         let q = select (u ... id) # from (users # as u) # wher (u ... id .<>. 3)
-                        TM.parameterized """SELECT "u".id "u.id" FROM users AS "u" WHERE "u".id <> $1""" $ Query.query q
+                        TM.parameterized """SELECT "u"."id" "u.id" FROM users AS "u" WHERE "u"."id" <> $1""" $ Query.query q
                         TM.result q [ { "u.id": 1 }, { "u.id": 2 } ]
                   TU.test "named subquery" do
                         let q = select n # from (select (id # as n) # from users # as u) # wher (u ... n .<>. 3)
-                        TM.parameterized """SELECT n FROM (SELECT id AS "n" FROM users) AS "u" WHERE "u".n <> $1""" $ Query.query q
+                        TM.parameterized """SELECT n FROM (SELECT id AS "n" FROM users) AS "u" WHERE "u"."n" <> $1""" $ Query.query q
                         TM.result q [ { n: 1 }, { n: 2 } ]
                   TU.suite "column subquery" do
                         TU.test "outer" do
                               let q = select (select id # from users # wher (u ... id .<>. id)) # from (users # as u)
-                              TM.notParameterized """SELECT (SELECT id FROM users WHERE "u".id <> id) FROM users AS "u"""" $ Query.query q
+                              TM.notParameterized """SELECT (SELECT id FROM users WHERE "u"."id" <> id) FROM users AS "u"""" $ Query.query q
                               TM.result q [ { id: Just 2 }, { id: Just 1 } ]
                         TU.test "value" do
                               let q = select (id /\ (select ((u ... id) # as n) # from users # wher (id .=. 2))) # from (users # as u)
-                              TM.parameterized """SELECT id, (SELECT "u".id AS "n" FROM users WHERE id = $1) FROM users AS "u"""" $ Query.query q
+                              TM.parameterized """SELECT id, (SELECT "u"."id" AS "n" FROM users WHERE id = $1) FROM users AS "u"""" $ Query.query q
                               TM.result q [ { id: 1, n: Just 1 }, { id: 2, n: Just 2 } ]
                         TU.test "inner alias" do
                               let q = select (select (n ... name) # from (users # as n) # wher (u ... id .<>. n ... id)) # from (users # as u)
-                              TM.notParameterized """SELECT (SELECT "n".name "n.name" FROM users AS "n" WHERE "u".id <> "n".id) FROM users AS "u"""" $ Query.query q
+                              TM.notParameterized """SELECT (SELECT "n"."name" "n.name" FROM users AS "n" WHERE "u"."id" <> "n"."id") FROM users AS "u"""" $ Query.query q
                               TM.result q [ { "n.name": Just "mary" }, { "n.name": Just "josh" } ]
                         TU.test "same alias" do
                               let q = select (id /\ (select (u ... id) # from (users # as u) # wher (u ... id .<>. u ... id))) # from (users # as u)
-                              TM.notParameterized """SELECT id, (SELECT "u".id "u.id" FROM users AS "u" WHERE "u".id <> "u".id) FROM users AS "u"""" $ Query.query q
+                              TM.notParameterized """SELECT id, (SELECT "u"."id" "u.id" FROM users AS "u" WHERE "u"."id" <> "u"."id") FROM users AS "u"""" $ Query.query q
                               TM.result q [ { id: 1, "u.id": Nothing }, { id: 2, "u.id": Nothing } ]
                         TU.test "join" do
                               let q = select ((select name # from users # wher (id .=. u ... _by)) # as b) # from (join (tags # as u) (messages # as b) # on (u ... id .=. b ... id)) # wher (u ... id .=. 34)
-                              TM.parameterized """SELECT (SELECT name FROM users WHERE id = "u".by) AS "b" FROM tags AS "u" INNER JOIN messages AS "b" ON "u".id = "b".id WHERE "u".id = $1""" $ Query.query q
+                              TM.parameterized """SELECT (SELECT name FROM users WHERE id = "u"."by") AS "b" FROM tags AS "u" INNER JOIN messages AS "b" ON "u"."id" = "b"."id" WHERE "u"."id" = $1""" $ Query.query q
                               TM.result q []

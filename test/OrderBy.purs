@@ -40,17 +40,17 @@ tests =
             TU.suite "path" do
                   TU.test "field name" do
                         let q = select id # from (users # as u) # orderBy (u ... id)
-                        TM.notParameterized """SELECT id FROM users AS "u" ORDER BY "u".id""" $ Query.query q
+                        TM.notParameterized """SELECT id FROM users AS "u" ORDER BY "u"."id"""" $ Query.query q
                         TM.result q [ { id: 1 }, { id: 2 } ]
                   TU.test "asc" do
                         let q = select id # from (select id # from users # as u) # orderBy (u ... id # asc)
-                        TM.notParameterized """SELECT id FROM (SELECT id FROM users) AS "u" ORDER BY "u".id ASC""" $ Query.query q
+                        TM.notParameterized """SELECT id FROM (SELECT id FROM users) AS "u" ORDER BY "u"."id" ASC""" $ Query.query q
                         TM.result q [ { id: 1 }, { id: 2 } ]
                   TU.test "desc" do
                         let q = select (3 # as id) # from (join (users # as u) (messages # as t) # on (t ... id .=. u ... id)) # orderBy (u ... id # desc)
-                        TM.notParameterized """SELECT 3 AS "id" FROM users AS "u" INNER JOIN messages AS "t" ON "t".id = "u".id ORDER BY "u".id DESC""" $ Query.query q
+                        TM.notParameterized """SELECT 3 AS "id" FROM users AS "u" INNER JOIN messages AS "t" ON "t"."id" = "u"."id" ORDER BY "u"."id" DESC""" $ Query.query q
                         TM.result q [ { id: 3 }, { id: 3 } ]
                   TU.test "function" do
                         let q = select (4 # as n) # from (messages # as u) # orderBy (date_part_age ("year" /\ u ... date))
-                        TM.parameterized """SELECT 4 AS "n" FROM messages AS "u" ORDER BY date_part_age($1, "u".date)""" $ Query.query q
+                        TM.parameterized """SELECT 4 AS "n" FROM messages AS "u" ORDER BY date_part_age($1, "u"."date")""" $ Query.query q
                         TM.result q [ { n: 4 }, { n: 4 } ]

@@ -34,7 +34,7 @@ tests = do
                   TM.result q [ { u: DB.fromInt 2 } ]
             TU.test "path" do
                   let q = select (count (u ... id) # as u) # from (users # as u)
-                  TM.notParameterized """SELECT COUNT("u".id) AS "u" FROM users AS "u"""" $ Query.query q
+                  TM.notParameterized """SELECT COUNT("u"."id") AS "u" FROM users AS "u"""" $ Query.query q
                   TM.result q [ { u: DB.fromInt 2 } ]
       TU.test "function without parameters" do
             let q = select ((random # as u) /\ id) # from users
@@ -47,7 +47,7 @@ tests = do
                   TM.result q [ { u: Just "josh, mary" } ]
             TU.test "path" do
                   let q = select (string_agg (u ... name) ", " # as u) # from (users # as u)
-                  TM.parameterized """SELECT string_agg("u".name, $1) AS "u" FROM users AS "u"""" $ Query.query q
+                  TM.parameterized """SELECT string_agg("u"."name", $1) AS "u" FROM users AS "u"""" $ Query.query q
                   TM.result q [ { u: Just "josh, mary" } ]
             TU.suite "order by" do
                   TU.test "field" do
@@ -56,5 +56,5 @@ tests = do
                         TM.result q [ { u: Just "josh, mary" } ]
                   TU.test "path" do
                         let q = select (string_agg (u ... name) (", " # orderBy (u ... id)) # as u) # from (users # as u)
-                        TM.parameterized """SELECT string_agg("u".name, $1 ORDER BY "u".id) AS "u" FROM users AS "u"""" $ Query.query q
+                        TM.parameterized """SELECT string_agg("u"."name", $1 ORDER BY "u"."id") AS "u" FROM users AS "u"""" $ Query.query q
                         TM.result q [ { u: Just "josh, mary" } ]

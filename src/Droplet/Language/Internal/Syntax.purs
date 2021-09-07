@@ -1086,7 +1086,10 @@ instance QueryOptionallyAliased E name name
 
 instance QueryOptionallyAliased (As alias E) name alias
 
--- | SELECT * FROM should display columns unqualified as long as they are not ambiguous
+-- | SELECT * FROM should:
+-- |
+-- | - Display column unqualified if it appear both as qualified and unqualified
+-- | - Display column qualified if is projected with `Path`
 class StarProjection (list ∷ RowList Type) (fields ∷ Row Type) (aliases ∷ SymbolList) (projection ∷ Row Type) | list → projection
 
 --very slow and kind of clunky, but an easy way to unqualify and select distinct columns

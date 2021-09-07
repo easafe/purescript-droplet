@@ -690,7 +690,7 @@ instance IsSymbol name ⇒ NameList (Proxy name) where
       nameList name = DS.reflectSymbol name
 
 instance (IsSymbol alias, IsSymbol name) ⇒ NameList (Path alias name) where
-      nameList _ = quote (Proxy ∷ Proxy alias) <> dotSymbol <> DS.reflectSymbol (Proxy ∷ Proxy name)
+      nameList _ = quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name)
 
 instance NameList Star where
       nameList _ = starSymbol
@@ -706,7 +706,7 @@ instance IsSymbol name ⇒ ArgumentList (Proxy name) where
       argumentList name = pure $ DS.reflectSymbol name
 
 else instance (IsSymbol alias, IsSymbol name) ⇒ ArgumentList (Path alias name) where
-      argumentList _ = pure $ quote (Proxy ∷ Proxy alias) <> dotSymbol <> DS.reflectSymbol (Proxy ∷ Proxy name)
+      argumentList _ = pure $ quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name)
 
 else instance (ArgumentList s, Translate (OrderBy f E)) ⇒ ArgumentList (OrderBy f s) where
       argumentList (OrderBy f s) = do
@@ -827,8 +827,9 @@ printFunction (PgFunction name args) = do
 quote ∷ ∀ alias. IsSymbol alias ⇒ Proxy alias → String
 quote name = quoteSymbol <> DS.reflectSymbol name <> quoteSymbol
 
+-- | Columns in the format alias.name must be quoted to avoid problems with ambiguous column names and *
 quotePath ∷ ∀ alias name. IsSymbol alias ⇒ IsSymbol name ⇒ Proxy alias → Proxy name → String
-quotePath alias name = quote alias <> dotSymbol <> DS.reflectSymbol name
+quotePath alias name = quote alias <> dotSymbol <> quote name
 
 query ∷ ∀ q projection. ToQuery q projection ⇒ q → Query projection
 query qr = Query plan q parameters

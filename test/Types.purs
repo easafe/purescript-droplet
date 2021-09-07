@@ -91,6 +91,9 @@ t = Proxy
 u ∷ Proxy "u"
 u = Proxy
 
+bigB :: Proxy "B"
+bigB = Proxy
+
 date_part_age ∷ FunctionSignature (String /\ DateTime) Int
 date_part_age = function "date_part_age"
 
