@@ -106,8 +106,8 @@ instance Translate (Delete (From f fields rest)) ⇒ ToQuery (Delete (From f fie
 
 -- | Unsafe queries
 instance ToQuery (Query projection) projection where
-      toQuery (Query p q parameters) = do
-            CMS.put { plan: p, parameters, bracketed: false }
+      toQuery (Query plan q parameters) = do
+            CMS.put { plan, parameters, bracketed: false }
             pure q
 
 -- | Asserts that queries not using GROUP BY do not mix aggregated and non aggregated columns
@@ -566,14 +566,8 @@ instance (TranslateConditions c, Translate rest) ⇒ Translate (On c rest) where
 -- | (SELECT ... FROM ...) AS
 instance IsSymbol name ⇒ Translate (As name E) where
       translate _ = do
-            --as has to come outside brackets
-            { bracketed } ← CMS.get
-            let as = asKeyword <> quote (Proxy ∷ Proxy name)
-            if bracketed then do
-                  CMS.modify_ (_ { bracketed = false })
-                  pure $ closeBracket <> as
-            else
-                  pure as
+            CMS.modify_ (_ { bracketed = false })
+            pure $ closeBracket <> asKeyword <> quote (Proxy ∷ Proxy name)
 
 -- | WHERE
 instance (TranslateConditions c, Translate rest) ⇒ Translate (Where c rest) where

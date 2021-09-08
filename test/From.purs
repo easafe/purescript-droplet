@@ -41,6 +41,10 @@ tests = do
                         let q = select star # from (select (bigB ... birthday) # from (users # as bigB) # as t)
                         TM.notParameterized """SELECT * FROM (SELECT "B"."birthday" "B.birthday" FROM users AS "B") AS "t"""" $ Query.query q
                         TM.result q [ { "B.birthday": TM.makeDate 1990 1 1 }, { "B.birthday": TM.makeDate 1900 11 11 } ]
+                  TU.test "star bracket" do
+                        let q = select star # from (select (select id # from users # orderBy id # limit 1) # from users # as n)
+                        TM.notParameterized """SELECT * FROM (SELECT (SELECT id FROM users ORDER BY id LIMIT 1) FROM users) AS "n"""" $ Query.query q
+                        TM.result q [ { id: Just 1 }, { id: Just 1 } ]
                   TU.test "field" do
                         let q = select birthday # from (select birthday # from users # as t)
                         TM.notParameterized """SELECT birthday FROM (SELECT birthday FROM users) AS "t"""" $ Query.query q
