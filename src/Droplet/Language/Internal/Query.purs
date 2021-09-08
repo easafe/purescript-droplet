@@ -14,6 +14,7 @@ import Data.String.Regex.Flags (global)
 import Data.String.Regex.Unsafe as DSRU
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
+import Data.Traversable as DF
 import Data.Traversable as DT
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
@@ -745,6 +746,12 @@ instance (ToFieldValues p, ToFieldValues rest) ⇒ ToFieldValues (Tuple p rest) 
             q ← toFieldValues p
             otherQ ← toFieldValues rest
             pure $ q <> comma <> otherQ
+
+else instance ToFieldValues u ⇒ ToFieldValues (Array u) where
+      toFieldValues values = do
+            q ← DF.traverse toFieldValues values
+            let sep = closeBracket <> comma <> openBracket --work around Translate Insert adding brackets
+            pure $ DST.joinWith sep q
 
 else instance ToValue p ⇒ ToFieldValues p where
       toFieldValues p = do

@@ -172,7 +172,7 @@ instance ToSubExpression (Select (Proxy name) projection rest)
 
 instance ToSubExpression (Select (Path table name) projection rest)
 
-instance ToSubExpression (Select (As alias Int) rojection rest)
+instance ToSubExpression (Select (As alias Int) projection rest)
 
 instance ToSubExpression (Select (As alias (Proxy name)) projection rest)
 
@@ -737,7 +737,12 @@ data Values fieldValues rest = Values fieldValues rest
 
 class InsertList (fields ∷ Row Type) (fieldNames ∷ Type) (inserted ∷ Row Type) | fieldNames → fields inserted
 
-instance (InvalidField t, Cons name t e fields, Cons name t () single) ⇒ InsertList fields (Proxy name) single
+instance
+      ( InvalidField t
+      , Cons name t e fields
+      , Cons name t () single
+      ) ⇒
+      InsertList fields (Proxy name) single
 
 instance
       ( InsertList fields f head
@@ -757,13 +762,28 @@ else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Default t
 
 else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Maybe t) rest) required
 
-else instance (RequiredFields rest tail, Cons name t () head, Lacks name tail, Union head tail required) ⇒ RequiredFields (Cons name t rest) required
+else instance
+      ( RequiredFields rest tail
+      , Cons name t () head
+      , Lacks name tail
+      , Union head tail required
+      ) ⇒
+      RequiredFields (Cons name t rest) required
 
-class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type) | fieldNames → fields t
+class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type) -- | fieldNames → fields t
 
-instance (UnwrapDefinition t u, Cons name t e fields, ToValue u) ⇒ InsertValues fields (Proxy name) u
+instance InsertValues fields (Proxy name) u ⇒ InsertValues fields (Proxy name) (Array u)
+
+else instance
+      ( UnwrapDefinition t u
+      , Cons name t e fields
+      , ToValue u
+      ) ⇒
+      InsertValues fields (Proxy name) u
 
 else instance (InsertValues fields name value, InsertValues fields some more) ⇒ InsertValues fields (name /\ some) (value /\ more)
+
+else instance (InsertValues fields (name /\ some) (value /\ more)) ⇒ InsertValues fields (name /\ some) (Array (value /\ more))
 
 insert ∷ Insert E
 insert = Insert E

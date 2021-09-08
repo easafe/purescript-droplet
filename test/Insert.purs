@@ -22,3 +22,16 @@ tests = do
                         let q = insert # into tags name # values "my tag"
                         TM.parameterized """INSERT INTO tags(name) VALUES ($1)""" $ Query.query q
                         TM.result' q []
+                  TU.suite "multiple" do
+                        TU.test "all fields" do
+                              let
+                                    q = insert # into users (name /\ surname /\ birthday /\ joined) # values
+                                          [ "mary" /\ "m." /\ TM.makeDate 2000 9 9 /\ TM.makeDate 2009 9 9
+                                          , "john" /\ "j." /\ TM.makeDate 2000 9 9 /\ TM.makeDate 2009 9 9
+                                          ]
+                              TM.parameterized """INSERT INTO users(name, surname, birthday, joined) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)""" $ Query.query q
+                              TM.result' q []
+                        TU.test "some fields" do
+                              let q = insert # into tags name # values [ "my tag", "my other tag" ]
+                              TM.parameterized """INSERT INTO tags(name) VALUES ($1), ($2)""" $ Query.query q
+                              TM.result' q []
