@@ -2,6 +2,6 @@
     "name": "purescript-droplet",
     "dependencies": {
         "big-integer": "^1.6.48",
-        "pg": "^8.6.0"
+        "pg": "^8.7.1"
     }
 }

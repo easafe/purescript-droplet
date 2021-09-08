@@ -18,11 +18,11 @@ tests = do
             TU.test "value" do
                   let q = select (date_part_age ("year" /\ (TM.makeDateTime 1900 2 2)) # as u) # from users
                   TM.parameterized """SELECT date_part_age($1, $2) AS "u" FROM users""" $ Query.query q
-                  TM.result' q []
+                  void $ TM.resultOnly q
             TU.test "field" do
                   let q = select (date_part_age ("month" /\ date) # as u) # from messages
                   TM.parameterized """SELECT date_part_age($1, date) AS "u" FROM messages""" $ Query.query q
-                  TM.result' q []
+                  void $ TM.resultOnly q
       TU.suite "count" do
             TU.test "star" do
                   let q = select (count star # as u) # from users

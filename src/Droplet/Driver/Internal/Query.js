@@ -2,7 +2,11 @@
 
 var pg = require('pg');
 
-pg.types.setTypeParser(1082 /* DATE_OID */, function (dateString) { return dateString; });
+function id(x) { return x; }
+
+pg.types.setTypeParser(1082 /* DATE_OID */, id);
+pg.types.setTypeParser(1114 /* TIMESTAMP_OID */, id);
+pg.types.setTypeParser(1184 /* TIMESTAMPTZ_OID */, id);
 
 exports.connect_ = function (config) {
     return function (pool) {

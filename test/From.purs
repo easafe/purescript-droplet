@@ -15,10 +15,10 @@ import Type.Proxy (Proxy(..))
 tests ∷ TestSuite
 tests = do
       TU.suite "from" do
-            TU.test "table" do
+            TU.test "star" do
                   let q = select star # from messages
                   TM.notParameterized """SELECT * FROM messages""" $ Query.query q
-                  TM.result' q []
+                  void $ TM.resultOnly q
             TU.test "null fields" do
                   let q = select (created /\ _by) # from tags
                   TM.notParameterized """SELECT created, by FROM tags""" $ Query.query q
