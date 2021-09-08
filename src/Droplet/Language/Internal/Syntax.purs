@@ -988,7 +988,7 @@ else instance
       ToProjection (Select s p (From f fields rest)) fd aliases projection
 
 -- | DISTINCT
-else instance ToProjection s fields alias projection ⇒ ToProjection (Distinct s) fields aliases projection
+else instance ToProjection s fields aliases projection ⇒ ToProjection (Distinct s) fields aliases projection
 
 -- | Any valid instance should be recognizable
 else instance Fail (Text "Cannot recognize projection") ⇒ ToProjection x f a p
@@ -1092,7 +1092,7 @@ instance QueryOptionallyAliased (As alias E) name alias
 -- | - Display column qualified if is projected with `Path`
 class StarProjection (list ∷ RowList Type) (fields ∷ Row Type) (aliases ∷ SymbolList) (projection ∷ Row Type) | list → projection
 
---very slow and kind of clunky, but an easy way to unqualify and select distinct columns
+--very slow and kind of clunky, but an easy way to un-qualify and select distinct columns
 -- the trick is that the union of the original fields with all columns qualified by all aliases will yield only unqualified columns
 instance
       ( IncludeAllColumns list aliases included
