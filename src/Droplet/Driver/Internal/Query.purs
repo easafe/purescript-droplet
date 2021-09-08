@@ -130,13 +130,14 @@ instance consFromResult ∷
       , Cons name t restProjection projection
       ) ⇒
       FromResult (RL.Cons name t rest) (Record projection) where
-      toResult _ raw = case FO.lookup (DS.reflectSymbol name) raw of
-            Nothing → Left $ "Could not find column matching field: " <> DS.reflectSymbol name
+      toResult _ raw = case FO.lookup field raw of
+            Nothing → Left $ "Could not find column matching field: " <> field
             Just value → case DIED.fromValue value of
-                  Left error → Left error
+                  Left error → Left $ "Parsing field " <> field <> ": " <> error
                   Right converted → map (R.insert name converted) $ toResult (Proxy ∷ Proxy rest) raw
             where
             name = Proxy ∷ Proxy name
+            field = DS.reflectSymbol name
 
 foreign import connect_ ∷
       ∀ a.
