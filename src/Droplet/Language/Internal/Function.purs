@@ -62,13 +62,21 @@ instance TextColumn (Maybe String)
 
 instance TextColumn (Default String)
 
-class MatchArgumentList (input ∷ Type) (args ∷ Type) (fields ∷ Row Type) | input args → fields
+-- | Function arguments must match input type
+class MatchArgumentList (input ∷ Type) (args ∷ Type) (fields ∷ Row Type)
 
 instance (MatchArgumentList inp ar fields, MatchArgumentList ut gs fields) ⇒ MatchArgumentList (inp /\ ut) (ar /\ gs) fields
 
 else instance (MatchArgument i fields t, MatchArgument a fields t) ⇒ MatchArgumentList i a fields
 
-class MatchArgument (a ∷ Type) (fields ∷ Row Type) (t ∷ Type) | a → fields t
+-- | coalesce arguments must be of same type
+class ToCoalesce (a ∷ Type) (fields ∷ Row Type) (t ∷ Type) | a → t
+
+instance (ToCoalesce inp fields t, ToCoalesce ut fields t) ⇒ ToCoalesce (inp /\ ut) fields t
+
+else instance MatchArgument i fields t ⇒ ToCoalesce i fields t
+
+class MatchArgument (a ∷ Type) (fields ∷ Row Type) (t ∷ Type) | a → t
 
 instance
       ( Cons name t d fields
@@ -88,12 +96,6 @@ else instance
 else instance UnwrapNullable w v ⇒ MatchArgument (PgFunction i a f w) fields v
 
 else instance (ToValue a, UnwrapNullable a t) ⇒ MatchArgument a fields t
-
-class ToCoalesce (a ∷ Type) (fields ∷ Row Type) (t ∷ Type) | a → fields t
-
-instance (ToCoalesce inp fields t, ToCoalesce ut fields t) ⇒ ToCoalesce (inp /\ ut) fields t
-
-else instance MatchArgument i fields t ⇒ ToCoalesce i fields t
 
 count ∷ ∀ f fields. ToCount f fields ⇒ f → Aggregate f E fields BigInt
 count = Count
