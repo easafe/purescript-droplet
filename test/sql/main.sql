@@ -1,3 +1,12 @@
+create or replace function utc_now()
+  returns timestamptz as
+$body$
+begin
+    return utc_now();
+end;
+  $body$
+  language plpgsql;
+
 create table users (
       id integer generated always as identity primary key,
       name text not null,
@@ -52,15 +61,6 @@ create or replace function fire_missiles(a integer, b integer)
 $body$
 begin
 
-end;
-  $body$
-  language plpgsql;
-
-create or replace function utc_now()
-  returns timestamptz as
-$body$
-begin
-    return utc_now();
 end;
   $body$
   language plpgsql;
