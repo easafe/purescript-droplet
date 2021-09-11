@@ -19,6 +19,7 @@ import Data.Either as DET
 import Data.Enum as DEN
 import Data.Int as DI
 import Data.Maybe (Maybe(..))
+import Data.Nullable (Nullable)
 import Data.Nullable as DN
 import Data.String (Pattern(..))
 import Data.String as DST
@@ -36,6 +37,9 @@ import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
 import Record as R
 import Type.Proxy (Proxy(..))
+
+foreign import readInt :: Foreign -> Nullable Int
+foreign import showForeigner :: Foreign -> String
 
 -- | Marks the query end
 data E = E
@@ -79,10 +83,10 @@ instance Show a ⇒ Show (Auto a) where
 class ToValue v where
       toValue ∷ v → Foreign
 
-instance ToValue String where
+instance ToValue Int where
       toValue = F.unsafeToForeign
 
-instance ToValue Int where
+instance ToValue String where
       toValue = F.unsafeToForeign
 
 instance ToValue Boolean where
@@ -101,6 +105,9 @@ instance ToValue a ⇒ ToValue (Maybe a) where
       toValue = case _ of
             Nothing → F.unsafeToForeign DN.null
             Just a → toValue a
+
+instance ToValue BigInt where
+      toValue = F.unsafeToForeign <<< DBT.toString
 
 instance ToValue Date where
       toValue = F.unsafeToForeign <<< formatDate
@@ -123,8 +130,15 @@ formatDate date = show y <> "-" <> show m <> "-" <> show d
 class FromValue t where
       fromValue ∷ Foreign → Either String t
 
+--sometimes node pg returns a string for integers
+-- this might arise out a invalid type definition on the users part;
+-- the number is actually a big int;
+-- something funky
+--in the two former cases, readInt returns null, as well in the latter if the string can't be parsed as an integer
 instance FromValue Int where
-      fromValue = DB.lmap show <<< CME.runExcept <<< F.readInt
+      fromValue i = case DN.toMaybe $ readInt i of
+            Nothing -> Left $ "Could not parse value as integer: " <> showForeigner i
+            Just int -> Right int
 
 instance FromValue String where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readString

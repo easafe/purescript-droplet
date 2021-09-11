@@ -20,7 +20,7 @@ tests =
                   TM.result q [ { id: 1 }, { id: 2 } ]
             TU.test "many fields" do
                   let q = select ((count id # as b) /\ name) # from users # groupBy (id /\ name) # orderBy id
-                  TM.notParameterized """SELECT COUNT(id) AS "b", name FROM users GROUP BY id, name ORDER BY id""" $ Query.query q
+                  TM.notParameterized """SELECT count(id) AS "b", name FROM users GROUP BY id, name ORDER BY id""" $ Query.query q
                   TM.result q [ { b: BG.fromInt 1, name: "josh" }, { b: BG.fromInt 1, name: "mary" } ]
             TU.suite "path" do
                   TU.test "single field" do

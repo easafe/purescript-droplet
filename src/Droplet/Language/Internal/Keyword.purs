@@ -119,7 +119,7 @@ byKeyword ∷ String
 byKeyword = "BY "
 
 countFunctionName ∷ String
-countFunctionName = "COUNT"
+countFunctionName = "count"
 
 limitKeyword ∷ String
 limitKeyword = " LIMIT "

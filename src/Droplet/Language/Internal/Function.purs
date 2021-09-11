@@ -1,4 +1,20 @@
-module Droplet.Language.Internal.Function (class TextColumn, count, class ToCount, random, Aggregate(..), function', string_agg, class ToStringAgg, PgFunction(..), function, class MatchArgumentList, FunctionSignature, FunctionSignature') where
+module Droplet.Language.Internal.Function
+      ( class TextColumn
+      , count
+      , class ToCount
+      , random
+      , Aggregate(..)
+      , function'
+      , string_agg
+      , class ToStringAgg
+      , class ToCoalesce
+      , PgFunction(..)
+      , function
+      , class MatchArgumentList
+      , FunctionSignature
+      , FunctionSignature'
+      , coalesce
+      ) where
 
 import Prelude
 
@@ -10,10 +26,12 @@ import Prim.Row (class Cons)
 import Type.Proxy (Proxy)
 
 -- fields parameter is needed to match later with ToProjection
+-- | Built-in aggregate functions
 data Aggregate input rest (fields ∷ Row Type) (output ∷ Type)
       = Count input
       | StringAgg input rest
 
+-- | Declares a functions
 data PgFunction (input ∷ Type) args (fields ∷ Row Type) (output ∷ Type) = PgFunction String args
 
 type FunctionSignature input output = ∀ args fields. MatchArgumentList input args fields ⇒ args → PgFunction input args fields output
@@ -43,7 +61,6 @@ instance TextColumn (Maybe String)
 
 instance TextColumn (Default String)
 
---should support out of scope paths too
 class MatchArgumentList (input ∷ Type) (args ∷ Type) (fields ∷ Row Type)
 
 instance (MatchArgumentList inp ar fields, MatchArgumentList ut gs fields) ⇒ MatchArgumentList (inp /\ ut) (ar /\ gs) fields
@@ -67,6 +84,27 @@ else instance
 
 else instance ToValue t ⇒ MatchArgumentList t t fields
 
+class ToCoalesce (a ∷ Type) (fields ∷ Row Type) (t ∷ Type) | a -> t
+
+instance (ToCoalesce inp fields t, ToCoalesce ut fields t) ⇒ ToCoalesce (inp /\ ut) fields t
+
+else instance
+      ( Cons name t d fields
+      , UnwrapDefinition t u
+      , UnwrapNullable u v
+      ) ⇒
+      ToCoalesce (Proxy name) fields v
+
+else instance
+      ( AppendPath alias name fullPath
+      , Cons fullPath t d fields
+      , UnwrapDefinition t u
+      , UnwrapNullable u v
+      ) ⇒
+      ToCoalesce (Path alias name) fields v
+
+else instance ToValue t ⇒ ToCoalesce t fields t
+
 count ∷ ∀ f fields. ToCount f fields ⇒ f → Aggregate f E fields BigInt
 count = Count
 
@@ -76,6 +114,9 @@ string_agg f rest = StringAgg f rest
 
 random ∷ FunctionSignature' Number
 random = function' "random"
+
+coalesce ∷ ∀ input output fields. ToCoalesce input fields output ⇒ input → PgFunction input input fields (Maybe output)
+coalesce = PgFunction "coalesce"
 
 -- | Represents a function that takes arguments
 function ∷ ∀ input output. String → FunctionSignature input output

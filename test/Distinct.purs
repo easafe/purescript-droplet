@@ -10,7 +10,7 @@ import Test.Unit (TestSuite)
 import Test.Unit as TU
 
 tests ∷ TestSuite
-tests = do
+tests =
       TU.suite "distinct" do
             TU.test "field" do
                   let q = select (distinct id) # from messages

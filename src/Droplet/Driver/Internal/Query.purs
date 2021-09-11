@@ -133,7 +133,7 @@ instance consFromResult ∷
       toResult _ raw = case FO.lookup field raw of
             Nothing → Left $ "Could not find column matching field: " <> field
             Just value → case DIED.fromValue value of
-                  Left error → Left $ "Parsing field " <> field <> ": " <> error
+                  Left error → Left $ "While parsing field " <> field <> ": " <> error
                   Right converted → map (R.insert name converted) $ toResult (Proxy ∷ Proxy rest) raw
             where
             name = Proxy ∷ Proxy name
