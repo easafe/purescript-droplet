@@ -43,6 +43,7 @@ import Droplet.Language.Internal.Function
       , coalesce
       , string_agg
       , function
+      , function'
       , FunctionSignature
       , FunctionSignature'
       , random

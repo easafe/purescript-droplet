@@ -9,6 +9,7 @@ module Droplet.Language.Internal.Function
       , class ToStringAgg
       , class ToCoalesce
       , PgFunction(..)
+      , class MatchArgument
       , function
       , class MatchArgumentList
       , FunctionSignature
@@ -61,49 +62,38 @@ instance TextColumn (Maybe String)
 
 instance TextColumn (Default String)
 
-class MatchArgumentList (input ∷ Type) (args ∷ Type) (fields ∷ Row Type)
+class MatchArgumentList (input ∷ Type) (args ∷ Type) (fields ∷ Row Type) | input args → fields
 
 instance (MatchArgumentList inp ar fields, MatchArgumentList ut gs fields) ⇒ MatchArgumentList (inp /\ ut) (ar /\ gs) fields
 
-else instance
+else instance (MatchArgument i fields t, MatchArgument a fields t) ⇒ MatchArgumentList i a fields
+
+class MatchArgument (a ∷ Type) (fields ∷ Row Type) (t ∷ Type) | a → fields t
+
+instance
       ( Cons name t d fields
       , UnwrapDefinition t u
       , UnwrapNullable u v
-      , ToValue v
       ) ⇒
-      MatchArgumentList v (Proxy name) fields
+      MatchArgument (Proxy name) fields v
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t d fields
       , UnwrapDefinition t u
       , UnwrapNullable u v
-      , ToValue v
       ) ⇒
-      MatchArgumentList v (Path alias name) fields
+      MatchArgument (Path alias name) fields v
 
-else instance ToValue t ⇒ MatchArgumentList t t fields
+else instance UnwrapNullable w v ⇒ MatchArgument (PgFunction i a f w) fields v
 
-class ToCoalesce (a ∷ Type) (fields ∷ Row Type) (t ∷ Type) | a -> t
+else instance (ToValue a, UnwrapNullable a t) ⇒ MatchArgument a fields t
+
+class ToCoalesce (a ∷ Type) (fields ∷ Row Type) (t ∷ Type) | a → fields t
 
 instance (ToCoalesce inp fields t, ToCoalesce ut fields t) ⇒ ToCoalesce (inp /\ ut) fields t
 
-else instance
-      ( Cons name t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
-      ) ⇒
-      ToCoalesce (Proxy name) fields v
-
-else instance
-      ( AppendPath alias name fullPath
-      , Cons fullPath t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
-      ) ⇒
-      ToCoalesce (Path alias name) fields v
-
-else instance ToValue t ⇒ ToCoalesce t fields t
+else instance MatchArgument i fields t ⇒ ToCoalesce i fields t
 
 count ∷ ∀ f fields. ToCount f fields ⇒ f → Aggregate f E fields BigInt
 count = Count
