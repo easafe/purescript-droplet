@@ -6,8 +6,7 @@ import Data.Date (Date)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
-import Droplet.Language (FunctionSignature, function)
-import Droplet.Language.Internal.Definition (Auto, Default, Table(..))
+import Droplet.Language
 import Type.Proxy (Proxy(..))
 
 type Users =
@@ -102,3 +101,6 @@ date_part_age' = function "date_part_age"
 
 fire_missiles ∷ FunctionSignature (Int /\ Int) Unit
 fire_missiles = function "fire_missiles"
+
+utc_now ∷ FunctionSignature' DateTime
+utc_now = function' "utc_now"

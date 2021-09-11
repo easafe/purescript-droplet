@@ -1,14 +1,14 @@
 module Test.Function where
 
-import Droplet.Language (as, coalesce, count, from, orderBy, random, select, star, string_agg, (...))
 import Prelude
-import Test.Types (_by, date, date_part_age, id, messages, name, tags, u, users)
 
 import Data.BigInt as DB
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
+import Droplet.Language (as, coalesce, count, from, orderBy, random, select, star, string_agg, (...))
 import Droplet.Language.Internal.Query as Query
 import Test.Model as TM
+import Test.Types
 import Test.Unit (TestSuite)
 import Test.Unit as TU
 
@@ -40,6 +40,10 @@ tests = TU.suite "functions" do
                   let q = select (coalesce (id /\ u ... id /\ 4) # as u) # from (users # as u)
                   TM.parameterized """SELECT coalesce(id, "u"."id", $1) AS "u" FROM users AS "u"""" $ Query.query q
                   TM.result q [ { u: Just 1 }, { u: Just 2 } ]
+      TU.test "function as argument" do
+            let q = select (date_part_age ("year" /\ coalesce (date /\ utc_now)) # as u) # from messages
+            TM.parameterized """SELECT date_part_age($1, coalesce(date, utc_now())) AS "u" FROM messages""" $ Query.query q
+            void $ TM.resultOnly q
       TU.suite "count" do
             TU.test "star" do
                   let q = select (count star # as u) # from users

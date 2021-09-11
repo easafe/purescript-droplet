@@ -32,6 +32,7 @@ You can edit this file as you like.
   , "test-unit"
   , "transformers"
   , "tuples"
+  , "type-equality"
   , "typelevel-prelude"
   , "unsafe-coerce"
   ]

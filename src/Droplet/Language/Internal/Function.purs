@@ -24,6 +24,7 @@ import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, Default, E, Path, Star)
 import Prim.Row (class Cons)
+import Type.Equality (class TypeEquals)
 import Type.Proxy (Proxy)
 
 -- fields parameter is needed to match later with ToProjection
@@ -93,7 +94,7 @@ else instance
       ) ⇒
       MatchArgument (Path alias name) fields v
 
-else instance UnwrapNullable w v ⇒ MatchArgument (PgFunction i a f w) fields v
+else instance (UnwrapNullable o t, TypeEquals fd fields) ⇒ MatchArgument (PgFunction i a fd o) fields t
 
 else instance (ToValue a, UnwrapNullable a t) ⇒ MatchArgument a fields t
 

@@ -2,16 +2,16 @@ create table users (
       id integer generated always as identity primary key,
       name text not null,
       surname text not null,
-      birthday date default (now() at time zone 'utc'),
-      joined date default (now() at time zone 'utc')
+      birthday date default (utc_now()),
+      joined date default (utc_now())
 );
 
 create table messages (
       id integer generated always as identity primary key,
       sender integer not null,
       recipient integer not null,
-      date timestamp without time zone default (now() at time zone 'utc'),
-      second_date timestamp with time zone default (now() at time zone 'utc'),
+      date timestamp without time zone default (utc_now()),
+      second_date timestamp with time zone default (utc_now()),
       sent bool not null,
 
       constraint sender_user foreign key (sender) references users(id),
@@ -52,6 +52,15 @@ create or replace function fire_missiles(a integer, b integer)
 $body$
 begin
 
+end;
+  $body$
+  language plpgsql;
+
+create or replace function utc_now()
+  returns timestamptz as
+$body$
+begin
+    return utc_now();
 end;
   $body$
   language plpgsql;
