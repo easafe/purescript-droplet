@@ -21,7 +21,7 @@ tests = do
                   void $ TM.resultOnly q
             TU.test "null fields" do
                   let q = select (created /\ _by) # from tags
-                  TM.notParameterized """SELECT created, by FROM tags""" $ Query.query q
+                  TM.notParameterized """SELECT "created", "by" FROM tags""" $ Query.query q
                   TM.result q [ { created: Nothing, by: Just 1 } ]
             TU.suite "named table" do
                   TU.test "path" do
@@ -43,15 +43,15 @@ tests = do
                         TM.result q [ { "B.birthday": TM.makeDate 1990 1 1 }, { "B.birthday": TM.makeDate 1900 11 11 } ]
                   TU.test "star bracket" do
                         let q = select star # from (select (select id # from users # orderBy id # limit 1) # from users # as n)
-                        TM.notParameterized """SELECT * FROM (SELECT (SELECT id FROM users ORDER BY id LIMIT 1) FROM users) AS "n"""" $ Query.query q
+                        TM.notParameterized """SELECT * FROM (SELECT (SELECT "id" FROM users ORDER BY "id" LIMIT 1) FROM users) AS "n"""" $ Query.query q
                         TM.result q [ { id: Just 1 }, { id: Just 1 } ]
                   TU.test "field" do
                         let q = select birthday # from (select birthday # from users # as t)
-                        TM.notParameterized """SELECT birthday FROM (SELECT birthday FROM users) AS "t"""" $ Query.query q
+                        TM.notParameterized """SELECT "birthday" FROM (SELECT "birthday" FROM users) AS "t"""" $ Query.query q
                         TM.result q [ { birthday: TM.makeDate 1990 1 1 }, { birthday: TM.makeDate 1900 11 11 } ]
                   TU.test "qualified field" do
                         let q = select (t ... birthday) # from (select birthday # from users # as t)
-                        TM.notParameterized """SELECT "t"."birthday" "t.birthday" FROM (SELECT birthday FROM users) AS "t"""" $ Query.query q
+                        TM.notParameterized """SELECT "t"."birthday" "t.birthday" FROM (SELECT "birthday" FROM users) AS "t"""" $ Query.query q
                         TM.result q [ { "t.birthday": TM.makeDate 1990 1 1 }, { "t.birthday": TM.makeDate 1900 11 11 } ]
                   TU.test "qualified qualified field" do
                         let q = select (t ... (Proxy ∷ Proxy "B.birthday")) # from (select (bigB ... birthday) # from (users # as bigB) # as t)
@@ -59,7 +59,7 @@ tests = do
                         TM.result q [ { "t.B.birthday": TM.makeDate 1990 1 1 }, { "t.B.birthday": TM.makeDate 1900 11 11 } ]
                   TU.test "renamed field" do
                         let q = select t # from (select (birthday # as t) # from users # as t)
-                        TM.notParameterized """SELECT t FROM (SELECT birthday AS "t" FROM users) AS "t"""" $ Query.query q
+                        TM.notParameterized """SELECT "t" FROM (SELECT "birthday" AS "t" FROM users) AS "t"""" $ Query.query q
                         TM.result q [ { t: TM.makeDate 1990 1 1 }, { t: TM.makeDate 1900 11 11 } ]
                   TU.test "join" do
                         let q = select star # from (select (u ... name /\ t ... id) # from (join (users # as u) (messages # as t) # on (u ... id .=. t ... id)) # as b)

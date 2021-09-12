@@ -439,7 +439,7 @@ class TranslateColumn q where
       translateColumn ∷ q → State QueryState String
 
 instance IsSymbol name ⇒ TranslateColumn (Proxy name) where
-      translateColumn name = pure $ DS.reflectSymbol name
+      translateColumn name = pure $ quote name
 
 else instance
       ( IsSymbol fullPath
@@ -448,12 +448,7 @@ else instance
       , AppendPath alias name fullPath
       ) ⇒
       TranslateColumn (Path alias name) where
-      translateColumn _ = pure $
-            quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name)
-                  <> " "
-                  <> quoteSymbol
-                  <> DS.reflectSymbol (Proxy ∷ Proxy fullPath)
-                  <> quoteSymbol
+      translateColumn _ = pure $ quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name) <> " " <> quote (Proxy ∷ Proxy fullPath)
 
 else instance TranslateColumn Star where
       translateColumn _ = pure starSymbol
@@ -472,7 +467,7 @@ else instance (IsSymbol name, ArgumentList args) ⇒ TranslateColumn (As name (P
             pure $ q <> asKeyword <> quote (Proxy ∷ Proxy name)
 
 else instance (IsSymbol name, IsSymbol alias) ⇒ TranslateColumn (As alias (Proxy name)) where
-      translateColumn _ = pure $ DS.reflectSymbol (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
+      translateColumn _ = pure $ quote (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
 
 else instance
       ( IsSymbol fullPath
@@ -613,7 +608,7 @@ else instance (TranslateConditions a, TranslateConditions b) ⇒ TranslateCondit
                         q <> printOperator operator <> otherQ
 
 else instance IsSymbol name ⇒ TranslateConditions (Proxy name) where
-      translateConditions name = pure $ DS.reflectSymbol name
+      translateConditions name = pure $ quote name
 
 else instance (IsSymbol alias, IsSymbol name) ⇒ TranslateConditions (Path alias name) where
       translateConditions _ = pure $ quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name)
@@ -682,7 +677,7 @@ class NameList fieldNames where
       nameList ∷ fieldNames → String
 
 instance IsSymbol name ⇒ NameList (Proxy name) where
-      nameList name = DS.reflectSymbol name
+      nameList name = quote name
 
 instance (IsSymbol alias, IsSymbol name) ⇒ NameList (Path alias name) where
       nameList _ = quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name)
@@ -698,7 +693,7 @@ class ArgumentList v where
       argumentList ∷ v → State QueryState String
 
 instance IsSymbol name ⇒ ArgumentList (Proxy name) where
-      argumentList name = pure $ DS.reflectSymbol name
+      argumentList name = pure $ quote name
 
 else instance (IsSymbol alias, IsSymbol name) ⇒ ArgumentList (Path alias name) where
       argumentList _ = pure $ quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name)
@@ -710,7 +705,7 @@ else instance (ArgumentList s, Translate (OrderBy f E)) ⇒ ArgumentList (OrderB
             pure $ ns <> q
 
 else instance IsSymbol name ⇒ ArgumentList (Sort (Proxy name)) where
-      argumentList s = pure $ DS.reflectSymbol (Proxy ∷ Proxy name) <> case s of
+      argumentList s = pure $ quote (Proxy ∷ Proxy name) <> case s of
             Desc → descKeyword
             Asc → ascKeyword
 

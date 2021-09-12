@@ -25,9 +25,9 @@ tests = do
       TU.suite "where" do
             TU.test "single field" do
                   let q = update users # set (surname /\ "Sue") # wher (id .=. 1)
-                  TM.parameterized """UPDATE users SET surname = $1 WHERE id = $2""" $ Query.query q
+                  TM.parameterized """UPDATE users SET surname = $1 WHERE "id" = $2""" $ Query.query q
                   TM.result q []
             TU.test "fields" do
                   let q = update users # set ((name /\ "Mary") /\ (surname /\ "Sue")) # wher (id .=. 2 .||. id .=. 4)
-                  TM.parameterized """UPDATE users SET name = $1, surname = $2 WHERE (id = $3 OR id = $4)""" $ Query.query q
+                  TM.parameterized """UPDATE users SET name = $1, surname = $2 WHERE ("id" = $3 OR "id" = $4)""" $ Query.query q
                   TM.result q []

@@ -14,11 +14,11 @@ tests =
       TU.suite "distinct" do
             TU.test "field" do
                   let q = select (distinct id) # from messages
-                  TM.notParameterized """SELECT DISTINCT id FROM messages""" $ Query.query q
+                  TM.notParameterized """SELECT DISTINCT "id" FROM messages""" $ Query.query q
                   TM.result' q []
             TU.test "fields" do
                   let q = select (distinct (id /\ name)) # from users
-                  TM.notParameterized """SELECT DISTINCT id, name FROM users""" $ Query.query q
+                  TM.notParameterized """SELECT DISTINCT "id", "name" FROM users""" $ Query.query q
                   TM.result q [ { id: 1, name: "josh" }, { id: 2, name: "mary" } ]
             TU.test "qualified fields" do
                   let q = select (distinct (u ... id /\ u ... name)) # from (users # as u)

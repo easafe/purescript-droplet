@@ -18,5 +18,5 @@ tests = do
                   TM.result' q []
             TU.test "where" do
                   let q = delete # from users # wher (id .=. 3)
-                  TM.parameterized """DELETE FROM users WHERE id = $1""" $ Query.query q
+                  TM.parameterized """DELETE FROM users WHERE "id" = $1""" $ Query.query q
                   TM.result' q []

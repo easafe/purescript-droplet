@@ -40,10 +40,10 @@ Since the columns are at type level, we need `Proxy`s to represent their names
 
 ```haskell
 id :: Proxy "id"
-id = Proxy
+"id" = Proxy
 
 name :: Proxy "name"
-name = Proxy
+"name" = Proxy
 
 date :: Proxy "date"
 date = Proxy
@@ -182,7 +182,7 @@ or with a alias
 
 ```haskell
 fromTableAlias :: Select (Proxy "id") (id :: Int) _
-fromTableAlias = select id # from (users # as u) -- SELECT id FROM users AS u
+fromTableAlias = select id # from (users # as u) -- SELECT "id" FROM users AS u
 
 fromTableAlias2 :: Select (Path "u" "id") ("u.id" :: Int) _
 fromTableAlias2 = select (u ... id) # from (users # as u) -- SELECT u.id FROM users AS u
@@ -194,7 +194,7 @@ Subqueries in FROM must have an alias
 
 ```haskell
 fromSubQuery :: Select (Proxy "name") (name :: String) _
-fromSubQuery = select name # from (select star # from users # as u) -- SELECT name FROM (SELECT * FROM users) AS u
+fromSubQuery = select name # from (select star # from users # as u) -- SELECT "name" FROM (SELECT * FROM users) AS u
 
 --example with union
 ```
@@ -212,7 +212,7 @@ queryInnerJoin :: Select (Path "u" "name") ("u.name" :: String) _
 queryInnerJoin = select ( u ... name) # from ((messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name FROM messages AS m INNER JOIN users AS u ON m.sender = u.id
 
 queryInnerJoin2 :: Select (Tuple (Path "u" "name") (Path "m" "sender")) ("m.sender" :: Int, "u.name" :: String) _
-queryInnerJoin2 = select ( u ... name /\ m ... sender) # from ((select sender # from messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM (SELECT sender FROM messages) AS m INNER JOIN users AS u ON m.sender = u.id
+queryInnerJoin2 = select ( u ... name /\ m ... sender) # from ((select sender # from messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM (SELECT "sender" FROM messages) AS m INNER JOIN users AS u ON m.sender = u.id
 ```
 
 2. LEFT OUTER JOIN

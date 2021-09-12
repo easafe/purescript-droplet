@@ -64,7 +64,7 @@ where `<version>` is:
 -------------------------------
 let upstream = --
 in  upstream
-  with new-package-name =
+  with new-package-"name" =
     { dependencies =
        [ "dependency1"
        , "dependency2"
