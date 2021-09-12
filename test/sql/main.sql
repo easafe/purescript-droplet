@@ -2,7 +2,7 @@ create or replace function utc_now()
   returns timestamptz as
 $body$
 begin
-    return now() at time zone utc;
+    return now() at time zone 'utc';
 end;
   $body$
   language plpgsql;
