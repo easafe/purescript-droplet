@@ -180,6 +180,8 @@ instance ToSubExpression (Select (As alias (Path table name)) projection rest)
 
 instance ToSubExpression (Select (As alias (PgFunction inp arg fields out)) projection rest)
 
+instance ToSubExpression (Select (As alias (Aggregate inp r fields out)) projection rest)
+
 instance Fail (Text "Subquery must return a single column") ⇒ ToSubExpression (Select (a /\ b) projection rest)
 
 -- | SELECT can project literals, columns and subqueries with the following considerations:
