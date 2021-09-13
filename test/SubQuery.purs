@@ -22,6 +22,10 @@ tests = do
                   TM.notParameterized """SELECT (SELECT "created" FROM tags) FROM messages ORDER BY "id" LIMIT 1""" $ Query.query q
                   --avoid (Maybe (Maybe t))
                   TM.result q [ { created: Nothing } ]
+            TU.test "function" do
+                  let q = select (select (coalesce id # as id) # from users # orderBy id # limit 1) # from messages
+                  TM.notParameterized """SELECT (SELECT coalesce("id") AS "id" FROM users ORDER BY "id" LIMIT 1) FROM messages""" $ Query.query q
+                  TM.result q [ { id: Just 1 }, { id: Just 1 } ]
             TU.suite "outer references" do
                   TU.suite "projection from table" do
                         TU.test "field" do
