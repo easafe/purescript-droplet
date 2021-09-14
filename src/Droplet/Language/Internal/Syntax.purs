@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class IncludeColumn, class UnwrapAll, class Resume, class StarProjection, class SymbolListSingleton, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class QualifiedColumn, class OnComparision, Join(..), Inclusion(..), Side, Inner, Outer, SymbolList, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class IncludeAllColumns, class SourceFields, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortColumns, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
+module Droplet.Language.Internal.Syntax (class SortFieldsSource, class IncludeColumn, class UnwrapAll, class Resume, class StarProjection, class SymbolListSingleton, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class QualifiedColumn, class OnComparision, Join(..), Inclusion(..), Side, Inner, Outer, SymbolList, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class IncludeAllColumns, class SourceFields, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortFields, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
 
 import Prelude
 
@@ -522,66 +522,52 @@ data Sort (f ∷ Type) = Asc | Desc
 -- | ORDER BY must be last statement
 class ToOrderBy (f ∷ Type) (q ∷ Type)
 
-instance
-      ( SourceAlias fr alias
-      , RowToList fields list
-      , QualifiedFields list alias qual
-      , Union projection fields pf
-      , Union qual pf all
-      , SortColumns f all
-      ) ⇒
-      ToOrderBy f (Select s projection (From fr fields E))
+instance (SortFieldsSource s projection f fields available, SortFields st available) ⇒ ToOrderBy st (Select s projection (From f fields E))
 
-instance
-      ( SourceAlias fr alias
-      , RowToList fields list
-      , QualifiedFields list alias qual
-      , Union projection fields pf
-      , Union qual pf all
-      , SortColumns f all
-      ) ⇒
-      ToOrderBy f (Select s projection (From fr fields (GroupBy fd E)))
+instance (SortFieldsSource s projection f fields available, SortFields st available) ⇒ ToOrderBy st (Select s projection (From f fields (GroupBy g E)))
 
-instance
-      ( SourceAlias fr alias
-      , RowToList fields list
-      , QualifiedFields list alias qual
-      , Union projection fields pf
-      , Union qual pf all
-      , SortColumns f all
-      ) ⇒
-      ToOrderBy f (Select s projection (From fr fields (Where cd E)))
+instance (SortFieldsSource s projection f fields available, SortFields st available) ⇒ ToOrderBy st (Select s projection (From f fields (Where cd E)))
 
-instance
-      ( SourceAlias fr alias
-      , RowToList fields list
-      , QualifiedFields list alias qual
-      , Union projection fields pf
-      , Union qual pf all
-      , SortColumns f all
-      ) ⇒
-      ToOrderBy f (Select s projection (From fr fields (Where cd (GroupBy fd E))))
+instance (SortFieldsSource s projection f fields available, SortFields st available) ⇒ ToOrderBy st (Select s projection (From f fields (Where cd (GroupBy g E))))
 
+-- for aggregate/window functions
 instance ToOrderBy (Proxy name) String
 
 instance ToOrderBy (Path alias name) String
 
-class SortColumns (f ∷ Type) (fields ∷ Row Type) | f → fields
+--this error might not be clear for the user
+-- | Fields available for sorting this query
+-- |
+-- | N.B: SELECT DISTINCT queries can only be sorted by fields in the projection
+class SortFieldsSource (s ∷ Type) (projection ∷ Row Type) (f ∷ Type) (fields ∷ Row Type) (available ∷ Row Type) | s → available
 
-instance Cons name t e fields ⇒ SortColumns (Proxy name) fields
+instance SortFieldsSource (Distinct s) projection f fields projection
 
---not allowing non local qualified fields yet
-instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ SortColumns (Path alias name) fields
+else instance
+      ( SourceAlias f alias
+      , RowToList fields list
+      , QualifiedFields list alias qual
+      , Union projection fields pf
+      , Union qual pf all
+      ) ⇒
+      SortFieldsSource s projection f fields all
 
-instance Cons name t e fields ⇒ SortColumns (Sort (Proxy name)) fields
+class SortFields (f ∷ Type) (fields ∷ Row Type) | f → fields
 
-instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ SortColumns (Sort (Path alias name)) fields
+instance Cons name t e fields ⇒ SortFields (Proxy name) fields
 
-instance Fail (Text "Cannot sort by void function") ⇒ SortColumns (PgFunction input args fields Unit) fields
+--not allowing out of scope qualified fields yet
+instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ SortFields (Path alias name) fields
 
-else instance SortColumns (PgFunction input args fields output) fields
+instance Cons name t e fields ⇒ SortFields (Sort (Proxy name)) fields
 
-instance (SortColumns a fields, SortColumns b fields) ⇒ SortColumns (a /\ b) fields
+instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ SortFields (Sort (Path alias name)) fields
+
+instance Fail (Text "Cannot sort by void function") ⇒ SortFields (PgFunction input args fields Unit) fields
+
+else instance SortFields (PgFunction input args fields output) fields
+
+instance (SortFields a fields, SortFields b fields) ⇒ SortFields (a /\ b) fields
 
 -- | ASC
 asc ∷ ∀ name. name → Sort name

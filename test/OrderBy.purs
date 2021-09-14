@@ -1,7 +1,7 @@
 module Test.OrderBy where
 
 import Data.Tuple.Nested ((/\))
-import Droplet.Language (as, asc, desc, from, join, on, orderBy, random, select, wher, (...), (.<>.), (.=.))
+import Droplet.Language
 import Droplet.Language.Internal.Query as Query
 import Prelude (discard, void, (#), ($))
 import Test.Model as TM
@@ -28,6 +28,10 @@ tests =
                   let q = select id # from users # orderBy (id # desc)
                   TM.notParameterized """SELECT "id" FROM users ORDER BY "id" DESC""" $ Query.query q
                   TM.result q [ { id: 2 }, { id: 1 } ]
+            TU.test "distinct" do
+                  let q = select (distinct (id # as n)) # from users # orderBy n
+                  TM.notParameterized """SELECT DISTINCT "id" AS "n" FROM users ORDER BY "n"""" $ Query.query q
+                  TM.result q [ { n: 1 }, { n: 2 } ]
             TU.suite "function" do
                   TU.test "regular" do
                         let q = select (4 # as n) # from users # orderBy (date_part_age ("year" /\ TM.makeDateTime 2000 1 1))
