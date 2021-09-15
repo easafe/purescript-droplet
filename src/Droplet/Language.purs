@@ -111,5 +111,5 @@ spyQuery ∷
       , plan ∷ Maybe Plan
       , query ∷ String
       }
-spyQuery q = case DLIQ.query q of
+spyQuery q = case DLIQ.buildQuery q of
       Query plan sql parameters → { plan, query: sql, parameters }

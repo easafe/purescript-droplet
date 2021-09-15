@@ -219,7 +219,7 @@ query connection q = do
             Left error → pure $ Left error
             Right r → pure $ DT.traverse (DB.lmap ConversionError <<< toResult (Proxy ∷ Proxy pro)) r
       where
-      Query plan sql parameters = DIMQ.query q
+      Query plan sql parameters = DIMQ.buildQuery q
 
       rawResults ∷ Aff (Either PgError (Array (Object Foreign)))
       rawResults = EAC.fromEffectFnAff $ rawQuery_ rightLeft (toUntaggedHandler connection)
@@ -241,7 +241,7 @@ unsafeQuery ∷
       String →
       Record parameters →
       Aff (Either PgError (Array (Record projection)))
-unsafeQuery connection plan q parameters = query connection $ DIMQ.unsafeQuery plan q parameters
+unsafeQuery connection plan q parameters = query connection $ DIMQ.unsafeBuildQuery plan q parameters
 
 execute ∷ ∀ q. ToQuery q () ⇒ Connection → q → Aff (Maybe PgError)
 execute connection q = do
@@ -260,7 +260,7 @@ unsafeExecute ∷
       Record parameters →
       Aff (Maybe PgError)
 unsafeExecute connection plan q parameters = do
-      results ← query connection (DIMQ.unsafeQuery plan q parameters ∷ Query ())
+      results ← query connection (DIMQ.unsafeBuildQuery plan q parameters ∷ Query ())
       pure $ case results of
             Left err → Just err
             _ → Nothing
@@ -292,7 +292,7 @@ unsafeSingle ∷
       String →
       Record parameters →
       Aff (Either PgError (Maybe (Record projection)))
-unsafeSingle connection plan q parameters = single connection $ DIMQ.unsafeQuery plan q parameters
+unsafeSingle connection plan q parameters = single connection $ DIMQ.unsafeBuildQuery plan q parameters
 
 toUntaggedHandler ∷ Connection → UntaggedConnection
 toUntaggedHandler (Connection c) = case c of

@@ -9,7 +9,7 @@ import Data.Maybe (Maybe(..))
 import Data.Maybe as DM
 import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Query (Query(..))
-import Droplet.Language.Internal.Query as Query
+import Droplet.Language.Internal.Query as DLIQ
 import Foreign as F
 import Partial.Unsafe as PU
 import Test.Model as TM
@@ -22,7 +22,7 @@ tests = do
       TU.suite "unsafe queries" do
             TU.test "select" do
                   let (plan /\ q /\ pr) = Nothing /\ """SELECT "name", m.id FROM users u JOIN messages m on "u"."id" = m.sender WHERE "u"."id" = @id OR "u"."id" = @id2 OR "u"."id" = @id3""" /\ { id: 2, id2: 3, id3: 4 }
-                  let Query _ dollaredQ parameters = Query.unsafeQuery plan q pr
+                  let Query _ dollaredQ parameters = DLIQ.unsafeBuildQuery plan q pr
                   --parameters are replaced by field order
                   TUA.equal """SELECT "name", m.id FROM users u JOIN messages m on "u"."id" = m.sender WHERE "u"."id" = $1 OR "u"."id" = $2 OR "u"."id" = $3""" dollaredQ
                   TUA.equal 3 $ DA.length parameters
@@ -32,13 +32,13 @@ tests = do
                   TM.unsafeResult plan q pr [ { name: "mary", id: 2 } ]
             TU.test "insert" do
                   let (plan /\ q) = Nothing /\ "insert into tags(name) values('hey')"
-                  let Query _ dollaredQ parameters = Query.unsafeQuery plan q {}
+                  let Query _ dollaredQ parameters = DLIQ.unsafeBuildQuery plan q {}
                   TUA.equal "insert into tags(name) values('hey')" dollaredQ
                   TUA.equal 0 $ DA.length parameters
                   TM.unsafeResult plan q {} ([] ∷ Array {})
             TU.test "update" do
                   let (plan /\ q /\ pr) = Nothing /\ """UPDATE users SET "name" = @name WHERE "id" = @id""" /\ { name: "Suzy", id: 23 }
-                  let Query _ dollaredQ parameters = Query.unsafeQuery plan q pr
+                  let Query _ dollaredQ parameters = DLIQ.unsafeBuildQuery plan q pr
                   --parameters are replaced by field order
                   TUA.equal """UPDATE users SET "name" = $2 WHERE "id" = $1""" dollaredQ
                   TUA.equal 2 $ DA.length parameters
@@ -47,7 +47,7 @@ tests = do
                   TM.unsafeResult plan q pr ([] ∷ Array {})
             TU.test "delete" do
                   let (plan /\ q /\ pr) = Nothing /\ "DELETE FROM users WHERE joined = @joined" /\ { joined: TM.makeDate 2000 1 1 }
-                  let Query _ dollaredQ parameters = Query.unsafeQuery plan q pr
+                  let Query _ dollaredQ parameters = DLIQ.unsafeBuildQuery plan q pr
                   --parameters are replaced by field order
                   TUA.equal "DELETE FROM users WHERE joined = $1" dollaredQ
                   TUA.equal 1 $ DA.length parameters
