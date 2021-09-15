@@ -34,16 +34,16 @@ messages :: Table "messages" Messages
 messages = Table
 ```
 
-`Users` refers to the table columns, whereas `users` ties it together with the table name onto the data type `Table`. `Auto` and `Default` refer to identity and default columns. Expectedly, `Maybe` signals nullable columns.
+`Users` refers to the table columns, whereas `users` ties the columns with the table name. `Auto` and `Default` refer to identity and default columns. Expectedly, `Maybe` represent nullable columns.
 
 Since the columns are at type level, we need `Proxy`s to represent their names
 
 ```haskell
 id :: Proxy "id"
-"id" = Proxy
+id = Proxy
 
 name :: Proxy "name"
-"name" = Proxy
+name = Proxy
 
 date :: Proxy "date"
 date = Proxy
@@ -73,7 +73,7 @@ t = Proxy
 
 * Query types
 
-The eDSL is designed to be composable, and resemble SQL syntax as much as possible with the generated code being a direct equivalent. For these reasons, function types are somewhat opaque. On the other hand, data types (such as for SELECT, WHERE or JOIN) become quite verbose quite fast. Luckily, when writing queries, type annotations are optional: the type checker should be able to infer the type of valid queries without any hints. That being said, specially when debugging type errors in your queries, it might be useful to know some of the conventions employed in the eDSL.
+The eDSL is designed to be composable, and resemble SQL syntax as much as possible so the generated code is a direct equivalent. For those reasons, function types are somewhat opaque. On the other hand, data types (such as for SELECT, WHERE or JOIN) can become quite verbose quite fast. Luckily, when writing queries, type annotations are optional: the type checker should be able to infer the type of valid queries without any hints. That being said, specially when debugging type errors in your queries, it might be useful to know some of the conventions employed in the eDSL.
 
 ```haskell
 -- select :: forall s projection. ToSelect s => s -> Select s projection E
@@ -92,7 +92,7 @@ To aid composition, functions are designed to be take the current query as their
 
 2. `To` type classes
 
-Type classes in the form `ToFrom`, `ToWhere` etc, are used to tell which statements are allowed before (e.g., FROM can only follow after SELECT or DELETE). These type classes have no function members
+Type classes in the form `ToFrom`, `ToWhere` etc, are used to tell which statements are allowed in sequence (e.g., FROM can only follow after SELECT or DELETE, etc). These type classes have no function members
 
 3. `Resume` type class
 
@@ -109,12 +109,13 @@ select :: forall s projection. ToSelect s => s -> Select s projection E
 
 ### Projections
 
-`select` can project columns, aliased literals, subqueries and functions.
+`select` can project columns, literals, subqueries and functions and star.
 
 ```haskell
 selectColumn :: forall projection. Select (Proxy "id") projection E
 selectColumn = select id
 
+-- literals must be aliased
 selectLiteral :: forall projection. Select (As "m" Int) projection E
 selectLiteral = select (3 # as m)
 
@@ -125,6 +126,13 @@ selectStar = select star
 selectQualifiedColumn :: forall projection. Select (Path "u" "id") projection E
 selectQualifiedColumn = select (u ... id)
 
+-- functions must be aliased
+selectCount :: forall projection fields. Select (As "u" (Aggregate Star E fields BigInt)) projection E
+selectCount = select (count star # as u)
+
+selectSubQuery :: _
+selectSubQuery = select (select name # from users # wher (u ... id .=. id) # orderBy id # limit 1) # from (messages # as u)
+
 selectManyColumns :: forall projection. Select (Tuple (Proxy "id") (Tuple (Proxy "name") (Tuple (As "u" Int) (Path "m" "id")))) projection E
 selectManyColumns = select (id /\ name /\ (5 # as u) /\ m ... id)
 ```
@@ -132,15 +140,24 @@ selectManyColumns = select (id /\ name /\ (5 # as u) /\ m ... id)
 In the case of fully formed SELECT statements, `projection` becomes a `Row Type` of the output
 
 ```haskell
-exampleProjection :: Select (Proxy "id") (id :: Int) _
-exampleProjection = select id # from users
+exampleProjection :: Select (Tuple (Proxy "id") (Proxy "name")) (id :: Int, name :: String) _
+exampleProjection = select (id /\ name) # from users
 ```
 
-Note that `select` on its own accepts any column name. Queries are checked after FROM is used.
+Note that `select` on its own accepts any column name. Queries are checked only after FROM is used.
 
 ### Subqueries
 
+Subqueries must return a single column. Columns from outer scopes can be referenced with `(alias ... column)`.
+
+```haskell
+subQueryExample :: _
+subQueryExample = select (select name # from users # wher (u ... id .=. id) # orderBy id # limit 1) # from (messages # as u)
+```
+
 ### Functions
+
+
 
 ### DISTINCT
 
@@ -154,7 +171,7 @@ DISTINCT is subject the same rules as SELECT.
 selectDistinctColumn :: Select (Distinct (Proxy "id")) (id :: Int) _
 selectDistinctColumn = select (distinct id) # from users
 
-selectDistinctColumns :: Select (Distinct (Tuple (Proxy "id") (Tuple (Proxy "name") (Proxy "birthday"))))  (birthday :: Maybe Date, id :: Int, name :: String) _
+selectDistinctColumns :: Select (Distinct (Tuple (Proxy "id") (Tuple (Proxy "name") (Proxy "birthday")))) (birthday :: Maybe Date, id :: Int, name :: String) _
 selectDistinctColumns = select (distinct $ id /\ name /\ birthday) # from users
 ```
 
@@ -182,7 +199,7 @@ or with a alias
 
 ```haskell
 fromTableAlias :: Select (Proxy "id") (id :: Int) _
-fromTableAlias = select id # from (users # as u) -- SELECT "id" FROM users AS u
+fromTableAlias = select id # from (users # as u) -- SELECT id FROM users AS u
 
 fromTableAlias2 :: Select (Path "u" "id") ("u.id" :: Int) _
 fromTableAlias2 = select (u ... id) # from (users # as u) -- SELECT u.id FROM users AS u
@@ -194,9 +211,7 @@ Subqueries in FROM must have an alias
 
 ```haskell
 fromSubQuery :: Select (Proxy "name") (name :: String) _
-fromSubQuery = select name # from (select star # from users # as u) -- SELECT "name" FROM (SELECT * FROM users) AS u
-
---example with union
+fromSubQuery = select name # from (select star # from users # as u) -- SELECT name FROM (SELECT * FROM users) AS u
 ```
 
 * Join
@@ -230,13 +245,11 @@ queryOuterJoin = select (u ... name /\ m ... sender) # from ((messages # as m) `
 
 ### LIMIT
 
+### OFFSET
+
 ### UNION
 
 ## WHERE
-
-### IN
-
-### EXISTS
 
 ## INSERT
 

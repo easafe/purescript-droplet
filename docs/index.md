@@ -5,9 +5,9 @@ title: Getting started
 
 ## Composable, type-safe eDSL and query mapper for PureScript targeting PostgreSQL
 
-Droplet is a bit different from other PureScript (or Haskell) SQL libraries. There is no monads, functions to yield columns, or a higher level API abstracting away from the generated SQL query. Instead, the eDSL is made out exclusively of combinators (nearly) identical to their SQL statement counterparts. Likewise, the output of a query is automatically inferred from its projection with almost no need for type annotations or boilerplate type class instances.
+Droplet is a bit different from other PureScript (or Haskell) SQL libraries. There is no monads, functions to yield columns, or a higher level API abstracting away from the generated SQL query. Instead, the eDSL is made out exclusively of combinators (nearly) identical to their SQL statement counterparts. Likewise, the output of a query is automatically inferred from its projection with almost no need for type annotations or boilerplate mapping type class instances.
 
-This guide first covers the syntax used by the eDSL, then how to run queries using a query mapper. Since the eDSL is just plain ol' functions, it can be be stored, composed, passed around like any other value. Likewise, the query mapper is independent from the eDSL -- it can be also used for unsafe queries.
+This guide first covers the syntax used by the eDSL, then how to run queries using a query mapper. The eDSL aims to make the keywords you already know (SELECT, WHERE, ORDER BY, JOIN, etc) composable. Likewise, the query mapper is independent from the eDSL -- it can be also used for unsafe queries.
 
 If you'd like to try the code examples, the following schema will be used throughout
 

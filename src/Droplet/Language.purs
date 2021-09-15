@@ -44,6 +44,7 @@ import Droplet.Language.Internal.Function
       , string_agg
       , function
       , function'
+      , Aggregate
       , FunctionSignature
       , FunctionSignature'
       , random

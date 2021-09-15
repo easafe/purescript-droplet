@@ -135,6 +135,7 @@ OFFSET
 
 -}
 
+
 -- | SELECT representation. `projection` refers to the final output of this statement
 data Select s (projection ∷ Row Type) rest = Select s rest
 
@@ -203,7 +204,7 @@ distinct = Distinct
 -------------------------------FROM----------------------------
 
 --as it is, From does not try to carry all source fields (for example qualified and unqualified columns from table as alias)
--- reason being, it makes projection code a lot harder for joins and selet *
+-- reason being, it makes projection code a lot harder for joins and select *
 -- this can change if a simpler design is found
 data From f (fields ∷ Row Type) rest = From f rest
 
@@ -463,7 +464,7 @@ instance
       ) ⇒
       GroupByFields (a /\ b) fields grouped
 
--- | Asserts that a SELECT ... GROUP BY projection contains only grouped columns or aggreagate functions
+-- | Asserts that a SELECT ... GROUP BY projection contains only grouped columns or aggregate functions
 class ValidGroupByProjection (s ∷ Type) (grouped ∷ Row Type) | s → grouped
 
 instance Cons name t e grouped ⇒ ValidGroupByProjection (Proxy name) grouped
