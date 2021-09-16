@@ -98,7 +98,7 @@ Type classes in the form `ToFrom`, `ToWhere` etc, are used to tell which stateme
 
 eDSL functions mark the end of a statement with the `E` data type. The type class `Resume` replaces it with a further statement, for example, `Select s projection E` => `Select s projection (From f fields E)`
 
-Lastly, tuples (via `/\`) stand in for commas, e.g., `select (column /\ column2 /\ columnN) ... groupBy (column /\ column2 /\ columnN) ... orderBy (column /\ column2 /\ columnN)`.
+Lastly, tuples (via `/\`) stand in for commas, e.g., `select (column /\ column2 /\ columnN) ... groupBy (column /\ column2 /\ columnN) ... orderBy (column /\ column2 /\ columnN)` == `SELECT column, column2, columnN ... GROUP BY column, column2, columnN ... ORDER BY column, column2, columnN`
 
 
 ## SELECT
@@ -173,10 +173,10 @@ As per SQL standard, aggregations must either be the only column projected or be
 
 ```haskell
 -- represents a function that takes arguments
-function ∷ forall input output. String -> FunctionSignature input output
+function :: forall input output. String -> FunctionSignature input output
 
 -- represents a function that takes no arguments
-function' ∷ forall output. String -> FunctionSignature' output
+function' :: forall output. String -> FunctionSignature' output
 
 -- example of defining array_agg for integer inputs
 int_array_agg :: FunctionSignature Int (Maybe (Array Int))
@@ -186,7 +186,7 @@ int_array_agg = function "array_agg"
 Be aware that functions must be aliased
 
 ```haskell
-selectCoalesce :: forall projection fields. Select (As "u" (Aggregate Star E fields BigInt)) projection E _
+selectCoalesce :: Select (As "u" (PgFunction (Tuple (Proxy "id") Int) (Tuple (Proxy "id") Int) Users (Maybe Int))) (u :: Maybe Int) _
 selectCoalesce = select (coalesce (id /\ 4) # as u) # from users
 ```
 
