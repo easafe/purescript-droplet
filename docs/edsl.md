@@ -98,6 +98,8 @@ Type classes in the form `ToFrom`, `ToWhere` etc, are used to tell which stateme
 
 eDSL functions mark the end of a statement with the `E` data type. The type class `Resume` replaces it with a further statement, for example, `Select s projection E` => `Select s projection (From f fields E)`
 
+Lastly, tuples (via `/\`) stand in for commas, e.g., `select (column /\ column2 /\ columnN) ... groupBy (column /\ column2 /\ columnN) ... orderBy (column /\ column2 /\ columnN)`.
+
 
 ## SELECT
 
@@ -157,7 +159,36 @@ subQueryExample = select (select name # from users # wher (u ... id .=. id) # or
 
 ### Functions
 
+Droplet offers a few functions built-in:
 
+* `count`
+
+* `string_agg`
+
+* `coalesce`
+
+* `random`
+
+As per SQL standard, aggregations must either be the only column projected or be in a GROUP BY query. User defined (or missing) functions can be declared using `function` (or `function'`)
+
+```haskell
+-- represents a function that takes arguments
+function ∷ forall input output. String -> FunctionSignature input output
+
+-- represents a function that takes no arguments
+function' ∷ forall output. String -> FunctionSignature' output
+
+-- example of defining array_agg for integer inputs
+int_array_agg :: FunctionSignature Int (Maybe (Array Int))
+int_array_agg = function "array_agg"
+```
+
+Be aware that functions must be aliased
+
+```haskell
+selectCoalesce :: forall projection fields. Select (As "u" (Aggregate Star E fields BigInt)) projection E _
+selectCoalesce = select (coalesce (id /\ 4) # as u) # from users
+```
 
 ### DISTINCT
 
@@ -218,16 +249,34 @@ fromSubQuery = select name # from (select star # from users # as u) -- SELECT na
 
 To be parsed correctly, joins must be bracketed into FROM. Joined expressions can any valid FROM expression, that is, tables, sub queries, other joins, etc. Currently, a following ON clause is mandatory.
 
+In the case of overlapping fields in joined sources, an alias is required for disambiguation. For example, if the two following tables are joined
+
+```haskell
+type T1 = (
+    id :: Int,
+    name :: String,
+    joined :: Date
+)
+
+type T2 = (
+    id :: Int,
+    name :: String,
+    birthday :: Date
+)
+```
+
+the columns `id` and `name` are not visible -- they must be accessed through `(alias ... colum)` since they are not unique. `birthday` and `joined` however are not repeated in both tables and can be accessed both with and without an alias.
+
 1. INNER JOIN
 
 Returns a cartesian product of both expressions
 
 ```haskell
 queryInnerJoin :: Select (Path "u" "name") ("u.name" :: String) _
-queryInnerJoin = select ( u ... name) # from ((messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name FROM messages AS m INNER JOIN users AS u ON m.sender = u.id
+queryInnerJoin = select (u ... name) # from ((messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name FROM messages AS m INNER JOIN users AS u ON m.sender = u.id
 
-queryInnerJoin2 :: Select (Tuple (Path "u" "name") (Path "m" "sender")) ("m.sender" :: Int, "u.name" :: String) _
-queryInnerJoin2 = select ( u ... name /\ m ... sender) # from ((select sender # from messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM (SELECT "sender" FROM messages) AS m INNER JOIN users AS u ON m.sender = u.id
+queryInnerJoin2 :: Select (Tuple (Proxy "name") (Proxy "sender")) ( name :: String, sender :: Int) _
+queryInnerJoin2 = select (name /\ sender) # from ((select sender # from messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT name, sender FROM (SELECT "sender" FROM messages) AS m INNER JOIN users AS u ON m.sender = u.id
 ```
 
 2. LEFT OUTER JOIN
@@ -235,11 +284,18 @@ queryInnerJoin2 = select ( u ... name /\ m ... sender) # from ((select sender # 
 Returns a cartesian product of both expressions plus each row in the left hand expression that had no match on the right side. Right side columns will become `Maybe` in the projection type.
 
 ```haskell
-queryOuterJoin :: Select (Tuple (Path "u" "name") (Path "m" "sender")) ("m.sender" :: Int, "u.name" :: Maybe String) _
-queryOuterJoin = select (u ... name /\ m ... sender) # from ((messages # as m) `leftJoin` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name, m.sender FROM messages AS m OUTER JOIN users AS u ON m.sender = u.id
+queryOuterJoin :: Select (Tuple (Proxy "name") (Path "m" "sender")) ("name" :: Maybe String, "m.sender" :: Int) _
+queryOuterJoin = select (name /\ m ... sender) # from ((messages # as m) `leftJoin` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT name, m.sender FROM messages AS m OUTER JOIN users AS u ON m.sender = u.id
 ```
 
 ### GROUP BY
+
+Expectedly, GROUP BY queries limit SELECT projection to grouped columns or aggregations
+
+```haskell
+selectGroupBy :: _
+selectGroupBy = select ((count id # as b) /\ name) # from users # groupBy (id /\ name) # orderBy id
+```
 
 ### ORDER BY
 
