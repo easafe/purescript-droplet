@@ -22,10 +22,10 @@ tests = do
                         let q = insert # into tags name # values "my tag"
                         TM.parameterized """INSERT INTO tags("name") VALUES ($1)""" $ DLIQ.buildQuery q
                         TM.result' q []
-                  TU.test "default values" do
-                        let q = insert # into users (name /\ surname /\ joined) # values ("josh" /\ "a" /\ Default)
-                        TM.parameterized """INSERT INTO users("name", "surname", "joined") VALUES ($1, $2, DEFAULT)""" $ DLIQ.buildQuery q
-                        TM.result' q []
+                  -- TU.test "default values" do
+                  --       let q = insert # into users (name /\ surname /\ joined) # values ("josh" /\ "a" /\ Default)
+                  --       TM.parameterized """INSERT INTO users("name", "surname", "joined") VALUES ($1, $2, DEFAULT)""" $ DLIQ.buildQuery q
+                  --       TM.result' q []
                   TU.suite "multiple" do
                         TU.test "all fields" do
                               let
