@@ -17,8 +17,7 @@
         "purescript-aff": "^v6.0.0",
         "purescript-arrays": "^v6.0.1",
         "purescript-bifunctors": "^v5.0.0",
-        "purescript-bigints": "^v5.0.0",
-        "purescript-console": "^v5.0.0",
+        "purescript-bigints": "^v6.0.0",
         "purescript-datetime": "^v5.0.2",
         "purescript-debug": "^v5.0.0",
         "purescript-effect": "^v3.0.0",
@@ -39,8 +38,9 @@
         "purescript-record": "^v3.0.0",
         "purescript-strings": "^v5.0.0",
         "purescript-test-unit": "^v16.0.0",
-        "purescript-transformers": "^v5.1.0",
+        "purescript-transformers": "^v5.2.0",
         "purescript-tuples": "^v6.0.1",
+        "purescript-type-equality": "^v4.0.0",
         "purescript-typelevel-prelude": "^v6.0.0",
         "purescript-unsafe-coerce": "^v5.0.0"
     }
