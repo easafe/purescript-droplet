@@ -100,7 +100,6 @@ eDSL functions mark the end of a statement with the `E` data type. The type clas
 
 Lastly, tuples (via `/\`) stand in for commas, e.g., `select (column /\ column2 /\ columnN) ... groupBy (column /\ column2 /\ columnN) ... orderBy (column /\ column2 /\ columnN)` == `SELECT column, column2, columnN ... GROUP BY column, column2, columnN ... ORDER BY column, column2, columnN`
 
-
 ## SELECT
 
 SELECT is typed as
@@ -206,7 +205,6 @@ selectDistinctColumns :: Select (Distinct (Tuple (Proxy "id") (Tuple (Proxy "nam
 selectDistinctColumns = select (distinct $ id /\ name /\ birthday) # from users
 ```
 
-
 ### FROM
 
 FROM statement keeps track of columns in scope. For this reason, its type is a bit more complex than SELECT
@@ -290,6 +288,10 @@ queryOuterJoin = select (name /\ m ... sender) # from ((messages # as m) `leftJo
 
 ### GROUP BY
 
+```haskell
+groupBy:: forall f s q sql grouped fields. ToGroupBy q s fields => GroupByFields f fields grouped => ValidGroupByProjection s grouped => Resume q (GroupBy f E) sql => f -> q -> sql
+```
+
 Expectedly, GROUP BY queries limit SELECT projection to grouped columns or aggregations
 
 ```haskell
@@ -299,13 +301,88 @@ selectGroupBy = select ((count id # as b) /\ name) # from users # groupBy (id /\
 
 ### ORDER BY
 
+```haskell
+orderBy :: ∀ f q sql. ToOrderBy f q => Resume q (OrderBy f E) sql => f -> q -> sql
+```
+
+Currently, ORDER BY statements can sort queries only by columns. Note that in DISTINCT queries only the projected fields can be used for sorting.
+
+```haskell
+selectOrderBy :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") E))
+selectOrderBy = select name # from users # orderBy id
+```
+
 ### LIMIT
+
+```haskell
+limit ∷ ∀ q sql. ToLimit q ⇒ Resume q (Limit E) sql ⇒ Int → q → sql
+```
+
+LIMIT must always follow ORDER BY (or OFFSET), as otherwise query order is unspecified.
+
+```haskell
+selectLimit :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") (Limit E)))
+selectLimit = select name # from users # orderBy id # limit 1
+```
+
+Only number literals are currently supported.
 
 ### OFFSET
 
+```haskell
+offset ∷ ∀ q sql. ToOffset q ⇒ Resume q (Offset E) sql ⇒ Int → q → sql
+```
+
+OFFSET must always follow ORDER BY (or LIMIT), as otherwise query order is unspecified.
+
+```haskell
+selectOffset :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") (Offset E)))
+selectOffset = select name # from users # orderBy id # offset 5
+```
+
+Only number literal are currently supported.
+
 ### UNION
 
+```haskell
+union ∷ ∀ q r. ToUnion q r ⇒ q → r → Union q r
+
+unionAll ∷ ∀ q r. ToUnion q r ⇒ q → r → Union q r
+```
+
+UNION removes duplicates, UNION ALL keeps results as it is. Right and left hand side projections types and column count must match.
+
+```haskell
+selectUnion :: _
+selectUnion = (select id # from users # wher (name .=. "mary")) `union` (select id # from users # wher (name .=. "john"))
+```
+
 ## WHERE
+
+```haskell
+wher ∷ ∀ c q sql. ToWhere c q ⇒ Resume q (Where c E) sql ⇒ c → q → sql
+```
+
+The usual operators (e.g., equals, not equals, greater/lesser than, etc.) are surrounded by dots (e.g., `.=.`, `.<>.`, `.>.`, `.<.`). In addition, `NOT`, `EXISTS`, `IN` and `IS NOT NULL` are currently supported. `AND` and `OR` are represented by the operators `.&&.` and `.||.` to help avoiding brackets.
+
+Literal values are replaced with Postgres parameters.
+
+```haskell
+selectWhereEquals :: _
+selectWhereEquals = select recipient # from messages # wher (sender .=. 1) -- SELECT recipient FROM messages WHERE sender = $1
+
+selectWhereAnd :: _
+selectWhereAnd = select id # from users # wher (name .=. "josh" .&&. name .<>. surname) -- SELECT id FROM users WHERE name = $1 AND name <> surname
+
+selectWhereOr :: _
+selectWhereOr = select id # from users # wher (name .=. "mary" .||. name .=. surname) -- SELECT id FROM users WHERE name = $1 OR name = surname
+
+selectWhereIn :: _
+selectWhereIn = select id # from users # wher (id `in_` [ 3, 4, 5 ]) -- SELECT id FROM users WHERE id IN $1
+
+selectWhereExists :: _
+selectWhereExists = select id # from users # wher (exists $ select id # from users)
+```
 
 ## INSERT
 

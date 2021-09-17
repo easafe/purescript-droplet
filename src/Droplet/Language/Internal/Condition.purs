@@ -28,7 +28,7 @@ data IsNotNull = IsNotNull
 
 derive instance Eq BinaryOperator
 
--- | Wrapper for comparisions
+-- | Wrapper for comparisons
 data Op b c = Op (Maybe BinaryOperator) b c
 
 data OuterScope
@@ -55,7 +55,7 @@ else instance ToCondition a fields alias ⇒ ToCondition (Op Not a) fields alias
 -- | IN values
 else instance ToCondition (Op a b) fields alias ⇒ ToCondition (Op In (Op a (Array b))) fields alias
 
--- | Comparisions
+-- | Comparisons
 else instance
       ( Comparision a fields alias t
       , Comparision b fields alias u
