@@ -38,8 +38,8 @@ import Prim.TypeError (class Fail, Text)
 import Record as R
 import Type.Proxy (Proxy(..))
 
-foreign import readInt :: Foreign -> Nullable Int
-foreign import showForeigner :: Foreign -> String
+foreign import readInt ∷ Foreign → Nullable Int
+foreign import showForeigner ∷ Foreign → String
 
 -- | Marks the query end
 data E = E
@@ -52,17 +52,17 @@ star ∷ Star
 star = Star
 
 -- | Identity fields
-newtype Auto a = Auto a
+data Auto (a :: Type)
 
--- | Defaul constraints
-newtype Default a = Default a
+-- | Default constraints
+data Default (a :: Type) = Default
 
 -- | A trick to mark left joined columns as nullable
-newtype Joined a = Joined a
+data Joined (a :: Type)
 
 data Table (name ∷ Symbol) (fields ∷ Row Type) = Table
 
--- | Qualifieds columns (e.g, table.column)
+-- | Qualified columns (e.g, table.column)
 data Path (alias ∷ Symbol) (field ∷ Symbol) = Path
 
 path ∷ ∀ alias field path pathField. Append alias Dot path ⇒ Append path field pathField ⇒ Proxy alias → Proxy field → Path alias field
@@ -73,12 +73,6 @@ infix 7 path as ...
 derive instance Eq a ⇒ Eq (Default a)
 
 derive instance Eq a ⇒ Eq (Auto a)
-
-instance Show a ⇒ Show (Default a) where
-      show (Default a) = show a
-
-instance Show a ⇒ Show (Auto a) where
-      show (Auto a) = show a
 
 class ToValue v where
       toValue ∷ v → Foreign
@@ -94,12 +88,6 @@ instance ToValue Boolean where
 
 instance ToValue Number where
       toValue = F.unsafeToForeign
-
-instance ToValue a ⇒ ToValue (Default a) where
-      toValue (Default a) = toValue a
-
-instance ToValue a ⇒ ToValue (Auto a) where
-      toValue (Auto a) = toValue a
 
 instance ToValue a ⇒ ToValue (Maybe a) where
       toValue = case _ of
@@ -137,8 +125,8 @@ class FromValue t where
 --in the two former cases, readInt returns null, as well in the latter if the string can't be parsed as an integer
 instance FromValue Int where
       fromValue i = case DN.toMaybe $ readInt i of
-            Nothing -> Left $ "Could not parse value as integer: " <> showForeigner i
-            Just int -> Right int
+            Nothing → Left $ "Could not parse value as integer: " <> showForeigner i
+            Just int → Right int
 
 instance FromValue String where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readString
@@ -152,12 +140,6 @@ instance FromValue Number where
 --tricky, since pg might return empty string for select some_side_effect_function()
 instance FromValue Unit where
       fromValue _ = Right unit
-
-instance FromValue v ⇒ FromValue (Default v) where
-      fromValue v = Default <$> fromValue v
-
-instance FromValue v ⇒ FromValue (Auto v) where
-      fromValue v = Auto <$> fromValue v
 
 instance FromValue v ⇒ FromValue (Array v) where
       fromValue = DT.traverse fromValue <=< DB.lmap show <<< CME.runExcept <<< F.readArray

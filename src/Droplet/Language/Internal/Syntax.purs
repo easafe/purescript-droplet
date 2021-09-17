@@ -759,7 +759,7 @@ else instance
       ) ⇒
       RequiredFields (Cons name t rest) required
 
-class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type) -- | fieldNames → fields t
+class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type)
 
 instance InsertValues fields (Proxy name) u ⇒ InsertValues fields (Proxy name) (Array u)
 

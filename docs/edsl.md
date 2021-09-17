@@ -386,6 +386,19 @@ selectWhereExists = select id # from users # wher (exists $ select id # from use
 
 ## INSERT
 
+INSERT can be single or multiple values; any number of columns can be specified as long mandatory columns are included.
+
+```haskell
+insertSingle :: _
+insertSingle = insert # into users (name) # values ("mary")
+
+insertDefault :: _
+insertDefault = insert # into messages (sender /\ recipient /\ date) # values (5 /\ 9 /\ Default)
+
+insertMultiple :: _
+insertMultiple = insert # into users (name /\ birthday) # values ["mary" /\ Just date, "josh" /\ Nothing]
+```
+
 ## UPDATE
 
 ## DELETE
