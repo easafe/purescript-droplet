@@ -401,16 +401,69 @@ insertMultiple = insert # into users (name /\ birthday) # values ["mary" /\ Just
 
 ## UPDATE
 
+UPDATE queries can be as it is or with a WHERE clause.
 
+```haskell
+updateQuery :: _
+updateQuery = update users # set ((name .=. "Mary") /\ (birthday .=. Nothing))
+
+updateWhere :: _
+updateWhere = update users # set ((name .=. "Mary") /\ (birthday .=. Nothing)) # where (id .=. 4)
+```
 
 ## DELETE
 
+DELETE queries can be as it is or with a WHERE clause.
+
+```haskell
+deleteQuery :: Delete (From (Table "users" Users) Users E)
+deleteQuery = delete # from users
+
+deleteWhere :: _
+deleteWhere = delete # from users # where (id .=. 4)
+```
+
 ## RETURNING
+
+RETURNING can output columns from INSERT, UPDATE and DELETE
+
+```haskell
+insertReturning :: _
+insertReturning = insert # into users (name) # values ("mary") # returning id
+
+updateReturning :: _
+updateReturning = update users # set ((name .=. "Mary") /\ (birthday .=. Nothing)) # where (id .=. 4) # returning (id /\ name)
+
+deleteReturning :: _
+deleteReturning = delete # from users # returning birthday
+```
 
 ## AS
 
+AS can be used to alias columns, tables and queries.
+
+```haskell
+asColumn :: _
+asColumn = select (id # as m) # from users
+
+asTable :: _
+asTable = select id # from (users # as m)
+
+asQuery :: _
+asQuery = select id # from (select star # from users # as m)
+```
+
+Be aware of bracketing, `select id # from (select star # from users # as m)` is parsed SELECT id FROM (SELECT * FROM users) AS m whereas `select id # from (select star # from users) # as m` results in a type error.
+
 ## PREPARE
 
+Prepared statements can be done with `prepare`.
+
+```haskell
+prepare ∷ ∀ q. ToPrepare q ⇒ Plan → q → Prepare q
+```
+
+Only the plan name is required. Parameters will be automatically parsed from the query.
 
 <a href="/index" class="direction previous">Previous: Getting started</a>
 <a href="/mapper" class="direction">Next: Query Mapper</a>
