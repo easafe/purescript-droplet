@@ -22,6 +22,8 @@ Install
 
 ```
 npm i big-integer pg
+
+spago install droplet
 ```
 
 Write some SQL
@@ -178,8 +180,6 @@ runSql connection = do
 
             _, _ -> pure unit
 ```
-
-
 
 ### Licensing
 

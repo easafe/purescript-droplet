@@ -9,6 +9,14 @@ Droplet is a bit different from other PureScript (or Haskell) SQL libraries. The
 
 This guide first covers the syntax used by the eDSL, then how to run queries using a query mapper. The eDSL aims to make the keywords you already know (SELECT, WHERE, ORDER BY, JOIN, etc) composable. Likewise, the query mapper is independent from the eDSL -- it can be also used for unsafe queries.
 
+Installation:
+
+```
+npm i big-integer pg
+
+spago install droplet
+```
+
 If you'd like to try the code examples, the following schema will be used throughout
 
 ```sql
