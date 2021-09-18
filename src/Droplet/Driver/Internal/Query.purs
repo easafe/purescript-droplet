@@ -176,11 +176,11 @@ withClient p k = bracket (connect p) cleanup run
 connect ∷ Pool → Aff (Either PgError ConnectResult)
 connect = EAC.fromEffectFnAff <<< connect_ rightLeft
 
--- | Trivial helper / shortcut which also wraps
--- | the connection to provide `Connection`.
+-- | Runs queries with a connection
 withConnection ∷ ∀ a. Pool → (Either PgError Connection → Aff a) → Aff a
 withConnection p k = withClient p (lcmap (map fromClient) k)
 
+-- | Runs queries within a transaction
 withTransaction ∷ ∀ a. Pool → (Connection → Aff a) → Aff (Either PgError a)
 withTransaction pool action = withClient pool case _ of
       Right client → withClientTransaction client (action $ fromClient client)

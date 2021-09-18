@@ -74,6 +74,7 @@ derive instance Eq a ⇒ Eq (Default a)
 
 derive instance Eq a ⇒ Eq (Auto a)
 
+-- | Converts a PureScript value into Postgres
 class ToValue v where
       toValue ∷ v → Foreign
 
@@ -118,6 +119,7 @@ formatDate date = show y <> "-" <> show m <> "-" <> show d
       m = DEN.fromEnum $ DD.month date
       d = DEN.fromEnum $ DD.day date
 
+-- | Converts a Postgres value into PureScript
 class FromValue t where
       fromValue ∷ Foreign → Either String t
 
@@ -229,7 +231,7 @@ instance
             where
             name = Proxy ∷ Proxy name
 
--- | Simplify append qualifiying column names
+-- | Simplify append qualifying column names
 class AppendPath (alias ∷ Symbol) (name ∷ Symbol) (fullPath ∷ Symbol) | alias name → fullPath
 
 instance (Append alias Dot path, Append path name fullPath) ⇒ AppendPath alias name fullPath
