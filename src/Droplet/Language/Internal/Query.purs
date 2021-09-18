@@ -1,7 +1,7 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class ArgumentList, argumentList, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class NameList, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, nameList, translateConditions, toFieldValuePairs, toFieldValues, translate, buildQuery, unsafeBuildQuery) where
+module Droplet.Language.Internal.Query (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class ArgumentList, argumentList, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class NameList, class ToFieldValuePairs, class ValueList, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, nameList, translateConditions, toFieldValuePairs, valueList, translate, buildQuery, unsafeBuildQuery) where
 
 import Control.Monad.State (State)
 import Control.Monad.State as CMS
@@ -20,9 +20,9 @@ import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
-import Droplet.Language.Internal.Definition (class AppendPath, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, E(..), Path, Star, Table, toParameters, toValue)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Default(..), E(..), Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
-import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
@@ -651,12 +651,12 @@ printInclusion = case _ of
 instance
       ( IsSymbol name
       , NameList fieldNames
-      , ToFieldValues v
+      , ValueList v
       , Translate rest
       ) ⇒
       Translate (Insert (Into name fields fieldNames (Values v rest))) where
       translate (Insert (Into fieldNames (Values v rest))) = do
-            q ← toFieldValues v
+            q ← valueList v
             otherQ ← translate rest
             pure $ insertKeyword
                   <> DS.reflectSymbol (Proxy ∷ Proxy name)
@@ -685,7 +685,7 @@ instance (IsSymbol alias, IsSymbol name) ⇒ NameList (Path alias name) where
 instance NameList Star where
       nameList _ = starSymbol
 
-instance (NameList f, NameList rest) ⇒ NameList (Tuple f rest) where
+instance (NameList f, NameList rest) ⇒ NameList (f /\ rest) where
       nameList (Tuple f rest) = nameList f <> comma <> nameList rest
 
 -- | Name list for functions, or when fields and parameters can be mixed
@@ -724,32 +724,35 @@ else instance ArgumentList Unit where
 else instance ArgumentList E where
       argumentList _ = pure ""
 
-else instance (ArgumentList f, ArgumentList rest) ⇒ ArgumentList (Tuple f rest) where
-      argumentList (Tuple f rest) = do
+else instance (ArgumentList f, ArgumentList rest) ⇒ ArgumentList (f /\ rest) where
+      argumentList (f /\ rest) = do
             af ← argumentList f
             ar ← argumentList rest
             pure $ af <> comma <> ar
 
-else instance ToFieldValues v ⇒ ArgumentList v where
-      argumentList v = toFieldValues v
+else instance ValueList v ⇒ ArgumentList v where
+      argumentList v = valueList v
 
-class ToFieldValues fieldValues where
-      toFieldValues ∷ fieldValues → State QueryState String
+class ValueList fieldValues where
+      valueList ∷ fieldValues → State QueryState String
 
-instance (ToFieldValues p, ToFieldValues rest) ⇒ ToFieldValues (Tuple p rest) where
-      toFieldValues (Tuple p rest) = do
-            q ← toFieldValues p
-            otherQ ← toFieldValues rest
+instance (ValueList p, ValueList rest) ⇒ ValueList (p /\ rest) where
+      valueList (p /\ rest) = do
+            q ← valueList p
+            otherQ ← valueList rest
             pure $ q <> comma <> otherQ
 
-else instance ToFieldValues u ⇒ ToFieldValues (Array u) where
-      toFieldValues values = do
-            q ← DF.traverse toFieldValues values
+else instance ValueList u ⇒ ValueList (Array u) where
+      valueList values = do
+            q ← DF.traverse valueList values
             let sep = closeBracket <> comma <> openBracket --work around Translate Insert adding brackets
             pure $ DST.joinWith sep q
 
-else instance ToValue p ⇒ ToFieldValues p where
-      toFieldValues p = do
+else instance ValueList (Default t) where
+      valueList _ = pure defaultKeyword
+
+else instance ToValue p ⇒ ValueList p where
+      valueList p = do
             { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ toValue p }
             pure $ "$" <> show (DA.length parameters)
 

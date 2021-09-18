@@ -761,8 +761,13 @@ else instance
 
 class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type)
 
+-- | Multiple values, single column
 instance InsertValues fields (Proxy name) u ⇒ InsertValues fields (Proxy name) (Array u)
 
+-- | DEFAULT
+else instance Cons name (Default t) e fields ⇒ InsertValues fields (Proxy name) (Default t)
+
+-- | Values
 else instance
       ( UnwrapDefinition t u
       , Cons name t e fields
@@ -770,8 +775,10 @@ else instance
       ) ⇒
       InsertValues fields (Proxy name) u
 
+-- | Column list
 else instance (InsertValues fields name value, InsertValues fields some more) ⇒ InsertValues fields (name /\ some) (value /\ more)
 
+-- | Multiple values, many columns
 else instance (InsertValues fields (name /\ some) (value /\ more)) ⇒ InsertValues fields (name /\ some) (Array (value /\ more))
 
 insert ∷ Insert E

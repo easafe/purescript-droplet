@@ -37,6 +37,9 @@ asKeyword = " AS "
 innerKeyword ∷ String
 innerKeyword = " INNER "
 
+defaultKeyword ∷ String
+defaultKeyword = "DEFAULT"
+
 joinKeyword ∷ String
 joinKeyword = "JOIN "
 

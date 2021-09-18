@@ -83,6 +83,9 @@ instance ToValue Int where
 instance ToValue String where
       toValue = F.unsafeToForeign
 
+instance ToValue (Default t) where
+      toValue _ = F.unsafeToForeign $ DN.null
+
 instance ToValue Boolean where
       toValue = F.unsafeToForeign
 
