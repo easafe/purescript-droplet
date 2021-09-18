@@ -9,7 +9,7 @@ Before looking at the eDSL (embedded Domain Specific Language) syntax, let's tal
 
 * Database types
 
-In order to write queries, we have to define types for database objects. As an example, the schema defined in [getting started](/index) could be represented as
+In order to write queries, we have to define types for database objects. As an example, the schema from [getting started](/index) could be represented as
 
 ```haskell
 -- `users` table
@@ -34,9 +34,9 @@ messages :: Table "messages" Messages
 messages = Table
 ```
 
-`Users` refers to the table columns, whereas `users` ties the columns with the table name. `Auto` and `Default` refer to identity and default columns. Expectedly, `Maybe` represent nullable columns.
+`Users` refers to the table columns, whereas `users` ties the columns to the table name. `Auto` and `Default` refer to identity and default columns. Expectedly, `Maybe` represent nullable columns.
 
-Since the columns are at type level, we need `Proxy`s to represent their names
+Since the columns are at the type level, we need `Proxy`s to represent their names
 
 ```haskell
 id :: Proxy "id"
@@ -86,17 +86,17 @@ exampleQuery = select name # from users # wher (id .=. 9)
 
 It is not important to immediately understand all the types. The main draws are:
 
-1. Left association
+* Left association
 
 To aid composition, functions are designed to be take the current query as their last parameter. While it is possible to write `wher (id .=. 9) (from users (select name))`, we will stick with `#` in this guide
 
-2. `To` type classes
+* `To` type classes
 
-Type classes in the form `ToFrom`, `ToWhere` etc, are used to tell which statements are allowed in sequence (e.g., FROM can only follow after SELECT or DELETE, etc). These type classes have no function members
+Type classes like `ToFrom`, `ToWhere` etc., serve to tell which statements are allowed in sequence (e.g., FROM can only follow after SELECT or DELETE, etc). These type classes have no function members
 
-3. `Resume` type class
+* `Resume` type class
 
-eDSL functions mark the end of a statement with the `E` data type. The type class `Resume` replaces it with a further statement, for example, `Select s projection E` => `Select s projection (From f fields E)`
+The end of a statement is marked by the `E` data type. The type class `Resume` can replace it with a further statement, for example, `Select s projection E` => `Select s projection (From f fields E)`
 
 Lastly, tuples (via `/\`) stand in for commas, e.g., `select (column /\ column2 /\ columnN) ... groupBy (column /\ column2 /\ columnN) ... orderBy (column /\ column2 /\ columnN)` == `SELECT column, column2, columnN ... GROUP BY column, column2, columnN ... ORDER BY column, column2, columnN`
 
@@ -149,7 +149,7 @@ Note that `select` on its own accepts any column name. Queries are checked only 
 
 ### Subqueries
 
-Subqueries must return a single column. Columns from outer scopes can be referenced with `(alias ... column)`.
+Subqueries must return a single column. Columns from outer scope can be referenced with `(alias ... column)`.
 
 ```haskell
 subQueryExample :: _
@@ -168,7 +168,7 @@ Droplet offers a few functions built-in:
 
 * `random`
 
-As per SQL standard, aggregations must either be the only column projected or be in a GROUP BY query. User defined (or missing) functions can be declared using `function` (or `function'`)
+As per SQL standard, aggregations must either be the only column projected or in a GROUP BY query. User defined (or missing) functions can be declared using `function` (or `function'`)
 
 ```haskell
 -- represents a function that takes arguments
@@ -302,7 +302,7 @@ selectGroupBy = select ((count id # as b) /\ name) # from users # groupBy (id /\
 ### ORDER BY
 
 ```haskell
-orderBy :: ∀ f q sql. ToOrderBy f q => Resume q (OrderBy f E) sql => f -> q -> sql
+orderBy :: forall f q sql. ToOrderBy f q => Resume q (OrderBy f E) sql => f -> q -> sql
 ```
 
 Currently, ORDER BY statements can sort queries only by columns. Note that in DISTINCT queries only the projected fields can be used for sorting.
@@ -315,7 +315,7 @@ selectOrderBy = select name # from users # orderBy id
 ### LIMIT
 
 ```haskell
-limit ∷ ∀ q sql. ToLimit q ⇒ Resume q (Limit E) sql ⇒ Int → q → sql
+limit :: forall q sql. ToLimit q => Resume q (Limit E) sql => Int -> q -> sql
 ```
 
 LIMIT must always follow ORDER BY (or OFFSET), as otherwise query order is unspecified.
@@ -330,7 +330,7 @@ Only number literals are currently supported.
 ### OFFSET
 
 ```haskell
-offset ∷ ∀ q sql. ToOffset q ⇒ Resume q (Offset E) sql ⇒ Int → q → sql
+offset :: forall q sql. ToOffset q => Resume q (Offset E) sql => Int -> q -> sql
 ```
 
 OFFSET must always follow ORDER BY (or LIMIT), as otherwise query order is unspecified.
@@ -345,12 +345,12 @@ Only number literal are currently supported.
 ### UNION
 
 ```haskell
-union ∷ ∀ q r. ToUnion q r ⇒ q → r → Union q r
+union :: forall q r. ToUnion q r => q -> r -> Union q r
 
-unionAll ∷ ∀ q r. ToUnion q r ⇒ q → r → Union q r
+unionAll :: forall q r. ToUnion q r => q -> r -> Union q r
 ```
 
-UNION removes duplicates, UNION ALL keeps results as it is. Right and left hand side projections types and column count must match.
+UNION removes duplicates; UNION ALL keeps results as it is. Right and left hand side projections types and column count must match.
 
 ```haskell
 selectUnion :: _
@@ -360,7 +360,7 @@ selectUnion = (select id # from users # wher (name .=. "mary")) `union` (select 
 ## WHERE
 
 ```haskell
-wher ∷ ∀ c q sql. ToWhere c q ⇒ Resume q (Where c E) sql ⇒ c → q → sql
+wher :: forall c q sql. ToWhere c q => Resume q (Where c E) sql => c -> q -> sql
 ```
 
 The usual operators (e.g., equals, not equals, greater/lesser than, etc.) are surrounded by dots (e.g., `.=.`, `.<>.`, `.>.`, `.<.`). In addition, `NOT`, `EXISTS`, `IN` and `IS NOT NULL` are currently supported. `AND` and `OR` are represented by the operators `.&&.` and `.||.` to help avoiding brackets.
@@ -453,14 +453,14 @@ asQuery :: _
 asQuery = select id # from (select star # from users # as m)
 ```
 
-Be aware of bracketing, `select id # from (select star # from users # as m)` is parsed SELECT id FROM (SELECT * FROM users) AS m whereas `select id # from (select star # from users) # as m` results in a type error.
+Be aware of bracketing, `select id # from (select star # from users # as m)` is parsed as `SELECT id FROM (SELECT * FROM users) AS m` whereas `select id # from (select star # from users) # as m` results in a type error.
 
 ## PREPARE
 
 Prepared statements can be done with `prepare`.
 
 ```haskell
-prepare ∷ ∀ q. ToPrepare q ⇒ Plan → q → Prepare q
+prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
 ```
 
 Only the plan name is required. Parameters will be automatically parsed from the query.
