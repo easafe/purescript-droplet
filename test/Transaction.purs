@@ -33,7 +33,7 @@ tests = do
                         result ← DD.single connection sel
                         TUA.equal (Right (Just { id: 1 })) result
 
-                        let upd = update users # set ((name /\ "Mary") /\ (surname /\ "Sue")) # wher (id .=. 1)
+                        let upd = update users # set ((name .=. "Mary") /\ (surname .=. "Sue")) # wher (id .=. 1)
                         errors ← DD.execute connection upd
                         TUA.equal Nothing errors
 
@@ -50,10 +50,9 @@ tests = do
 
                         void <<< EA.throwError $ EE.error "pretend it happened for some reason"
 
-                        let upd = update users # set ((name /\ "Mary") /\ (surname /\ "Sue")) # wher (id .=. 1)
-                        errors ← DD.execute connection upd
-                        TUA.equal Nothing errors
+                        let upd = update users # set ((name .=. "Mary") /\ (surname .=. "Sue")) # wher (id .=. 1)
+                        errors2 ← DD.execute connection upd
+                        TUA.equal Nothing errors2
 
                   let q = select (name /\ surname) # from users
                   TM.result' q []
-

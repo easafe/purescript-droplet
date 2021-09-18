@@ -401,6 +401,8 @@ insertMultiple = insert # into users (name /\ birthday) # values ["mary" /\ Just
 
 ## UPDATE
 
+
+
 ## DELETE
 
 ## RETURNING

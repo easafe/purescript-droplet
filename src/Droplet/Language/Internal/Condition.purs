@@ -88,8 +88,8 @@ else instance ValidComparision OuterScope t
 
 else instance ValidComparision t t
 
-equals ∷ ∀ field compared. field → compared → Op field compared
-equals field compared = Op (Just Equals) field compared
+equals ∷ ∀ field other. field → other → Op field other
+equals field other = Op (Just Equals) field other
 
 notEquals ∷ ∀ compared field. field → compared → Op field compared
 notEquals field compared = Op (Just NotEquals) field compared

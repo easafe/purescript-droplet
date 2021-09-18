@@ -135,7 +135,6 @@ OFFSET
 
 -}
 
-
 -- | SELECT representation. `projection` refers to the final output of this statement
 data Select s (projection ∷ Row Type) rest = Select s rest
 
@@ -832,15 +831,17 @@ data Set pairs rest = Set pairs rest
 
 class ToUpdatePairs (fields ∷ Row Type) (pairs ∷ Type)
 
-instance
+instance Cons name (Default t) e fields ⇒ ToUpdatePairs fields (Op (Proxy name) (Default t))
+
+else instance
       ( InvalidField t
       , UnwrapDefinition t u
       , ToValue u
       , Cons name t e fields
       ) ⇒
-      ToUpdatePairs fields (Proxy name /\ u)
+      ToUpdatePairs fields (Op (Proxy name) u)
 
-else instance
+instance
       ( ToUpdatePairs fields head
       , ToUpdatePairs fields tail
       ) ⇒

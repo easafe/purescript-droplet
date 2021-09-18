@@ -1,7 +1,7 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class ArgumentList, argumentList, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class NameList, class ToFieldValuePairs, class ValueList, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, nameList, translateConditions, toFieldValuePairs, valueList, translate, buildQuery, unsafeBuildQuery) where
+module Droplet.Language.Internal.Query (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class ArgumentList, argumentList, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class NameList, class NameValuePairs, class ValueList, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, nameList, translateConditions, nameValuePairs, valueList, translate, buildQuery, unsafeBuildQuery) where
 
 import Control.Monad.State (State)
 import Control.Monad.State as CMS
@@ -757,9 +757,9 @@ else instance ToValue p ⇒ ValueList p where
             pure $ "$" <> show (DA.length parameters)
 
 -- | UPDATE
-instance (IsSymbol name, ToFieldValuePairs pairs, Translate rest) ⇒ Translate (Update name fields (Set pairs rest)) where
+instance (IsSymbol name, NameValuePairs pairs, Translate rest) ⇒ Translate (Update name fields (Set pairs rest)) where
       translate (Update (Set pairs rest)) = do
-            q ← toFieldValuePairs pairs
+            q ← nameValuePairs pairs
             otherQ ← translate rest
             pure $ updateKeyword
                   <> DS.reflectSymbol (Proxy ∷ Proxy name)
@@ -768,18 +768,22 @@ instance (IsSymbol name, ToFieldValuePairs pairs, Translate rest) ⇒ Translate 
                   <>
                         otherQ
 
-class ToFieldValuePairs pairs where
-      toFieldValuePairs ∷ pairs → State QueryState String
+-- | UPDATE list
+class NameValuePairs pairs where
+      nameValuePairs ∷ pairs → State QueryState String
 
-instance (IsSymbol name, ToValue p) ⇒ ToFieldValuePairs (Tuple (Proxy name) p) where
-      toFieldValuePairs (Tuple name p) = do
+instance IsSymbol name ⇒ NameValuePairs (Op (Proxy name) (Default t)) where
+      nameValuePairs (Op _ name _) = pure $ DS.reflectSymbol name <> equalsSymbol <> defaultKeyword
+
+else instance (IsSymbol name, ToValue p) ⇒ NameValuePairs (Op (Proxy name) p) where
+      nameValuePairs (Op _ name p) = do
             { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ toValue p }
             pure $ DS.reflectSymbol name <> equalsSymbol <> "$" <> show (DA.length parameters)
 
-else instance (ToFieldValuePairs p, ToFieldValuePairs rest) ⇒ ToFieldValuePairs (Tuple p rest) where
-      toFieldValuePairs (Tuple p rest) = do
-            q ← toFieldValuePairs p
-            otherQ ← toFieldValuePairs rest
+instance (NameValuePairs p, NameValuePairs rest) ⇒ NameValuePairs (p /\ rest) where
+      nameValuePairs (p /\ rest) = do
+            q ← nameValuePairs p
+            otherQ ← nameValuePairs rest
             pure $ q <> comma <> otherQ
 
 -- | DELETE
