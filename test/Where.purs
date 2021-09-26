@@ -69,10 +69,15 @@ tests = do
                         TM.parameterized """SELECT "id" FROM users WHERE "id" IN ($1, $2, $3)""" $ DLIQ.buildQuery q
                         TM.result q []
 
-                  TU.test "is not null" do
-                        let q = select id # from tags # wher (_by # isNotNull)
-                        TM.notParameterized """SELECT "id" FROM tags WHERE "by" IS NOT NULL""" $ DLIQ.buildQuery q
-                        TM.result q [ { id: 1 } ]
+                  TU.suite "is not null" do
+                        TU.test "maybe field" do
+                              let q = select id # from tags # wher (_by # isNotNull)
+                              TM.notParameterized """SELECT "id" FROM tags WHERE "by" IS NOT NULL""" $ DLIQ.buildQuery q
+                              TM.result q [ { id: 1 } ]
+                        TU.test "joined field" do
+                              let q = select joined # from (leftJoin users (tags # as t) # on (joined .=. created)) # wher (isNotNull (t ... id))
+                              TM.notParameterized """SELECT "joined" FROM users LEFT JOIN tags AS "t" ON "joined" = "created" WHERE "t"."id" IS NOT NULL""" $ DLIQ.buildQuery q
+                              TM.result q [  ]
 
                   TU.suite "not" do
                         TU.test "operator" do

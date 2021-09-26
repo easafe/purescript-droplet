@@ -1,7 +1,7 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
+module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
 
 import Prelude
 
@@ -213,6 +213,12 @@ class InvalidField (t ∷ Type)
 instance Fail (Text "Auto columns cannot be inserted or updated") ⇒ InvalidField (Auto t)
 
 else instance InvalidField t
+
+class IsNullable (t ∷ Type)
+
+instance IsNullable (Maybe t)
+
+instance IsNullable (Joined t)
 
 class ToParameters record (list ∷ RowList Type) where
       toParameters ∷ Proxy list → Record record → Array (Tuple String Foreign)

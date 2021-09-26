@@ -6,7 +6,7 @@ module Droplet.Language.Internal.Condition (class ToCondition, class ValidCompar
 import Prelude
 
 import Data.Maybe (Maybe(..))
-import Droplet.Language.Internal.Definition (class ToValue, class UnwrapDefinition, class UnwrapNullable, Path)
+import Droplet.Language.Internal.Definition (class IsNullable, class ToValue, class UnwrapDefinition, class UnwrapNullable, Path)
 import Prim.Row (class Cons)
 import Type.Proxy (Proxy)
 
@@ -43,9 +43,9 @@ instance (ToCondition (Op a b) fields alias, ToCondition (Op c d) fields alias) 
 else instance ToCondition (Op Exists b) fields alias
 
 -- | IS NOT NULL
-else instance Cons name (Maybe t) d fields ⇒ ToCondition (Op IsNotNull (Proxy name)) fields alias
+else instance (Cons name t d fields, IsNullable t) ⇒ ToCondition (Op IsNotNull (Proxy name)) fields alias
 
-else instance Cons name (Maybe t) d fields ⇒ ToCondition (Op IsNotNull (Path alias name)) fields alias
+else instance (Cons name t d fields, IsNullable t) ⇒ ToCondition (Op IsNotNull (Path alias name)) fields alias
 
 else instance ToCondition (Op IsNotNull (Path table name)) fields alias
 

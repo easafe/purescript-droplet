@@ -20,7 +20,7 @@ import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
-import Droplet.Language.Internal.Definition (class AppendPath, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Default(..), E(..), Path, Star, Table, toParameters, toValue)
+import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Default, E(..), Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
 import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
@@ -274,7 +274,7 @@ else instance (FilteredQuery (Op a b) outer, FilteredQuery (Op c d) outer) ⇒ F
 
 else instance FilteredQuery (Op a b) outer ⇒ FilteredQuery (Op Not (Op a b)) outer
 
-else instance (AppendPath alias name fullPath, Cons fullPath (Maybe t) e outer) ⇒ FilteredQuery (Op IsNotNull (Path alias name)) outer
+else instance (AppendPath alias name fullPath, Cons fullPath t e outer, IsNullable t) ⇒ FilteredQuery (Op IsNotNull (Path alias name)) outer
 
 else instance
       (
@@ -524,6 +524,9 @@ instance Translate (Select s ppp more) ⇒ TranslateSource (Select s ppp more) w
 
 instance (IsSymbol name, IsSymbol alias) ⇒ TranslateSource (As alias (Table name fd)) where
       translateSource _ = pure $ DS.reflectSymbol (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
+
+instance IsSymbol name ⇒ TranslateSource (Table name fd) where
+      translateSource _ = pure $ DS.reflectSymbol (Proxy ∷ Proxy name)
 
 instance (ToJoinType k, Translate (Join k fields l r a rest)) ⇒ TranslateSource (Join k fields l r a rest) where
       translateSource j = translate j
