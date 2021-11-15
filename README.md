@@ -72,10 +72,10 @@ type Messages = (
 
 -- representation of column names to be used in queries
 id :: Proxy "id"
-"id" = Proxy
+id = Proxy
 
 name :: Proxy "name"
-"name" = Proxy
+name = Proxy
 
 birthday :: Proxy "birthday"
 birthday = Proxy
