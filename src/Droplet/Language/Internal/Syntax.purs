@@ -713,7 +713,7 @@ full insert syntax supported by droplet
 
 INSERT INTO
       table name fields
-      [VALUES values ]
+      [VALUES values | DEFAULT ]
 
 -}
 
@@ -821,7 +821,7 @@ UPDATE [ ONLY ] table_name [ * ] [ [ AS ] alias ]
 full update syntax supported by droplet
 
 UPDATE table name
-      SET field = value | [, ...]
+      SET field = value | [, ...] 
       [WHERE conditions]
 -}
 
