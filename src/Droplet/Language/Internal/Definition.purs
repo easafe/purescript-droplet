@@ -1,7 +1,7 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
+module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), PrimaryKey(..), Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
 
 import Prelude
 
@@ -51,11 +51,19 @@ data Star = Star
 star ∷ Star
 star = Star
 
--- | Identity fields
+-- | Identity field equivalent to GENERATED ALWAYS AS IDENTITY
 data Auto (a :: Type)
 
+-- needs to be able to carry default value (literal or function)
 -- | Default constraints
 data Default (a :: Type) = Default
+
+data PrimaryKey (a :: Type) = PrimaryKey
+
+--needs CHECK
+--needs UNIQUE
+--needs FOREIGN KEY
+--needs CONSTRAINT
 
 -- | A trick to mark left joined columns as nullable
 data Joined (a :: Type)

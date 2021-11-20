@@ -10,7 +10,7 @@ import Droplet.Language
 import Type.Proxy (Proxy(..))
 
 type Users =
-      ( id ∷ Auto Int
+      ( id ∷ PrimaryKey (Auto Int)
       , name ∷ String
       , surname ∷ String
       , birthday ∷ Default Date
@@ -18,7 +18,7 @@ type Users =
       )
 
 type Messages =
-      ( id ∷ Auto Int
+      ( id ∷ PrimaryKey (Auto Int)
       , sender ∷ Int
       , recipient ∷ Int
       , date ∷ Default DateTime
@@ -27,7 +27,7 @@ type Messages =
       )
 
 type Tags =
-      ( id ∷ Auto Int
+      ( id ∷ PrimaryKey (Auto Int)
       , name ∷ String
       , created ∷ Maybe Date
       , by ∷ Maybe Int

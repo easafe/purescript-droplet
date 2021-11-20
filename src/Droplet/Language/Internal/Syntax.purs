@@ -1,7 +1,7 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class SortFieldsSource, class IncludeColumn, class UnwrapAll, class Resume, class StarProjection, class SymbolListSingleton, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class QualifiedColumn, class OnComparision, Join(..), Inclusion(..), Side, Inner, Outer, SymbolList, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class IncludeAllColumns, class SourceFields, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortFields, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), from, insert, limit, into, prepare, select, set, update, values, returning, wher) where
+module Droplet.Language.Internal.Syntax (class SortFieldsSource, class IncludeColumn, class UnwrapAll, class Resume, class StarProjection, class SymbolListSingleton, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class QualifiedColumn, class OnComparision, Join(..), Inclusion(..), Side, Inner, Outer, SymbolList, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class IncludeAllColumns, class SourceFields, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortFields, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Create(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), Tabl(..), tabl, from, insert, limit, into, prepare, select, set, update, values, returning, wher, create) where
 
 import Prelude
 
@@ -424,6 +424,7 @@ instance GroupBySource f fields ⇒ ToGroupBy (Select s p (From f fd E)) s field
 instance GroupBySource f fields ⇒ ToGroupBy (Select s p (From f fd (Where cond E))) s fields
 
 class GroupBySource (f ∷ Type) (fields ∷ Row Type) | f → fields
+
 --refactor: could be the same as tojoin if joins accepted non aliased tables
 instance GroupBySource (Table name fields) fields
 
@@ -821,7 +822,7 @@ UPDATE [ ONLY ] table_name [ * ] [ [ AS ] alias ]
 full update syntax supported by droplet
 
 UPDATE table name
-      SET field = value | [, ...] 
+      SET field = value | [, ...]
       [WHERE conditions]
 -}
 
@@ -1273,3 +1274,240 @@ else instance Resume E b b where
 
 else instance Resume b a c ⇒ Resume a b c where
       resume a b = resume b a
+
+---------------------------CREATE------------------------------------------
+
+newtype Create rest = Create rest
+
+create ∷ Create E
+create = Create E
+
+---------------------------TABLE------------------------------------------
+
+{-
+
+full create table syntax supported by postgresql (https://www.postgresql.org/docs/current/sql-createtable.html)
+
+CREATE [ [ GLOBAL | LOCAL ] { TEMPORARY | TEMP } | UNLOGGED ] TABLE [ IF NOT EXISTS ] table_name ( [
+  { column_name data_type [ COMPRESSION compression_method ] [ COLLATE collation ] [ column_constraint [ ... ] ]
+    | table_constraint
+    | LIKE source_table [ like_option ... ] }
+    [, ... ]
+] )
+[ INHERITS ( parent_table [, ... ] ) ]
+[ PARTITION BY { RANGE | LIST | HASH } ( { column_name | ( expression ) } [ COLLATE collation ] [ opclass ] [, ... ] ) ]
+[ USING method ]
+[ WITH ( storage_parameter [= value] [, ... ] ) | WITHOUT OIDS ]
+[ ON COMMIT { PRESERVE ROWS | DELETE ROWS | DROP } ]
+[ TABLESPACE tablespace_name ]
+
+CREATE [ [ GLOBAL | LOCAL ] { TEMPORARY | TEMP } | UNLOGGED ] TABLE [ IF NOT EXISTS ] table_name
+    OF type_name [ (
+  { column_name [ WITH OPTIONS ] [ column_constraint [ ... ] ]
+    | table_constraint }
+    [, ... ]
+) ]
+[ PARTITION BY { RANGE | LIST | HASH } ( { column_name | ( expression ) } [ COLLATE collation ] [ opclass ] [, ... ] ) ]
+[ USING method ]
+[ WITH ( storage_parameter [= value] [, ... ] ) | WITHOUT OIDS ]
+[ ON COMMIT { PRESERVE ROWS | DELETE ROWS | DROP } ]
+[ TABLESPACE tablespace_name ]
+
+CREATE [ [ GLOBAL | LOCAL ] { TEMPORARY | TEMP } | UNLOGGED ] TABLE [ IF NOT EXISTS ] table_name
+    PARTITION OF parent_table [ (
+  { column_name [ WITH OPTIONS ] [ column_constraint [ ... ] ]
+    | table_constraint }
+    [, ... ]
+) ] { FOR VALUES partition_bound_spec | DEFAULT }
+[ PARTITION BY { RANGE | LIST | HASH } ( { column_name | ( expression ) } [ COLLATE collation ] [ opclass ] [, ... ] ) ]
+[ USING method ]
+[ WITH ( storage_parameter [= value] [, ... ] ) | WITHOUT OIDS ]
+[ ON COMMIT { PRESERVE ROWS | DELETE ROWS | DROP } ]
+[ TABLESPACE tablespace_name ]
+
+where column_constraint is:
+
+[ CONSTRAINT constraint_name ]
+{ NOT NULL |
+  NULL |
+  CHECK ( expression ) [ NO INHERIT ] |
+  DEFAULT default_expr |
+  GENERATED ALWAYS AS ( generation_expr ) STORED |
+  GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( sequence_options ) ] |
+  UNIQUE index_parameters |
+  PRIMARY KEY index_parameters |
+  REFERENCES reftable [ ( refcolumn ) ] [ MATCH FULL | MATCH PARTIAL | MATCH SIMPLE ]
+    [ ON DELETE referential_action ] [ ON UPDATE referential_action ] }
+[ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]
+
+and table_constraint is:
+
+[ CONSTRAINT constraint_name ]
+{ CHECK ( expression ) [ NO INHERIT ] |
+  UNIQUE ( column_name [, ... ] ) index_parameters |
+  PRIMARY KEY ( column_name [, ... ] ) index_parameters |
+  EXCLUDE [ USING index_method ] ( exclude_element WITH operator [, ... ] ) index_parameters [ WHERE ( predicate ) ] |
+  FOREIGN KEY ( column_name [, ... ] ) REFERENCES reftable [ ( refcolumn [, ... ] ) ]
+    [ MATCH FULL | MATCH PARTIAL | MATCH SIMPLE ] [ ON DELETE referential_action ] [ ON UPDATE referential_action ] }
+[ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]
+
+and like_option is:
+
+{ INCLUDING | EXCLUDING } { COMMENTS | COMPRESSION | CONSTRAINTS | DEFAULTS | GENERATED | IDENTITY | INDEXES | STATISTICS | STORAGE | ALL }
+
+and partition_bound_spec is:
+
+IN ( partition_bound_expr [, ...] ) |
+FROM ( { partition_bound_expr | MINVALUE | MAXVALUE } [, ...] )
+  TO ( { partition_bound_expr | MINVALUE | MAXVALUE } [, ...] ) |
+WITH ( MODULUS numeric_literal, REMAINDER numeric_literal )
+
+index_parameters in UNIQUE, PRIMARY KEY, and EXCLUDE constraints are:
+
+[ INCLUDE ( column_name [, ... ] ) ]
+[ WITH ( storage_parameter [= value] [, ... ] ) ]
+[ USING INDEX TABLESPACE tablespace_name ]
+
+exclude_element in an EXCLUDE constraint is:
+
+{ column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]
+
+-}
+
+{-
+
+full create table syntax supported by droplet
+
+CREATE TABLE table_definition
+
+where table_definition is the Table type
+-}
+
+data Tabl (name ∷ Symbol) (fields ∷ Row Type) = Tabl
+
+tabl ∷ ∀ name fields. Create E → Table name fields → Create (Tabl name fields)
+tabl _ _ = Create Tabl
+
+---------------------------ALTER------------------------------------------
+
+---------------------------TABLE------------------------------------------
+
+{-
+
+full alter table syntax supported by postgresql (https://www.postgresql.org/docs/current/sql-altertable.html)
+
+ALTER TABLE [ IF EXISTS ] [ ONLY ] name [ * ]
+    action [, ... ]
+ALTER TABLE [ IF EXISTS ] [ ONLY ] name [ * ]
+    RENAME [ COLUMN ] column_name TO new_column_name
+ALTER TABLE [ IF EXISTS ] [ ONLY ] name [ * ]
+    RENAME CONSTRAINT constraint_name TO new_constraint_name
+ALTER TABLE [ IF EXISTS ] name
+    RENAME TO new_name
+ALTER TABLE [ IF EXISTS ] name
+    SET SCHEMA new_schema
+ALTER TABLE ALL IN TABLESPACE name [ OWNED BY role_name [, ... ] ]
+    SET TABLESPACE new_tablespace [ NOWAIT ]
+ALTER TABLE [ IF EXISTS ] name
+    ATTACH PARTITION partition_name { FOR VALUES partition_bound_spec | DEFAULT }
+ALTER TABLE [ IF EXISTS ] name
+    DETACH PARTITION partition_name [ CONCURRENTLY | FINALIZE ]
+
+where action is one of:
+
+    ADD [ COLUMN ] [ IF NOT EXISTS ] column_name data_type [ COLLATE collation ] [ column_constraint [ ... ] ]
+    DROP [ COLUMN ] [ IF EXISTS ] column_name [ RESTRICT | CASCADE ]
+    ALTER [ COLUMN ] column_name [ SET DATA ] TYPE data_type [ COLLATE collation ] [ USING expression ]
+    ALTER [ COLUMN ] column_name SET DEFAULT expression
+    ALTER [ COLUMN ] column_name DROP DEFAULT
+    ALTER [ COLUMN ] column_name { SET | DROP } NOT NULL
+    ALTER [ COLUMN ] column_name DROP EXPRESSION [ IF EXISTS ]
+    ALTER [ COLUMN ] column_name ADD GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( sequence_options ) ]
+    ALTER [ COLUMN ] column_name { SET GENERATED { ALWAYS | BY DEFAULT } | SET sequence_option | RESTART [ [ WITH ] restart ] } [...]
+    ALTER [ COLUMN ] column_name DROP IDENTITY [ IF EXISTS ]
+    ALTER [ COLUMN ] column_name SET STATISTICS integer
+    ALTER [ COLUMN ] column_name SET ( attribute_option = value [, ... ] )
+    ALTER [ COLUMN ] column_name RESET ( attribute_option [, ... ] )
+    ALTER [ COLUMN ] column_name SET STORAGE { PLAIN | EXTERNAL | EXTENDED | MAIN }
+    ALTER [ COLUMN ] column_name SET COMPRESSION compression_method
+    ADD table_constraint [ NOT VALID ]
+    ADD table_constraint_using_index
+    ALTER CONSTRAINT constraint_name [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]
+    VALIDATE CONSTRAINT constraint_name
+    DROP CONSTRAINT [ IF EXISTS ]  constraint_name [ RESTRICT | CASCADE ]
+    DISABLE TRIGGER [ trigger_name | ALL | USER ]
+    ENABLE TRIGGER [ trigger_name | ALL | USER ]
+    ENABLE REPLICA TRIGGER trigger_name
+    ENABLE ALWAYS TRIGGER trigger_name
+    DISABLE RULE rewrite_rule_name
+    ENABLE RULE rewrite_rule_name
+    ENABLE REPLICA RULE rewrite_rule_name
+    ENABLE ALWAYS RULE rewrite_rule_name
+    DISABLE ROW LEVEL SECURITY
+    ENABLE ROW LEVEL SECURITY
+    FORCE ROW LEVEL SECURITY
+    NO FORCE ROW LEVEL SECURITY
+    CLUSTER ON index_name
+    SET WITHOUT CLUSTER
+    SET WITHOUT OIDS
+    SET TABLESPACE new_tablespace
+    SET { LOGGED | UNLOGGED }
+    SET ( storage_parameter [= value] [, ... ] )
+    RESET ( storage_parameter [, ... ] )
+    INHERIT parent_table
+    NO INHERIT parent_table
+    OF type_name
+    NOT OF
+    OWNER TO { new_owner | CURRENT_ROLE | CURRENT_USER | SESSION_USER }
+    REPLICA IDENTITY { DEFAULT | USING INDEX index_name | FULL | NOTHING }
+
+and partition_bound_spec is:
+
+IN ( partition_bound_expr [, ...] ) |
+FROM ( { partition_bound_expr | MINVALUE | MAXVALUE } [, ...] )
+  TO ( { partition_bound_expr | MINVALUE | MAXVALUE } [, ...] ) |
+WITH ( MODULUS numeric_literal, REMAINDER numeric_literal )
+
+and column_constraint is:
+
+[ CONSTRAINT constraint_name ]
+{ NOT NULL |
+  NULL |
+  CHECK ( expression ) [ NO INHERIT ] |
+  DEFAULT default_expr |
+  GENERATED ALWAYS AS ( generation_expr ) STORED |
+  GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( sequence_options ) ] |
+  UNIQUE index_parameters |
+  PRIMARY KEY index_parameters |
+  REFERENCES reftable [ ( refcolumn ) ] [ MATCH FULL | MATCH PARTIAL | MATCH SIMPLE ]
+    [ ON DELETE referential_action ] [ ON UPDATE referential_action ] }
+[ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]
+
+and table_constraint is:
+
+[ CONSTRAINT constraint_name ]
+{ CHECK ( expression ) [ NO INHERIT ] |
+  UNIQUE ( column_name [, ... ] ) index_parameters |
+  PRIMARY KEY ( column_name [, ... ] ) index_parameters |
+  EXCLUDE [ USING index_method ] ( exclude_element WITH operator [, ... ] ) index_parameters [ WHERE ( predicate ) ] |
+  FOREIGN KEY ( column_name [, ... ] ) REFERENCES reftable [ ( refcolumn [, ... ] ) ]
+    [ MATCH FULL | MATCH PARTIAL | MATCH SIMPLE ] [ ON DELETE referential_action ] [ ON UPDATE referential_action ] }
+[ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]
+
+and table_constraint_using_index is:
+
+    [ CONSTRAINT constraint_name ]
+    { UNIQUE | PRIMARY KEY } USING INDEX index_name
+    [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]
+
+index_parameters in UNIQUE, PRIMARY KEY, and EXCLUDE constraints are:
+
+[ INCLUDE ( column_name [, ... ] ) ]
+[ WITH ( storage_parameter [= value] [, ... ] ) ]
+[ USING INDEX TABLESPACE tablespace_name ]
+
+exclude_element in an EXCLUDE constraint is:
+
+{ column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]
+
+-}

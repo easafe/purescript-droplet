@@ -27,7 +27,8 @@ import Droplet.Language.Internal.Definition
       ( class FromValue
       , class ToParameters
       , class ToValue
-      , Auto(..)
+      , Auto
+      , PrimaryKey
       , E
       , Path
       , Default(..)
@@ -68,15 +69,19 @@ import Droplet.Language.Internal.Syntax
       , Returning
       , Limit
       , Values
+      , Create
+      , Tabl
       , Where
       , as
       , delete
+      , tabl
       , from
       , insert
       , into
       , orderBy
       , join
       , leftJoin
+      , create
       , groupBy
       , Join
       , Offset
