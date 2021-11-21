@@ -10,7 +10,7 @@ import Droplet.Language
 import Type.Proxy (Proxy(..))
 
 type Users =
-      ( id ∷ PrimaryKey (Auto Int)
+      ( id ∷ Auto (PrimaryKey Int)
       , name ∷ String
       , surname ∷ String
       , birthday ∷ Default Date
@@ -18,7 +18,7 @@ type Users =
       )
 
 type Messages =
-      ( id ∷ PrimaryKey (Auto Int)
+      ( id ∷ Auto (PrimaryKey Int)
       , sender ∷ Int
       , recipient ∷ Int
       , date ∷ Default DateTime
@@ -27,10 +27,15 @@ type Messages =
       )
 
 type Tags =
-      ( id ∷ PrimaryKey (Auto Int)
+      ( id ∷ Auto (PrimaryKey Int)
       , name ∷ String
       , created ∷ Maybe Date
       , by ∷ Maybe Int
+      )
+
+-- we should not generate maybe for pks without identity or default
+type MaybeKeys =
+      ( id ∷ PrimaryKey Int
       )
 
 users ∷ Table "users" Users
@@ -41,6 +46,9 @@ messages = Table
 
 tags ∷ Table "tags" Tags
 tags = Table
+
+maybeKeys ∷ Table "maybe_keys" MaybeKeys
+maybeKeys = Table
 
 id ∷ Proxy "id"
 id = Proxy

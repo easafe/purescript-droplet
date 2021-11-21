@@ -23,6 +23,10 @@ tests = do
                   let q = select (created /\ _by) # from tags
                   TM.notParameterized """SELECT "created", "by" FROM tags""" $ DLIQ.buildQuery q
                   TM.result q [ { created: Nothing, by: Just 1 } ]
+            TU.test "maybe primary key" do
+                  let q = select id # from maybeKeys
+                  TM.notParameterized """SELECT "id" FROM maybe_keys""" $ DLIQ.buildQuery q
+                  TM.result q [ { id: 0 } ]
             TU.suite "named table" do
                   TU.test "path" do
                         let q = select (u ... id) # from (users # as u)

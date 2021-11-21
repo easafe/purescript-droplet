@@ -4,6 +4,7 @@ import Droplet.Language
 import Prelude
 import Test.Types
 
+import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Query as DLIQ
 import Test.Model as TM
@@ -21,6 +22,10 @@ tests = do
                   TU.test "some fields" do
                         let q = insert # into tags name # values "my tag"
                         TM.parameterized """INSERT INTO tags("name") VALUES ($1)""" $ DLIQ.buildQuery q
+                        TM.result' q []
+                  TU.test "primary key" do
+                        let q = insert # into maybeKeys id # values 4
+                        TM.parameterized """INSERT INTO maybe_keys("id") VALUES ($1)""" $ DLIQ.buildQuery q
                         TM.result' q []
                   TU.suite "default values" do
                         TU.test "single" do

@@ -8,7 +8,7 @@ import Prelude
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class InvalidField, class ToValue, class UnwrapDefinition, class UnwrapNullable, Auto, Default, E(..), Empty, Joined, Path, Star, Table)
+import Droplet.Language.Internal.Definition (class AppendPath, class InvalidField, class ToValue, class UnwrapDefinition, class UnwrapNullable, Auto, Default, E(..), Empty, Joined, Path, PrimaryKey, Star, Table)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Boolean (False, True)
@@ -747,7 +747,11 @@ instance RequiredFields Nil ()
 
 instance RequiredFields rest required ⇒ RequiredFields (Cons n (Auto t) rest) required
 
+else instance RequiredFields rest required ⇒ RequiredFields (Cons n (PrimaryKey (Auto t)) rest) required
+
 else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Default t) rest) required
+
+else instance RequiredFields rest required ⇒ RequiredFields (Cons n (PrimaryKey (Default t)) rest) required
 
 else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Maybe t) rest) required
 

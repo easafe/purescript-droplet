@@ -1,7 +1,7 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), PrimaryKey(..), Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
+module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), PrimaryKey, Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
 
 import Prelude
 
@@ -58,7 +58,7 @@ data Auto (a :: Type)
 -- | Default constraints
 data Default (a :: Type) = Default
 
-data PrimaryKey (a :: Type) = PrimaryKey
+data PrimaryKey (a :: Type)
 
 --needs CHECK
 --needs UNIQUE
@@ -202,23 +202,30 @@ parseTime input errorMessage =
 -- | Convenience to remove type wrappers
 class UnwrapDefinition (w ∷ Type) (t ∷ Type) | w → t
 
-instance UnwrapDefinition (Auto t) t
+instance UnwrapDefinition t u ⇒ UnwrapDefinition (Default t) u
 
-else instance UnwrapDefinition (Default t) t
+else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Auto t) u
 
 else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Joined t) u
+
+else instance UnwrapDefinition t u ⇒ UnwrapDefinition (PrimaryKey t) u
 
 else instance UnwrapDefinition t t
 
 class UnwrapNullable (w ∷ Type) (t ∷ Type) | w → t
 
+-- | Convenience to Maybe wrappers
+-- |
+-- | Maybe cannot be unwrapped in UnwrapDefinition since it is also part of the final column type
 instance UnwrapNullable (Maybe t) t
 
 else instance UnwrapNullable t t
 
 class InvalidField (t ∷ Type)
 
-instance Fail (Text "Auto columns cannot be inserted or updated") ⇒ InvalidField (Auto t)
+instance Fail (Text "Primary Key Auto columns cannot be inserted or updated") ⇒ InvalidField (PrimaryKey (Auto t))
+
+else instance Fail (Text "Auto columns cannot be inserted or updated") ⇒ InvalidField (Auto t)
 
 else instance InvalidField t
 
