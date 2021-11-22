@@ -58,13 +58,13 @@ messages = Table
 
 -- representation of the table's columns definitions
 type Users = (
-    id :: Auto Int, -- identity column
+    id :: Auto (PrimaryKey Int), -- identity primary key
     name :: String,
     birthday :: Maybe Date, -- nullable column
 )
 
 type Messages = (
-    id :: Auto Int,
+    id :: Auto (PrimaryKey Int),
     sender :: Int,
     recipient :: Int,
     date :: Default DateTime -- column with default

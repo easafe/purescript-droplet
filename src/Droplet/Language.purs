@@ -31,6 +31,7 @@ import Droplet.Language.Internal.Definition
       , PrimaryKey
       , E
       , Path
+      , Unique
       , Default(..)
       , Star(..)
       , Table(..)

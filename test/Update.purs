@@ -5,6 +5,7 @@ import Droplet.Language
 import Prelude
 import Test.Types
 
+import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Query as DLIQ
 import Test.Model as TM
@@ -26,6 +27,15 @@ tests = do
                   let q = update users # set ((name .=. "Mary") /\ (birthday .=. Default))
                   TM.parameterized """UPDATE users SET name = $1, birthday = DEFAULT""" $ DLIQ.buildQuery q
                   TM.result q []
+            TU.test "primary key" do
+                  let q = update maybeKeys # set (id .=. 898)
+                  TM.parameterized """UPDATE maybe_keys SET id = $1""" $ DLIQ.buildQuery q
+                  TM.result q []
+            TU.suite "nullable" do
+                  TU.test "unique" do
+                        let q = update uniqueValues # set (_by .=. Just 44)
+                        TM.parameterized """UPDATE unique_values SET by = $1""" $ DLIQ.buildQuery q
+                        TM.result q []
       TU.suite "where" do
             TU.test "single field" do
                   let q = update users # set (surname .=. "Sue") # wher (id .=. 1)

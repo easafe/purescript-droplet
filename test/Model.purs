@@ -112,7 +112,8 @@ insertDefaultRecords = do
                   void <<< DD.query connection $ insert # into messages (sender /\ recipient /\ sent /\ date /\ second_date) # values (1 /\ 2 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
                   void <<< DD.query connection $ insert # into messages (sender /\ recipient /\ sent /\ date /\ second_date) # values (2 /\ 1 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
                   void <<< DD.query connection $ insert # into tags (name /\ _by) # values ("tagged" /\ Just 1)
-                  void <<< DD.query connection $ insert # into maybeKeys id # values 0
+                  void <<< DD.query connection $ insert # into maybeKeys id # values 1
+                  void <<< DD.query connection $ insert # into uniqueValues (name /\ _by) # values ("named" /\ Just 1)
 
 connectionInfo ∷ Configuration
 connectionInfo = (DD.defaultConfiguration "droplet")

@@ -8,7 +8,7 @@ import Prelude
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class InvalidField, class ToValue, class UnwrapDefinition, class UnwrapNullable, Auto, Default, E(..), Empty, Joined, Path, PrimaryKey, Star, Table)
+import Droplet.Language.Internal.Definition (class AppendPath, class FieldCannotBeSet, class ToValue, class UnwrapDefinition, Unique, class UnwrapNullable, Auto, Default, E(..), Empty, Joined, Path, PrimaryKey, Star, Table)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Boolean (False, True)
@@ -351,7 +351,7 @@ leftJoin ∷
 leftJoin l r = Join l r E
 
 --would be nice to have a unified (but not messy) way to reuse tocondition here
--- | Comparision logic for ON statements
+-- | Comparison logic for ON statements
 class OnCondition (c ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList)
 
 instance (OnCondition (Op a b) fields aliases, OnCondition (Op c d) fields aliases) ⇒ OnCondition (Op (Op a b) (Op c d)) fields aliases
@@ -727,7 +727,7 @@ data Values fieldValues rest = Values fieldValues rest
 class InsertList (fields ∷ Row Type) (fieldNames ∷ Type) (inserted ∷ Row Type) | fieldNames → fields inserted
 
 instance
-      ( InvalidField t
+      ( FieldCannotBeSet t
       , Cons name t e fields
       , Cons name t () single
       ) ⇒
@@ -752,6 +752,8 @@ else instance RequiredFields rest required ⇒ RequiredFields (Cons n (PrimaryKe
 else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Default t) rest) required
 
 else instance RequiredFields rest required ⇒ RequiredFields (Cons n (PrimaryKey (Default t)) rest) required
+
+else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Unique (Default t)) rest) required
 
 else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Maybe t) rest) required
 
@@ -839,7 +841,7 @@ class ToUpdatePairs (fields ∷ Row Type) (pairs ∷ Type)
 instance Cons name (Default t) e fields ⇒ ToUpdatePairs fields (Op (Proxy name) (Default t))
 
 else instance
-      ( InvalidField t
+      ( FieldCannotBeSet t
       , UnwrapDefinition t u
       , ToValue u
       , Cons name t e fields

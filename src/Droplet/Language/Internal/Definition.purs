@@ -1,7 +1,7 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), PrimaryKey, Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
+module Droplet.Language.Internal.Definition (class FromValue, Empty, class FieldCannotBeSet, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), PrimaryKey, Table(..), Unique, star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
 
 import Prelude
 
@@ -54,16 +54,20 @@ star = Star
 -- | Identity field equivalent to GENERATED ALWAYS AS IDENTITY
 data Auto (a :: Type)
 
--- needs to be able to carry default value (literal or function)
 -- | Default constraints
 data Default (a :: Type) = Default
 
 data PrimaryKey (a :: Type)
 
+data Unique (a :: Type)
+
+--default needs type level representation of values
+--    likely best design is to have a type class to encode the values
 --needs CHECK
---needs UNIQUE
+--    same as above
 --needs FOREIGN KEY
 --needs CONSTRAINT
+--    easy, can be built with types above
 
 -- | A trick to mark left joined columns as nullable
 data Joined (a :: Type)
@@ -135,7 +139,7 @@ class FromValue t where
 -- this might arise out a invalid type definition on the users part;
 -- the number is actually a big int;
 -- something funky
---in the two former cases, readInt returns null, as well in the latter if the string can't be parsed as an integer
+--in the first two cases, readInt returns null, as well in the latter if the string can't be parsed as an integer
 instance FromValue Int where
       fromValue i = case DN.toMaybe $ readInt i of
             Nothing → Left $ "Could not parse value as integer: " <> showForeigner i
@@ -206,28 +210,33 @@ instance UnwrapDefinition t u ⇒ UnwrapDefinition (Default t) u
 
 else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Auto t) u
 
+else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Unique t) u
+
 else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Joined t) u
 
 else instance UnwrapDefinition t u ⇒ UnwrapDefinition (PrimaryKey t) u
+
+else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Maybe t) (Maybe u) --unwrap only inner definition
 
 else instance UnwrapDefinition t t
 
 class UnwrapNullable (w ∷ Type) (t ∷ Type) | w → t
 
--- | Convenience to Maybe wrappers
+-- | Convenience to remove Maybe wrappers
 -- |
 -- | Maybe cannot be unwrapped in UnwrapDefinition since it is also part of the final column type
-instance UnwrapNullable (Maybe t) t
+instance UnwrapDefinition t u => UnwrapNullable (Maybe t) u
 
 else instance UnwrapNullable t t
 
-class InvalidField (t ∷ Type)
+-- | Field types that cannot be inserted or updated
+class FieldCannotBeSet (t ∷ Type)
 
-instance Fail (Text "Primary Key Auto columns cannot be inserted or updated") ⇒ InvalidField (PrimaryKey (Auto t))
+instance Fail (Text "Primary Key Auto columns cannot be inserted or updated") ⇒ FieldCannotBeSet (PrimaryKey (Auto t))
 
-else instance Fail (Text "Auto columns cannot be inserted or updated") ⇒ InvalidField (Auto t)
+else instance Fail (Text "Auto columns cannot be inserted or updated") ⇒ FieldCannotBeSet (Auto t)
 
-else instance InvalidField t
+else instance FieldCannotBeSet t
 
 class IsNullable (t ∷ Type)
 

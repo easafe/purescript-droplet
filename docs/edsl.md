@@ -14,7 +14,7 @@ In order to write queries, we have to define types for database objects. As an e
 ```haskell
 -- `users` table
 type Users = (
-    id :: Auto Int,
+    id :: Auto (PrimaryKey Int),
     name :: String,
     birthday :: Maybe Date
 )
@@ -24,7 +24,7 @@ users = Table
 
 -- `messages` table
 type Messages = (
-    id :: Auto Int,
+    id :: Auto (PrimaryKey Int),
     sender :: Int,
     recipient :: Int,
     date :: Default DateTime

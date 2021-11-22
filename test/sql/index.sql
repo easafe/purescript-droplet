@@ -1,11 +1,11 @@
 create or replace function utc_now()
-  returns timestamptz as
+    returns timestamptz as
 $body$
 begin
     return now() at time zone 'utc';
 end;
-  $body$
-  language plpgsql;
+    $body$
+    language plpgsql;
 
 create table users (
     id integer generated always as identity primary key,
@@ -40,32 +40,38 @@ create table maybe_keys (
     id integer primary key
 );
 
+create table unique_values (
+    name text not null unique,
+    by integer unique
+);
+
 create or replace function truncate_tables()
-  returns void as
+    returns void as
 $body$
 begin
     truncate table users restart identity cascade;
     truncate table messages restart identity cascade;
     truncate table tags restart identity cascade;
     truncate table maybe_keys cascade;
+    truncate table unique_values cascade;
 end;
   $body$
   language plpgsql;
 
 create or replace function date_part_age(part text, tm timestamp with time zone)
-  returns integer as
+    returns integer as
 $body$
 begin
      return date_part(part, age(now (), tm));
 end;
-  $body$
-  language plpgsql;
+    $body$
+    language plpgsql;
 
 create or replace function fire_missiles(a integer, b integer)
-  returns void as
+    returns void as
 $body$
 begin
 
 end;
-  $body$
-  language plpgsql;
+    $body$
+    language plpgsql;

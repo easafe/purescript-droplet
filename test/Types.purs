@@ -38,6 +38,11 @@ type MaybeKeys =
       ( id ∷ PrimaryKey Int
       )
 
+type UniqueValues =
+      ( name ∷ Unique String
+      , by ∷ Maybe (Unique Int)
+      )
+
 users ∷ Table "users" Users
 users = Table
 
@@ -49,6 +54,9 @@ tags = Table
 
 maybeKeys ∷ Table "maybe_keys" MaybeKeys
 maybeKeys = Table
+
+uniqueValues ∷ Table "unique_values" UniqueValues
+uniqueValues = Table
 
 id ∷ Proxy "id"
 id = Proxy

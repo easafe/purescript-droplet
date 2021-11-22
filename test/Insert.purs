@@ -27,6 +27,11 @@ tests = do
                         let q = insert # into maybeKeys id # values 4
                         TM.parameterized """INSERT INTO maybe_keys("id") VALUES ($1)""" $ DLIQ.buildQuery q
                         TM.result' q []
+                  TU.suite "nullable" do
+                        TU.test "unique" do
+                              let q = insert # into uniqueValues (name /\ _by) # values ("test" /\ Nothing)
+                              TM.parameterized """INSERT INTO unique_values("name", "by") VALUES ($1, $2)""" $ DLIQ.buildQuery q
+                              TM.result' q []
                   TU.suite "default values" do
                         TU.test "single" do
                               let q = insert # into users (name /\ surname /\ joined) # values ("josh" /\ "a" /\ Default)
