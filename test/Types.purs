@@ -43,6 +43,15 @@ type UniqueValues =
       , by ∷ Maybe (Unique Int)
       )
 
+type DefaultColumns =
+      ( recipient ∷ Unique (Default ColumnRecipient)
+      , sender ∷ Default ColumnSender
+      )
+
+newtype ColumnSender = ColumnSender Int
+
+newtype ColumnRecipient = ColumnRecipient Int
+
 users ∷ Table "users" Users
 users = Table
 
@@ -57,6 +66,9 @@ maybeKeys = Table
 
 uniqueValues ∷ Table "unique_values" UniqueValues
 uniqueValues = Table
+
+defaultColumns ∷ Table "default_columns" DefaultColumns
+defaultColumns = Table
 
 id ∷ Proxy "id"
 id = Proxy

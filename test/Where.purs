@@ -6,7 +6,7 @@ import Test.Types
 
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
-import Droplet.Language.Internal.Query as DLIQ
+import Droplet.Language.Internal.Gen as DLIQ
 import Test.Model as TM
 import Test.Unit (TestSuite)
 import Test.Unit as TU

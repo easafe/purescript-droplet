@@ -4,7 +4,7 @@ import Droplet.Language (as, from, select, union, unionAll, wher, (.<>.), (.=.))
 import Prelude
 import Test.Types (b, id, messages, name, users)
 
-import Droplet.Language.Internal.Query as DLIQ
+import Droplet.Language.Internal.Gen as DLIQ
 import Test.Model as TM
 import Test.Unit (TestSuite)
 import Test.Unit as TU

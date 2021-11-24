@@ -16,7 +16,7 @@ import Data.Maybe as DM
 import Data.Show (class ShowRecordFields)
 import Data.Tuple.Nested ((/\))
 import Droplet.Driver (class FromResult, Configuration, Connection, PgError)
-import Droplet.Language.Internal.Query (class ToQuery, Query(..))
+import Droplet.Language.Internal.Gen (class ToQuery, Query(..))
 import Droplet.Driver (defaultConfiguration, newPool, query, withConnection) as DD
 import Droplet.Driver.Unsafe as DDU
 import Effect.Aff (Aff)

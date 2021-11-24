@@ -51,8 +51,8 @@ import Droplet.Language.Internal.Function
       , FunctionSignature'
       , random
       ) as Exported
-import Droplet.Language.Internal.Query (class ToQuery, Query(..))
-import Droplet.Language.Internal.Query as DLIQ
+import Droplet.Language.Internal.Gen (class ToQuery, Query(..))
+import Droplet.Language.Internal.Gen as DLIQ
 import Droplet.Language.Internal.Syntax
       ( As
       , Inner

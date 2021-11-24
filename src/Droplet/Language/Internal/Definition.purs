@@ -1,7 +1,7 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, Empty, class FieldCannotBeSet, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), PrimaryKey, Table(..), Unique, star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
+module Droplet.Language.Internal.Definition (class FromValue, Empty, class FieldCannotBeSet, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), PrimaryKey, Table(..), class ToConstraintValue, toConstraintValue, Unique, star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
 
 import Prelude
 
@@ -62,12 +62,9 @@ data PrimaryKey (a :: Type)
 data Unique (a :: Type)
 
 --default needs type level representation of values
---    likely best design is to have a type class to encode the values
 --needs CHECK
---    same as above
 --needs FOREIGN KEY
 --needs CONSTRAINT
---    easy, can be built with types above
 
 -- | A trick to mark left joined columns as nullable
 data Joined (a :: Type)
@@ -265,3 +262,10 @@ instance
 class AppendPath (alias ∷ Symbol) (name ∷ Symbol) (fullPath ∷ Symbol) | alias name → fullPath
 
 instance (Append alias Dot path, Append path name fullPath) ⇒ AppendPath alias name fullPath
+
+--here we need literals and functions
+-- | How a value should be generated for DEFAULT, CHECK and other constraints
+-- |
+-- | Required only if using migrations; other cases are handled by `ToValue`
+class ToConstraintValue t where
+      toConstraintValue ∷ Proxy t -> Foreign

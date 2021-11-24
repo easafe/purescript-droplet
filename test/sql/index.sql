@@ -7,6 +7,15 @@ end;
     $body$
     language plpgsql;
 
+create or replace function recipient_default()
+    returns integer as
+$body$
+begin
+    select isnull(max(recipient), 1) from default_columns; -- don't try it at home
+end;
+    $body$
+    language plpgsql;
+
 create table users (
     id integer generated always as identity primary key,
     name text not null,
@@ -45,6 +54,11 @@ create table unique_values (
     by integer unique
 );
 
+create table default_columns  (
+    recipient integer unique not null default (recipient_default()),
+    sender integer default (44)
+);
+
 create or replace function truncate_tables()
     returns void as
 $body$
@@ -54,6 +68,7 @@ begin
     truncate table tags restart identity cascade;
     truncate table maybe_keys cascade;
     truncate table unique_values cascade;
+    truncate table default_columns cascade;
 end;
   $body$
   language plpgsql;
