@@ -37,6 +37,10 @@ tests = do
                               let q = insert # into users (name /\ surname /\ joined) # values ("josh" /\ "a" /\ Default)
                               TM.parameterized """INSERT INTO users("name", "surname", "joined") VALUES ($1, $2, DEFAULT)""" $ DLIQ.buildQuery q
                               TM.result' q []
+                        TU.test "unique" do
+                              let q = insert # into defaultColumns (sender /\ recipient) # values (Default /\ Default)
+                              TM.notParameterized """INSERT INTO default_columns("sender", "recipient") VALUES (DEFAULT, DEFAULT)""" $ DLIQ.buildQuery q
+                              TM.result' q []
                         -- need some different design for this
                         -- TU.test "many" do
                         --       let q = insert # into users (name /\ surname /\ joined) # values ["josh" /\ "a" /\ TM.makeDate 2000 3 4, "josh" /\ "a" /\ Default]

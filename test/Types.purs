@@ -44,13 +44,33 @@ type UniqueValues =
       )
 
 type DefaultColumns =
-      ( recipient ∷ Unique (Default ColumnRecipient)
+      ( recipient ∷ Default (Unique ColumnRecipient)
       , sender ∷ Default ColumnSender
       )
 
 newtype ColumnSender = ColumnSender Int
-
 newtype ColumnRecipient = ColumnRecipient Int
+
+instance ToValue ColumnSender where
+      toValue (ColumnSender x) = toValue x
+
+instance ToValue ColumnRecipient where
+      toValue (ColumnRecipient x) = toValue x
+
+instance FromValue ColumnSender where
+      fromValue x = ColumnSender <$> fromValue x
+
+instance FromValue ColumnRecipient where
+      fromValue x = ColumnRecipient <$> fromValue x
+
+derive instance Eq ColumnSender
+derive instance Eq ColumnRecipient
+
+instance Show ColumnSender where
+      show (ColumnSender x) = show x
+
+instance Show ColumnRecipient where
+      show (ColumnRecipient x) = show x
 
 users ∷ Table "users" Users
 users = Table

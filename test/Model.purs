@@ -114,6 +114,7 @@ insertDefaultRecords = do
                   void <<< DD.query connection $ insert # into tags (name /\ _by) # values ("tagged" /\ Just 1)
                   void <<< DD.query connection $ insert # into maybeKeys id # values 1
                   void <<< DD.query connection $ insert # into uniqueValues (name /\ _by) # values ("named" /\ Just 1)
+                  void <<< DD.query connection $ insert # into defaultColumns (recipient /\ sender) # values (ColumnRecipient 3 /\ ColumnSender 1)
 
 connectionInfo ∷ Configuration
 connectionInfo = (DD.defaultConfiguration "droplet")

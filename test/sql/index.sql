@@ -11,7 +11,7 @@ create or replace function recipient_default()
     returns integer as
 $body$
 begin
-    select isnull(max(recipient), 1) from default_columns; -- don't try it at home
+    return (select coalesce(max(recipient), 1) from default_columns); -- don't try it at home
 end;
     $body$
     language plpgsql;

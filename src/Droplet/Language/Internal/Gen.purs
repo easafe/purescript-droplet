@@ -768,8 +768,7 @@ instance (IsSymbol name, NameValuePairs pairs, Translate rest) ⇒ Translate (Up
                   <> DS.reflectSymbol (Proxy ∷ Proxy name)
                   <> setKeyword
                   <> q
-                  <>
-                        otherQ
+                  <> otherQ
 
 -- | UPDATE list
 class NameValuePairs pairs where

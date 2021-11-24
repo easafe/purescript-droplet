@@ -27,6 +27,10 @@ tests = do
                   let q = select id # from maybeKeys
                   TM.notParameterized """SELECT "id" FROM maybe_keys""" $ DLIQ.buildQuery q
                   TM.result q [ { id: 1 } ]
+            TU.test "default" do
+                  let q = select (recipient /\ sender) # from defaultColumns
+                  TM.notParameterized """SELECT "recipient", "sender" FROM default_columns""" $ DLIQ.buildQuery q
+                  TM.result q [ { recipient: ColumnRecipient 3, sender: ColumnSender 1 } ]
             TU.suite "unique fields" do
                   TU.test "value" do
                         let q = select name # from uniqueValues
