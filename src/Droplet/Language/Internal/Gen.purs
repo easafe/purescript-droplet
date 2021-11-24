@@ -499,7 +499,7 @@ else instance Translate q ⇒ TranslateColumn q where
 instance (IsSymbol name, Translate rest) ⇒ Translate (From (Table name fields) fields rest) where
       translate (From _ rest) = do
             q ← translate rest
-            pure $ fromKeyword <> DS.reflectSymbol (Proxy ∷ Proxy name) <> q
+            pure $ fromKeyword <> quote (Proxy ∷ Proxy name) <> q
 
 else instance (Translate (Join k fields l r a more), Translate rest) ⇒ Translate (From (Join k fields l r a more) fields rest) where
       translate (From j rest) = do
@@ -662,7 +662,7 @@ instance
             q ← valueList v
             otherQ ← translate rest
             pure $ insertKeyword
-                  <> DS.reflectSymbol (Proxy ∷ Proxy name)
+                  <> quote (Proxy ∷ Proxy name)
                   <> openBracket
                   <> nameList fieldNames
                   <> closeBracket
@@ -765,7 +765,7 @@ instance (IsSymbol name, NameValuePairs pairs, Translate rest) ⇒ Translate (Up
             q ← nameValuePairs pairs
             otherQ ← translate rest
             pure $ updateKeyword
-                  <> DS.reflectSymbol (Proxy ∷ Proxy name)
+                  <> quote (Proxy ∷ Proxy name)
                   <> setKeyword
                   <> q
                   <> otherQ
