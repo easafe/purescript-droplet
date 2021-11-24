@@ -22,7 +22,7 @@ import Prelude
 import Data.BigInt (BigInt)
 import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
-import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, Default, E, Path, Star)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapNullable, Default, E, Path, Star)
 import Prim.Row (class Cons)
 import Type.Equality (class TypeEquals)
 import Type.Proxy (Proxy)
@@ -61,8 +61,6 @@ instance TextColumn String
 
 instance TextColumn (Maybe String)
 
-instance TextColumn (Default String)
-
 -- | Function arguments must match input type
 class MatchArgumentList (input ∷ Type) (args ∷ Type) (fields ∷ Row Type)
 
@@ -81,18 +79,16 @@ class MatchArgument (a ∷ Type) (fields ∷ Row Type) (t ∷ Type) | a → t
 
 instance
       ( Cons name t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t u
       ) ⇒
-      MatchArgument (Proxy name) fields v
+      MatchArgument (Proxy name) fields u
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t u
       ) ⇒
-      MatchArgument (Path alias name) fields v
+      MatchArgument (Path alias name) fields u
 
 else instance (UnwrapNullable o t, TypeEquals fd fields) ⇒ MatchArgument (PgFunction i a fd o) fields t
 

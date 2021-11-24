@@ -27,7 +27,8 @@ import Droplet.Language.Internal.Definition
       ( class FromValue
       , class ToParameters
       , class ToValue
-      , Auto
+      , Identity
+      , Constraint
       , PrimaryKey
       , E
       , Path

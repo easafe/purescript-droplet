@@ -1,12 +1,38 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, OuterScope, In, class Comparison, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition
+      ( class ToCondition
+      , class ValidComparision
+      , OuterScope
+      , In
+      , class Comparison
+      , Op(..)
+      , IsNotNull(..)
+      , isNotNull
+      , in_
+      , and
+      , Exists(..)
+      , Not(..)
+      , not
+      , BinaryOperator(..)
+      , equals
+      , notEquals
+      , greaterThan
+      , lesserThan
+      , or
+      , (.&&.)
+      , (.<>.)
+      , (.=.)
+      , (.||.)
+      , (.<.)
+      , (.>.)
+      ) where
 
 import Prelude
 
 import Data.Maybe (Maybe(..))
-import Droplet.Language.Internal.Definition (class IsNullable, class ToValue, class UnwrapDefinition, class UnwrapNullable, Path)
+import Droplet.Language.Internal.Definition (class IsNullable, class ToValue, class UnwrapNullable, Path)
 import Prim.Row (class Cons)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
@@ -67,18 +93,17 @@ else instance
 -- | Whether expression can be compared
 class Comparison (c ∷ Type) (fields ∷ Row Type) (alias ∷ Symbol) (t ∷ Type) | c → fields t
 
-instance (Cons name t d fields, UnwrapDefinition t u, UnwrapNullable u v) ⇒ Comparison (Proxy name) fields alias v
+instance (Cons name t d fields, UnwrapNullable t u) ⇒ Comparison (Proxy name) fields alias u
 
 else instance
       ( Cons name t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t u
       ) ⇒
-      Comparison (Path alias name) fields alias v
+      Comparison (Path alias name) fields alias u
 
 else instance Comparison (Path table name) fields alias OuterScope
 
-else instance Fail (Text "Comparisons must not be wrapped in Maybe") => Comparison (Maybe t) fields alias t
+else instance Fail (Text "Comparisons must not be wrapped in Maybe") ⇒ Comparison (Maybe t) fields alias t
 
 else instance ToValue t ⇒ Comparison t fields alias t
 

@@ -1,7 +1,44 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Gen (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class ArgumentList, argumentList, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class NameList, class NameValuePairs, class ValueList, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, nameList, translateConditions, nameValuePairs, valueList, translate, buildQuery, printFunction, unsafeBuildQuery) where
+module Droplet.Language.Internal.Gen
+      ( class FilteredQuery
+      , class QualifiedProjection
+      , class TranslateSource
+      , class ToNakedProjection
+      , class SingleQualifiedColumn
+      , class TranslateConditions
+      , class TranslateColumn
+      , class NoAggregations
+      , class OnlyAggregations
+      , class AggregatedQuery
+      , class IsValidAggregation
+      , class ToJoinType
+      , class ArgumentList
+      , argumentList
+      , class QueryMustNotBeAliased
+      , class ToQuery
+      , toQuery
+      , class TranslateNakedColumn
+      , translateNakedColumn
+      , class NameList
+      , class NameValuePairs
+      , class ValueList
+      , class Translate
+      , Query(..)
+      , translateSource
+      , QueryState
+      , translateColumn
+      , toJoinType
+      , nameList
+      , translateConditions
+      , nameValuePairs
+      , valueList
+      , translate
+      , buildQuery
+      , printFunction
+      , unsafeBuildQuery
+      ) where
 
 import Control.Monad.State (State)
 import Control.Monad.State as CMS
@@ -20,7 +57,7 @@ import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
-import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Default, E(..), Path, Star, Table, toParameters, toValue)
+import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToValue, class UnwrapNullable, Default, E(..), Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
 import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
@@ -194,8 +231,7 @@ instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
       , JoinedToMaybe t u
-      , UnwrapDefinition u v
-      , Cons fullPath v () projection
+      , Cons fullPath u () projection
       ) ⇒
       QualifiedProjection (Path alias name) outer projection
 
@@ -203,8 +239,7 @@ else instance
       ( AppendPath table name fullPath
       , Cons fullPath t e outer
       , JoinedToMaybe t u
-      , UnwrapDefinition u v
-      , Cons alias v () projection
+      , Cons alias u () projection
       ) ⇒
       QualifiedProjection (As alias (Path table name)) outer projection
 
@@ -291,60 +326,51 @@ else instance
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t u
       ) ⇒
-      FilteredQuery (Op In (Op (Path alias name) (Array v))) outer
+      FilteredQuery (Op In (Op (Path alias name) (Array u))) outer
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , UnwrapDefinition t v
-      , UnwrapNullable v w
+      , UnwrapNullable t v
       , AppendPath otherAlias otherName otherFullPath
       , Cons otherFullPath u f outer
-      , UnwrapDefinition u z
-      , UnwrapNullable z w
+      , UnwrapNullable u v
       ) ⇒
       FilteredQuery (Op (Path alias name) (Path otherAlias otherName)) outer
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , UnwrapDefinition t v
-      , UnwrapNullable v w
+      , UnwrapNullable t v
       , Cons otherName u f outer
-      , UnwrapDefinition u z
-      , UnwrapNullable z w
+      , UnwrapNullable u v
       ) ⇒
       FilteredQuery (Op (Path alias name) (Proxy otherName)) outer
 
 else instance
       ( Cons name t f outer
-      , UnwrapDefinition t v
-      , UnwrapNullable v w
+      , UnwrapNullable t v
       , AppendPath alias otherName fullPath
       , Cons fullPath u e outer
-      , UnwrapDefinition u z
-      , UnwrapNullable z w
+      , UnwrapNullable u v
       ) ⇒
       FilteredQuery (Op (Proxy name) (Path alias otherName)) outer
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t u
       ) ⇒
-      FilteredQuery (Op (Path alias name) v) outer
+      FilteredQuery (Op (Path alias name) u) outer
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t u
       ) ⇒
-      FilteredQuery (Op v (Path alias name)) outer
+      FilteredQuery (Op u (Path alias name)) outer
 
 else instance FilteredQuery e outer
 
@@ -496,7 +522,7 @@ else instance Translate q ⇒ TranslateColumn q where
             translate s
 
 -- | FROM
-instance (IsSymbol name, Translate rest) ⇒ Translate (From (Table name fields) fields rest) where
+instance (IsSymbol name, Translate rest) ⇒ Translate (From (Table name fields constraints) fields rest) where
       translate (From _ rest) = do
             q ← translate rest
             pure $ fromKeyword <> quote (Proxy ∷ Proxy name) <> q
@@ -522,10 +548,10 @@ instance Translate (Select s ppp more) ⇒ TranslateSource (Select s ppp more) w
             CMS.modify_ (_ { bracketed = true })
             translate s
 
-instance (IsSymbol name, IsSymbol alias) ⇒ TranslateSource (As alias (Table name fd)) where
+instance (IsSymbol name, IsSymbol alias) ⇒ TranslateSource (As alias (Table name fd constraints)) where
       translateSource _ = pure $ quote (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
 
-instance IsSymbol name ⇒ TranslateSource (Table name fd) where
+instance IsSymbol name ⇒ TranslateSource (Table name fd constraints) where
       translateSource _ = pure $ quote (Proxy ∷ Proxy name)
 
 instance (ToJoinType k, Translate (Join k fields l r a rest)) ⇒ TranslateSource (Join k fields l r a rest) where
@@ -751,7 +777,7 @@ else instance ValueList u ⇒ ValueList (Array u) where
             let sep = closeBracket <> comma <> openBracket --work around Translate Insert adding brackets
             pure $ DST.joinWith sep q
 
-else instance ValueList (Default t) where
+else instance ValueList Default where
       valueList _ = pure defaultKeyword
 
 else instance ToValue p ⇒ ValueList p where
@@ -774,7 +800,7 @@ instance (IsSymbol name, NameValuePairs pairs, Translate rest) ⇒ Translate (Up
 class NameValuePairs pairs where
       nameValuePairs ∷ pairs → State QueryState String
 
-instance IsSymbol name ⇒ NameValuePairs (Op (Proxy name) (Default t)) where
+instance IsSymbol name ⇒ NameValuePairs (Op (Proxy name) Default) where
       nameValuePairs (Op _ name _) = pure $ DS.reflectSymbol name <> equalsSymbol <> defaultKeyword
 
 else instance (IsSymbol name, ToValue p) ⇒ NameValuePairs (Op (Proxy name) p) where

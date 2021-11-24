@@ -2,6 +2,7 @@ module Test.Types where
 
 import Prelude
 
+import Prim hiding (Constraint)
 import Data.Date (Date)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
@@ -9,44 +10,82 @@ import Data.Tuple.Nested (type (/\))
 import Droplet.Language
 import Type.Proxy (Proxy(..))
 
-type Users =
-      ( id ∷ Auto (PrimaryKey Int)
+type UsersColumns =
+      ( id ∷ Int
       , name ∷ String
       , surname ∷ String
-      , birthday ∷ Default Date
-      , joined ∷ Default Date
+      , birthday ∷ Date
+      , joined ∷ Date
       )
 
-type Messages =
-      ( id ∷ Auto (PrimaryKey Int)
-      , sender ∷ ForeignKey Int "id" TableUsers
-      , recipient ∷ ForeignKey Int "id" TableUsers
-      , date ∷ Default DateTime
-      , second_date ∷ Default DateTime
+type UserConstraints =
+      ( Constraint "pk_users" "id" PrimaryKey
+              /\ Constraint "id_users" "id" Identity
+              /\ Constraint "df_birthday" "birthday" Default
+              /\ Constraint "df_joined" "joined" Default
+      )
+
+type MessagesColumns =
+      ( id ∷ Int
+      , sender ∷ Int
+      , recipient ∷ Int
+      , date ∷ DateTime
+      , second_date ∷ DateTime
       , sent ∷ Boolean
       )
 
-type Tags =
-      ( id ∷ Auto (PrimaryKey Int)
+type MessagesConstraints =
+      ( Constraint "pk_messages" "id" PrimaryKey
+              /\ Constraint "id_messages" "id" Identity
+              /\ Constraint "fk_sender" "sender" (ForeignKey "id" TableUsers)
+              /\ Constraint "fk_recipient" "recipient" (ForeignKey "id" TableUsers)
+              /\ Constraint "df_date" "date" Default
+              /\ Constraint "df_second_date" "second_date" Default
+      )
+
+type TagsColumns =
+      ( id ∷ Int
       , name ∷ String
       , created ∷ Maybe Date
       , by ∷ Maybe Int
       )
 
+type TagsConstraints =
+      ( Constraint "pk_tags" "id" PrimaryKey
+              /\ Constraint "id_tags" "id" Identity
+      )
+
 -- we should not generate maybe for pks without identity or default
-type MaybeKeys =
-      ( id ∷ PrimaryKey Int
+type MaybeKeysColumns =
+      ( id ∷ Int
       )
 
-type UniqueValues =
-      ( name ∷ Unique String
-      , by ∷ Maybe (Unique Int)
+type MaybeKeysConstraints =
+      ( Constraint "pk_maybe_keys" "id" PrimaryKey
       )
 
-type DefaultColumns =
-      ( recipient ∷ Default (Unique ColumnRecipient)
-      , sender ∷ Default ColumnSender
+type UniqueValuesColumns =
+      ( name ∷ String
+      , by ∷ Maybe Int
       )
+
+type UniqueValuesConstraints =
+      ( Constraint "uq_name" "name" Unique
+              /\ Constraint "uq_by" "by" Unique
+      )
+
+type DefaultColumnsColumns =
+      ( recipient ∷ ColumnRecipient
+      , sender ∷ ColumnSender
+      )
+
+type DefaultColumnsConstraints =
+      ( Constraint "uq_recipient" "recipient" Unique
+            /\ Constraint "df_recipient" "recipient" Default
+              /\ Constraint "df_sender" "sender" Default
+      )
+
+--needs table with composite pk fk unique
 
 newtype ColumnSender = ColumnSender Int
 newtype ColumnRecipient = ColumnRecipient Int
@@ -72,24 +111,24 @@ instance Show ColumnSender where
 instance Show ColumnRecipient where
       show (ColumnRecipient x) = show x
 
-type TableUsers = Table "users" Users
+type TableUsers = Table "users" UsersColumns UserConstraints
 
 users ∷ TableUsers
 users = Table
 
-messages ∷ Table "messages" Messages
+messages ∷ Table "messages" MessagesColumns MessagesConstraints
 messages = Table
 
-tags ∷ Table "tags" Tags
+tags ∷ Table "tags" TagsColumns TagsConstraints
 tags = Table
 
-maybeKeys ∷ Table "maybe_keys" MaybeKeys
+maybeKeys ∷ Table "maybe_keys" MaybeKeysColumns MaybeKeysConstraints
 maybeKeys = Table
 
-uniqueValues ∷ Table "unique_values" UniqueValues
+uniqueValues ∷ Table "unique_values" UniqueValuesColumns UniqueValuesConstraints
 uniqueValues = Table
 
-defaultColumns ∷ Table "default_columns" DefaultColumns
+defaultColumns ∷ Table "default_columns" DefaultColumnsColumns DefaultColumnsConstraints
 defaultColumns = Table
 
 id ∷ Proxy "id"
@@ -140,7 +179,7 @@ t = Proxy
 u ∷ Proxy "u"
 u = Proxy
 
-bigB :: Proxy "B"
+bigB ∷ Proxy "B"
 bigB = Proxy
 
 date_part_age ∷ FunctionSignature (String /\ DateTime) Int

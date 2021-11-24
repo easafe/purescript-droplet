@@ -1,14 +1,119 @@
 -- | This module defines the entire SQL eDSL, mostly because it'd be a pain to split it
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Syntax (class SortFieldsSource, class IncludeColumn, class UnwrapAll, class Resume, class StarProjection, class SymbolListSingleton, class SourceAlias, class ToPath, class QueryMustBeAliased, class UniqueSources, class OuterScopeAlias, class OnCondition, class QueryOptionallyAliased, class ToJoin, class QualifiedColumn, class OnComparision, Join(..), Inclusion(..), Side, Inner, Outer, SymbolList, join, leftJoin, resume, class ValidGroupByProjection, class GroupByFields, class ToGroupBy, class ToOuterFields, class ToUnion, class RequiredFields, class ToAs, exists, class ToFrom, class GroupBySource, class InsertList, class InsertValues, class ToPrepare, class ToProjection, class ToSelect, class ToSingleColumn, class ToSubExpression, class IncludeAllColumns, class SourceFields, class ToUpdatePairs, class ToReturning, class ToReturningFields, class UniqueAliases, class QualifiedFields, on, On(..), class ToWhere, class JoinedToMaybe, class CompatibleProjection, Union(..), union, class UniqueColumnNames, As(..), Delete(..), From(..), Insert(..), OrderBy(..), class ToOrderBy, class SortFields, class ToLimit, Limit(..), groupBy, GroupBy(..), unionAll, orderBy, Into(..), Plan(..), Distinct(..), distinct, Prepare(..), Select(..), Returning(..), Set(..), Update(..), Create(..), Values(..), Offset(..), class ToOffset, offset, Where(..), as, delete, asc, desc, Sort(..), Tabl(..), tabl, from, insert, limit, into, prepare, select, set, update, values, returning, wher, create) where
+module Droplet.Language.Internal.Syntax
+      ( class SortFieldsSource
+      , class IncludeColumn
+      , class UnwrapAll
+      , class Resume
+      , class StarProjection
+      , class SymbolListSingleton
+      , class SourceAlias
+      , class ToPath
+      , class QueryMustBeAliased
+      , class UniqueSources
+      , class OuterScopeAlias
+      , class OnCondition
+      , class QueryOptionallyAliased
+      , class ToJoin
+      , class QualifiedColumn
+      , class OnComparision
+      , Join(..)
+      , Inclusion(..)
+      , Side
+      , Inner
+      , Outer
+      , SymbolList
+      , join
+      , leftJoin
+      , resume
+      , class ValidGroupByProjection
+      , class GroupByFields
+      , class ToGroupBy
+      , class ToOuterFields
+      , class ToUnion
+      , class RequiredFields
+      , class ToAs
+      , exists
+      , class ToFrom
+      , class GroupBySource
+      , class InsertList
+      , class InsertValues
+      , class ToPrepare
+      , class ToProjection
+      , class ToSelect
+      , class ToSingleColumn
+      , class ToSubExpression
+      , class IncludeAllColumns
+      , class SourceFields
+      , class ToUpdatePairs
+      , class ToReturning
+      , class ToReturningFields
+      , class UniqueAliases
+      , class QualifiedFields
+      , on
+      , On(..)
+      , class ToWhere
+      , class JoinedToMaybe
+      , class CompatibleProjection
+      , Union(..)
+      , union
+      , class UniqueColumnNames
+      , As(..)
+      , Delete(..)
+      , From(..)
+      , Insert(..)
+      , OrderBy(..)
+      , class ToOrderBy
+      , class SortFields
+      , class ToLimit
+      , Limit(..)
+      , groupBy
+      , GroupBy(..)
+      , unionAll
+      , orderBy
+      , Into(..)
+      , Plan(..)
+      , Distinct(..)
+      , distinct
+      , Prepare(..)
+      , Select(..)
+      , Returning(..)
+      , Set(..)
+      , Update(..)
+      , Create(..)
+      , Values(..)
+      , Offset(..)
+      , class ToOffset
+      , offset
+      , Where(..)
+      , as
+      , delete
+      , asc
+      , desc
+      , Sort(..)
+      , Tabl(..)
+      , tabl
+      , from
+      , insert
+      , limit
+      , into
+      , prepare
+      , select
+      , set
+      , update
+      , values
+      , returning
+      , wher
+      , create
+      ) where
 
 import Prelude
 
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class FieldCannotBeSet, class ToValue, class UnwrapDefinition, Unique, class UnwrapNullable, Auto, Default, E(..), Empty, Joined, Path, PrimaryKey, Star, Table)
+import Droplet.Language.Internal.Definition (class AppendPath, class FieldCannotBeSet, class ToValue, Unique, class UnwrapNullable, Identity, Default, E(..), Empty, Joined, Path, PrimaryKey, Star, Table)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Boolean (False, True)
@@ -211,7 +316,7 @@ data From f (fields ∷ Row Type) rest = From f rest
 class ToFrom (f ∷ Type) (q ∷ Type) (fields ∷ Row Type) | q f → fields
 
 -- | (DELETE) FROM table
-instance ToFrom (Table name fields) (Delete E) fields
+instance ToFrom (Table name fields constraints) (Delete E) fields
 
 -- | FROM ... JOIN ...
 else instance
@@ -367,10 +472,9 @@ class OnComparision (a ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) 
 
 instance
       ( Cons name t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t u
       ) ⇒
-      OnComparision (Proxy name) fields aliases v
+      OnComparision (Proxy name) fields aliases u
 
 else instance
       ( SymbolListSingleton alias single
@@ -379,8 +483,9 @@ else instance
       , OuterScopeAlias all unique y
       , AppendPath alias name fullPath
       , QualifiedColumn y fullPath fields t
+      , UnwrapNullable t u
       ) ⇒
-      OnComparision (Path alias name) fields aliases t
+      OnComparision (Path alias name) fields aliases u
 
 else instance OnComparision (Path alias name) fields aliases OuterScope
 
@@ -426,14 +531,14 @@ instance GroupBySource f fields ⇒ ToGroupBy (Select s p (From f fd (Where cond
 class GroupBySource (f ∷ Type) (fields ∷ Row Type) | f → fields
 
 --refactor: could be the same as tojoin if joins accepted non aliased tables
-instance GroupBySource (Table name fields) fields
+instance GroupBySource (Table name fields constraints) fields
 
 instance
       ( RowToList fields list
       , QualifiedFields list alias aliased
       , Union aliased fields all
       ) ⇒
-      GroupBySource (As alias (Table name fields)) all
+      GroupBySource (As alias (Table name fields constraints)) all
 
 instance GroupBySource (Join k fields q r a rest) fields
 
@@ -498,7 +603,7 @@ class ToAs (q ∷ Type) (alias ∷ Symbol) | q → alias
 
 instance ToAs Int alias
 
-instance ToAs (Table name fields) alias
+instance ToAs (Table name fields constraints) alias
 
 instance ToAs (Proxy name) alias
 
@@ -740,20 +845,19 @@ instance
       ) ⇒
       InsertList fields (f /\ rest) all
 
---refactor: error messages are quite bad
 class RequiredFields (fieldList ∷ RowList Type) (required ∷ Row Type) | fieldList → required
 
 instance RequiredFields Nil ()
 
-instance RequiredFields rest required ⇒ RequiredFields (Cons n (Auto t) rest) required
+instance RequiredFields rest required ⇒ RequiredFields (Cons n Identity rest) required
 
-else instance RequiredFields rest required ⇒ RequiredFields (Cons n (PrimaryKey (Auto t)) rest) required
+else instance RequiredFields rest required ⇒ RequiredFields (Cons n PrimaryKey rest) required
 
-else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Default t) rest) required
+else instance RequiredFields rest required ⇒ RequiredFields (Cons n Default rest) required
 
-else instance RequiredFields rest required ⇒ RequiredFields (Cons n (PrimaryKey (Default t)) rest) required
+else instance RequiredFields rest required ⇒ RequiredFields (Cons n PrimaryKey rest) required
 
-else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Unique (Default t)) rest) required
+else instance RequiredFields rest required ⇒ RequiredFields (Cons n Unique rest) required
 
 else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Maybe t) rest) required
 
@@ -771,15 +875,14 @@ class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type)
 instance InsertValues fields (Proxy name) u ⇒ InsertValues fields (Proxy name) (Array u)
 
 -- | DEFAULT
-else instance Cons name (Default t) e fields ⇒ InsertValues fields (Proxy name) (Default t)
+else instance Cons name Default e fields ⇒ InsertValues fields (Proxy name) Default
 
 -- | Values
 else instance
-      ( UnwrapDefinition t u
-      , Cons name t e fields
-      , ToValue u
+      ( Cons name t e fields
+      , ToValue t
       ) ⇒
-      InsertValues fields (Proxy name) u
+      InsertValues fields (Proxy name) t
 
 -- | Column list
 else instance (InsertValues fields name value, InsertValues fields some more) ⇒ InsertValues fields (name /\ some) (value /\ more)
@@ -791,12 +894,12 @@ insert ∷ Insert E
 insert = Insert E
 
 into ∷
-      ∀ tableName fields fieldNames fieldList required e inserted.
+      ∀ tableName fields fieldNames constraints fieldList required e inserted.
       RowToList fields fieldList ⇒
       RequiredFields fieldList required ⇒
       InsertList fields fieldNames inserted ⇒
       Union required e inserted ⇒
-      Table tableName fields →
+      Table tableName fields constraints →
       fieldNames →
       Insert E →
       Insert (Into tableName fields fieldNames E)
@@ -838,15 +941,14 @@ data Set pairs rest = Set pairs rest
 
 class ToUpdatePairs (fields ∷ Row Type) (pairs ∷ Type)
 
-instance Cons name (Default t) e fields ⇒ ToUpdatePairs fields (Op (Proxy name) (Default t))
+instance Cons name Default e fields ⇒ ToUpdatePairs fields (Op (Proxy name) Default)
 
 else instance
       ( FieldCannotBeSet t
-      , UnwrapDefinition t u
-      , ToValue u
+      , ToValue t
       , Cons name t e fields
       ) ⇒
-      ToUpdatePairs fields (Op (Proxy name) u)
+      ToUpdatePairs fields (Op (Proxy name) t)
 
 instance
       ( ToUpdatePairs fields head
@@ -854,7 +956,7 @@ instance
       ) ⇒
       ToUpdatePairs fields (head /\ tail)
 
-update ∷ ∀ name fields. Table name fields → Update name fields E
+update ∷ ∀ name fields constraints. Table name fields constraints → Update name fields E
 update _ = Update E
 
 set ∷ ∀ name fields pairs. ToUpdatePairs fields pairs ⇒ pairs → Update name fields E → Update name fields (Set pairs E)
@@ -934,8 +1036,7 @@ class ToProjection (s ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) (
 instance
       ( Cons name t e fields
       , JoinedToMaybe t v
-      , UnwrapDefinition v u
-      , Cons name u () projection
+      , Cons name v () projection
       ) ⇒
       ToProjection (Proxy name) fields aliases projection
 
@@ -966,8 +1067,7 @@ else instance Cons alias t () projection ⇒ ToProjection (As alias (PgFunction 
 else instance
       ( Cons name t e fields
       , JoinedToMaybe t v
-      , UnwrapDefinition v u
-      , Cons alias u () projection
+      , Cons alias v () projection
       ) ⇒
       ToProjection (As alias (Proxy name)) fields aliases projection
 
@@ -1037,10 +1137,9 @@ instance QualifiedColumn True fullPath fields OuterScope
 
 instance
       ( Cons fullPath t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t u
       ) ⇒
-      QualifiedColumn False fullPath fields v
+      QualifiedColumn False fullPath fields u
 
 --not required but makes for clearer type errors
 class ToSingleColumn (fields ∷ RowList Type) (name ∷ Symbol) (t ∷ Type) | fields → name t
@@ -1070,7 +1169,7 @@ instance UniqueAliases aliases aliases
 -- | Table/subquery alias or `Empty`
 class SourceAlias (f ∷ Type) (alias ∷ Symbol) | f → alias
 
-instance SourceAlias (As alias (Table name fields)) alias
+instance SourceAlias (As alias (Table name fields constraints)) alias
 
 else instance QueryOptionallyAliased rest Empty alias ⇒ SourceAlias (Select s p (From f fd rest)) alias
 
@@ -1154,8 +1253,7 @@ class UnwrapAll (list ∷ RowList Type) (projection ∷ Row Type) | list → pro
 instance UnwrapAll Nil ()
 
 instance
-      ( UnwrapDefinition t u
-      , Cons name u () head
+      ( Cons name t () head
       , UnwrapAll rest tail
       , Union head tail projection
       ) ⇒
@@ -1185,11 +1283,9 @@ else instance Append alias Dot path ⇒ ToPath alias path
 -- | `Joined` fields appear as `Maybe` in projections
 class JoinedToMaybe (t ∷ Type) (v ∷ Type) | t → v
 
-instance JoinedToMaybe (Joined (f (Maybe t))) (Maybe t)
+instance JoinedToMaybe (Joined (Maybe t)) (Maybe t)
 
-else instance JoinedToMaybe (Joined (Maybe t)) (Maybe t)
-
-else instance UnwrapDefinition t u ⇒ JoinedToMaybe (Joined t) (Maybe u)
+else instance JoinedToMaybe (Joined t) (Maybe t)
 
 else instance JoinedToMaybe t t
 
@@ -1202,7 +1298,7 @@ instance SymbolListSingleton alias (Cons alias alias Nil)
 class SourceFields (f ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) | f → fields aliases
 
 -- | Tables
-instance SourceFields (Table name fields) fields Nil
+instance SourceFields (Table name fields constraints) fields Nil
 
 -- | Aliased tables
 instance
@@ -1211,7 +1307,7 @@ instance
       , Union aliased source fields
       , SymbolListSingleton alias single
       ) ⇒
-      SourceFields (As alias (Table name source)) fields single
+      SourceFields (As alias (Table name source constraints)) fields single
 
 -- | Aliased subqueries
 instance
@@ -1391,7 +1487,7 @@ where table_definition is the Table type
 
 data Tabl (name ∷ Symbol) (fields ∷ Row Type) = Tabl
 
-tabl ∷ ∀ name fields. Create E → Table name fields → Create (Tabl name fields)
+tabl ∷ ∀ name fields constraints. Create E → Table name fields constraints → Create (Tabl name fields)
 tabl _ _ = Create Tabl
 
 ---------------------------ALTER------------------------------------------

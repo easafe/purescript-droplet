@@ -1,7 +1,35 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, Empty, class FieldCannotBeSet, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), ForeignKey, PrimaryKey, Table(..), class ToConstraintValue, toConstraintValue, Unique, star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
+module Droplet.Language.Internal.Definition
+      ( class FromValue
+      , Empty
+      , class FieldCannotBeSet
+      , class IsNullable
+      , class UnwrapNullable
+      , class ToParameters
+      , class ToValue
+      , Identity
+      , Default(..)
+      , Star(..)
+      , ForeignKey
+      , PrimaryKey
+      , Table(..)
+      , class ToConstraintValue
+      , toConstraintValue
+      , Unique
+      , star
+      , Constraint
+      , toParameters
+      , fromValue
+      , toValue
+      , Joined(..)
+      , path
+      , (...)
+      , E(..)
+      , Path
+      , class AppendPath
+      ) where
 
 import Prelude
 
@@ -52,23 +80,23 @@ star ∷ Star
 star = Star
 
 -- | Identity field equivalent to GENERATED ALWAYS AS IDENTITY
-data Auto (a :: Type)
+data Identity
 
-data Default (a :: Type) = Default
+data Default = Default
 
-data PrimaryKey (a :: Type)
+data PrimaryKey
 
-data Unique (a :: Type)
+data Unique
 
-data ForeignKey (a :: Type) (b :: Symbol) (c :: Type)
+data ForeignKey (field ∷ Symbol) (table ∷ Type)
 
---needs FOREIGN KEY
---needs CONSTRAINT
+data Constraint :: forall f t. Symbol -> f -> t -> Type
+data Constraint name fields t
 
 -- | A trick to mark left joined columns as nullable
-data Joined (a :: Type)
+data Joined (t ∷ Type)
 
-data Table (name ∷ Symbol) (fields ∷ Row Type) = Table
+data Table (name ∷ Symbol) (fields ∷ Row Type) (constraints ∷ Type) = Table
 
 -- | Qualified columns (e.g, table.column)
 data Path (alias ∷ Symbol) (field ∷ Symbol) = Path
@@ -77,10 +105,6 @@ path ∷ ∀ alias field path pathField. Append alias Dot path ⇒ Append path f
 path _ _ = Path
 
 infix 7 path as ...
-
-derive instance Eq a ⇒ Eq (Default a)
-
-derive instance Eq a ⇒ Eq (Auto a)
 
 -- | Converts a PureScript value into Postgres
 class ToValue v where
@@ -92,7 +116,7 @@ instance ToValue Int where
 instance ToValue String where
       toValue = F.unsafeToForeign
 
-instance ToValue (Default t) where
+instance ToValue Default where
       toValue _ = F.unsafeToForeign $ DN.null
 
 instance ToValue Boolean where
@@ -199,40 +223,19 @@ parseTime input errorMessage =
                   DE.note errorMessage result
             _ → Left errorMessage
 
--- | Convenience to remove type wrappers
-class UnwrapDefinition (w ∷ Type) (t ∷ Type) | w → t
-
-instance UnwrapDefinition t u ⇒ UnwrapDefinition (Default t) u
-
-else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Auto t) u
-
-else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Unique t) u
-
-else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Joined t) u
-
-else instance UnwrapDefinition t u ⇒ UnwrapDefinition (PrimaryKey t) u
-
-else instance UnwrapDefinition t u ⇒ UnwrapDefinition (ForeignKey t n m) u
-
-else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Maybe t) (Maybe u) --unwrap only inner definition
-
-else instance UnwrapDefinition t t
-
+-- | Convenience to remove Maybe wrappers
 class UnwrapNullable (w ∷ Type) (t ∷ Type) | w → t
 
--- | Convenience to remove Maybe wrappers
--- |
--- | Maybe cannot be unwrapped in UnwrapDefinition since it is also part of the final column type
-instance UnwrapDefinition t u => UnwrapNullable (Maybe t) u
+instance UnwrapNullable (Maybe t) t
+
+else instance UnwrapNullable t u => UnwrapNullable (Joined t) u
 
 else instance UnwrapNullable t t
 
 -- | Field types that cannot be inserted or updated
 class FieldCannotBeSet (t ∷ Type)
 
-instance Fail (Text "Primary Key Auto columns cannot be inserted or updated") ⇒ FieldCannotBeSet (PrimaryKey (Auto t))
-
-else instance Fail (Text "Auto columns cannot be inserted or updated") ⇒ FieldCannotBeSet (Auto t)
+instance Fail (Text "Identity columns cannot be inserted or updated") ⇒ FieldCannotBeSet Identity
 
 else instance FieldCannotBeSet t
 
@@ -268,5 +271,5 @@ instance (Append alias Dot path, Append path name fullPath) ⇒ AppendPath alias
 -- | How a value should be generated for DEFAULT, CHECK and other constraints
 -- |
 -- | Required only if using migrations; other cases are handled by `ToValue`
-class ToConstraintValue t where
-      toConstraintValue ∷ Proxy t -> Foreign
+class ToConstraintValue (t ∷ Type) where
+      toConstraintValue ∷ Proxy t → Foreign
