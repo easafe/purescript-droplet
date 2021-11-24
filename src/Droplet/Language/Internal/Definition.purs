@@ -1,7 +1,7 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, Empty, class FieldCannotBeSet, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), PrimaryKey, Table(..), class ToConstraintValue, toConstraintValue, Unique, star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
+module Droplet.Language.Internal.Definition (class FromValue, Empty, class FieldCannotBeSet, class IsNullable, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), ForeignKey, PrimaryKey, Table(..), class ToConstraintValue, toConstraintValue, Unique, star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
 
 import Prelude
 
@@ -54,15 +54,14 @@ star = Star
 -- | Identity field equivalent to GENERATED ALWAYS AS IDENTITY
 data Auto (a :: Type)
 
--- | Default constraints
 data Default (a :: Type) = Default
 
 data PrimaryKey (a :: Type)
 
 data Unique (a :: Type)
 
---default needs type level representation of values
---needs CHECK
+data ForeignKey (a :: Type) (b :: Symbol) (c :: Type)
+
 --needs FOREIGN KEY
 --needs CONSTRAINT
 
@@ -212,6 +211,8 @@ else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Unique t) u
 else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Joined t) u
 
 else instance UnwrapDefinition t u ⇒ UnwrapDefinition (PrimaryKey t) u
+
+else instance UnwrapDefinition t u ⇒ UnwrapDefinition (ForeignKey t n m) u
 
 else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Maybe t) (Maybe u) --unwrap only inner definition
 

@@ -19,8 +19,8 @@ type Users =
 
 type Messages =
       ( id ∷ Auto (PrimaryKey Int)
-      , sender ∷ Int
-      , recipient ∷ Int
+      , sender ∷ ForeignKey Int "id" TableUsers
+      , recipient ∷ ForeignKey Int "id" TableUsers
       , date ∷ Default DateTime
       , second_date ∷ Default DateTime
       , sent ∷ Boolean
@@ -72,7 +72,9 @@ instance Show ColumnSender where
 instance Show ColumnRecipient where
       show (ColumnRecipient x) = show x
 
-users ∷ Table "users" Users
+type TableUsers = Table "users" Users
+
+users ∷ TableUsers
 users = Table
 
 messages ∷ Table "messages" Messages

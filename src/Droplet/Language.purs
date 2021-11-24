@@ -35,6 +35,7 @@ import Droplet.Language.Internal.Definition
       , Default(..)
       , Star(..)
       , Table(..)
+      , ForeignKey
       , star
       , fromValue
       , toValue
