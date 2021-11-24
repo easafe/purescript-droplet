@@ -523,10 +523,10 @@ instance Translate (Select s ppp more) ⇒ TranslateSource (Select s ppp more) w
             translate s
 
 instance (IsSymbol name, IsSymbol alias) ⇒ TranslateSource (As alias (Table name fd)) where
-      translateSource _ = pure $ DS.reflectSymbol (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
+      translateSource _ = pure $ quote (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
 
 instance IsSymbol name ⇒ TranslateSource (Table name fd) where
-      translateSource _ = pure $ DS.reflectSymbol (Proxy ∷ Proxy name)
+      translateSource _ = pure $ quote (Proxy ∷ Proxy name)
 
 instance (ToJoinType k, Translate (Join k fields l r a rest)) ⇒ TranslateSource (Join k fields l r a rest) where
       translateSource j = translate j
