@@ -2,7 +2,37 @@
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
 module Droplet.Language.Internal.Syntax
-      ( class SortFieldsSource
+      ( Join(..)
+      , Inclusion(..)
+      , Side
+      , Inner
+      , Outer
+      , SymbolList
+      , On(..)
+      , Union(..)
+      , As(..)
+      , Delete(..)
+      , From(..)
+      , Insert(..)
+      , OrderBy(..)
+      , Into(..)
+      , D
+      , GroupBy(..)
+      , Limit(..)
+      , Plan(..)
+      , Distinct(..)
+      , Prepare(..)
+      , Select(..)
+      , Returning(..)
+      , Set(..)
+      , Update(..)
+      , Create(..)
+      , Values(..)
+      , Offset(..)
+      , Where(..)
+      , Sort(..)
+      , Tabl(..)
+      , class SortFieldsSource
       , class IncludeColumn
       , class UnwrapAll
       , class Resume
@@ -14,6 +44,8 @@ module Droplet.Language.Internal.Syntax
       , class UniqueSources
       , class OuterScopeAlias
       , class OnCondition
+      , class IsDefault
+      , class UnwrapDefault
       , class QueryOptionallyAliased
       , class ToJoin
       , class QualifiedColumn
@@ -22,15 +54,6 @@ module Droplet.Language.Internal.Syntax
       , class ConstraintsToRowList
       , class IncludeField
       , class IncludesRequiredFields
-      , Join(..)
-      , Inclusion(..)
-      , Side
-      , Inner
-      , Outer
-      , SymbolList
-      , join
-      , leftJoin
-      , resume
       , class ValidGroupByProjection
       , class GroupByFields
       , class ToGroupBy
@@ -38,7 +61,6 @@ module Droplet.Language.Internal.Syntax
       , class ToUnion
       , class RequiredFields
       , class ToAs
-      , exists
       , class ToFrom
       , class GroupBySource
       , class InsertList
@@ -55,48 +77,29 @@ module Droplet.Language.Internal.Syntax
       , class ToReturningFields
       , class UniqueAliases
       , class QualifiedFields
-      , on
-      , On(..)
       , class ToWhere
       , class JoinedToMaybe
       , class CompatibleProjection
-      , Union(..)
-      , union
       , class UniqueColumnNames
-      , As(..)
-      , Delete(..)
-      , From(..)
-      , Insert(..)
-      , OrderBy(..)
       , class ToOrderBy
       , class SortFields
       , class ToLimit
-      , Limit(..)
+      , class ToOffset
+      , join
+      , leftJoin
+      , resume
+      , exists
+      , on
+      , union
       , groupBy
-      , GroupBy(..)
       , unionAll
       , orderBy
-      , Into(..)
-      , Plan(..)
-      , Distinct(..)
       , distinct
-      , Prepare(..)
-      , Select(..)
-      , Returning(..)
-      , Set(..)
-      , Update(..)
-      , Create(..)
-      , Values(..)
-      , Offset(..)
-      , class ToOffset
       , offset
-      , Where(..)
       , as
       , delete
       , asc
       , desc
-      , Sort(..)
-      , Tabl(..)
       , tabl
       , from
       , insert
@@ -118,16 +121,14 @@ import Prim hiding (Constraint)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (Constraint, class AppendPath, class ToValue, Unique, class UnwrapNullable, Identity, Default, E(..), Empty, Joined, Path, PrimaryKey, Star, Table)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapNullable, Constraint, Default, E(..), Empty, Identity, Joined, Path, Star, Table)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Boolean (False, True)
-import Prim.Row (class Cons, class Lacks, class Nub, class Union)
+import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
-import Type.Data.Boolean (class If, class Or)
-import Type.Data.Symbol (class Equals)
 import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
 
@@ -143,7 +144,7 @@ class ToPrepare (q ∷ Type)
 
 instance ToPrepare (Select s p (From f fields rest))
 
-instance ToPrepare (Insert (Into name fields fieldNames (Values v rest)))
+instance ToPrepare (Insert (Into name fields inserted names (Values v rest)))
 
 instance ToPrepare (Update name fields (Set v rest))
 
@@ -830,9 +831,12 @@ INSERT INTO
 
 -}
 
+-- | Trick to support default values
+data D (t ∷ Type)
+
 newtype Insert rest = Insert rest
 
-data Into (name ∷ Symbol) (fields ∷ Row Type) fieldNames rest = Into fieldNames rest
+data Into (name ∷ Symbol) (fields ∷ Row Type) (inserted ∷ Row Type) names rest = Into names rest
 
 data Values fieldValues rest = Values fieldValues rest
 
@@ -861,7 +865,7 @@ instance
       ) ⇒
       ConstraintsToRowList (c /\ rest) all
 
--- | Filters valid, non optional inserted fields
+-- | Valid insert fields
 class InsertList (names ∷ Type) (fields ∷ Row Type) (constraints ∷ RowList Type) (inserted ∷ Row Type) | names → inserted
 
 instance
@@ -877,13 +881,12 @@ instance
       ) ⇒
       InsertList (n /\ rest) fields constraints all
 
--- this is the same as IncludeField, except for the fail.....
--- | Exclude field if optional or identity
+-- | Exclude field if identity
 class ExcludeField (name ∷ Symbol) (t ∷ Type) (constraints ∷ RowList Type) (single ∷ Row Type) | name → single
 
-instance ExcludeField name (Maybe t) constraints ()
+instance Cons name t () single ⇒ ExcludeField name t Nil single
 
-else instance Cons name t () single ⇒ ExcludeField name t Nil single
+else instance Cons name (D t) () single ⇒ ExcludeField name t (Cons name Default rest) single
 
 else instance
       ( Append "Identity column " name start
@@ -891,8 +894,6 @@ else instance
       , Fail (Text finish)
       ) ⇒
       ExcludeField name t (Cons name Identity rest) ()
-
-else instance ExcludeField name t (Cons name Default rest) ()
 
 else instance ExcludeField name t rest single ⇒ ExcludeField name t (Cons other u rest) single
 
@@ -921,18 +922,19 @@ else instance IncludeField name t (Cons name Default rest) ()
 
 else instance IncludeField name t rest single ⇒ IncludeField name t (Cons other u rest) single
 
--- | Values inserted must match insert list
+-- | Inserted values must match insert list
 class InsertValues (fields ∷ Row Type) (names ∷ Type) (t ∷ Type)
 
 -- | Multiple values, single column
 instance InsertValues fields (Proxy name) u ⇒ InsertValues fields (Proxy name) (Array u)
 
 -- | DEFAULT
-else instance Cons name Default e fields ⇒ InsertValues fields (Proxy name) Default
+else instance (Cons name t e fields, IsDefault t name) ⇒ InsertValues fields (Proxy name) Default
 
 -- | Values
 else instance
-      ( Cons name t e fields
+      ( Cons name u e fields
+      , UnwrapDefault u t
       , ToValue t
       ) ⇒
       InsertValues fields (Proxy name) t
@@ -943,10 +945,24 @@ else instance (InsertValues fields name value, InsertValues fields some more) �
 -- | Multiple values, many columns
 else instance (InsertValues fields (name /\ some) (value /\ more)) ⇒ InsertValues fields (name /\ some) (Array (value /\ more))
 
--- | Inserted fields contain required fields
-class IncludesRequiredFields (some ∷ Row Type) (more ∷ Row Type)
+-- | Clearer error message in case of misplaced default value
+class IsDefault (t ∷ Type) (name ∷ Symbol) | t → name
 
-instance IncludesRequiredFields fields fields
+instance IsDefault (D t) name
+
+else instance (Append name " does not have a DEFAULT constraint" message, Fail (Text message)) ⇒ IsDefault t name
+
+class UnwrapDefault (t ∷ Type) (u ∷ Type) | t → u
+
+instance UnwrapDefault (D t) t
+
+else instance UnwrapDefault t t
+
+--suboptimal error messages!
+-- | Inserted fields contain required fields
+class IncludesRequiredFields (required ∷ Row Type) (inserted ∷ Row Type)
+
+instance Union required e inserted ⇒ IncludesRequiredFields required inserted
 
 insert ∷ Insert E
 insert = Insert E
@@ -961,10 +977,10 @@ into ∷
       Table tableName fields constraints →
       names →
       Insert E →
-      Insert (Into tableName fields names E)
+      Insert (Into tableName fields inserted names E)
 into _ names _ = Insert (Into names E)
 
-values ∷ ∀ tableName fields fieldNames fieldValues. InsertValues fields fieldNames fieldValues ⇒ fieldValues → Insert (Into tableName fields fieldNames E) → Insert (Into tableName fields fieldNames (Values fieldValues E))
+values ∷ ∀ tableName fields names inserted values. InsertValues inserted names values ⇒ values → Insert (Into tableName fields inserted names E) → Insert (Into tableName fields inserted names (Values values E))
 values fieldValues (Insert (Into fieldNames _)) = Insert <<< Into fieldNames $ Values fieldValues E
 
 ---------------------------UPDATE------------------------------------------
@@ -1072,7 +1088,7 @@ newtype Returning f = Returning f
 
 class ToReturning (f ∷ Type) (q ∷ Type) | q → f
 
-instance ToReturningFields f fields ⇒ ToReturning f (Insert (Into tn fields fn (Values fv E)))
+instance ToReturningFields f fields ⇒ ToReturning f (Insert (Into tn fields ins fn (Values fv E)))
 
 class ToReturningFields (f ∷ Type) (fields ∷ Row Type) | f → fields
 
@@ -1415,7 +1431,7 @@ else instance Resume rest b c ⇒ Resume (Update n f rest) b (Update n f c) wher
 else instance Resume rest b c ⇒ Resume (Insert rest) b (Insert c) where
       resume (Insert rest) b = Insert $ resume rest b
 
-else instance Resume rest b c ⇒ Resume (Into n f fd rest) b (Into n f fd c) where
+else instance Resume rest b c ⇒ Resume (Into n f ins fd rest) b (Into n f ins fd c) where
       resume (Into f rest) b = Into f $ resume rest b
 
 else instance Resume rest b c ⇒ Resume (Values v rest) b (Values v c) where

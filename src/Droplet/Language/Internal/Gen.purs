@@ -125,13 +125,13 @@ instance
 -- | INSERT ... RETURNING
 instance
       ( ToProjection f fields Nil projection
-      , Translate (Insert (Into name fields fieldNames (Values v (Returning f))))
+      , Translate (Insert (Into name fields inserted fieldNames (Values v (Returning f))))
       ) ⇒
-      ToQuery (Insert (Into name fields fieldNames (Values v (Returning f)))) projection where
+      ToQuery (Insert (Into name fields inserted fieldNames (Values v (Returning f)))) projection where
       toQuery q = translate q
 
 -- | INSERT
-instance Translate (Insert (Into name fields fieldNames (Values v E))) ⇒ ToQuery (Insert (Into name fields fieldNames (Values v E))) () where
+instance Translate (Insert (Into name fields inserted fieldNames (Values v E))) ⇒ ToQuery (Insert (Into name fields inserted fieldNames (Values v E))) () where
       toQuery q = translate q
 
 -- | UPDATE
@@ -683,7 +683,7 @@ instance
       , ValueList v
       , Translate rest
       ) ⇒
-      Translate (Insert (Into name fields fieldNames (Values v rest))) where
+      Translate (Insert (Into name fields inserted fieldNames (Values v rest))) where
       translate (Insert (Into fieldNames (Values v rest))) = do
             q ← valueList v
             otherQ ← translate rest
