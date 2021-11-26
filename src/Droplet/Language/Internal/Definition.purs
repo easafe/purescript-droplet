@@ -4,7 +4,7 @@
 module Droplet.Language.Internal.Definition
       ( class FromValue
       , Empty
-      , class FieldCannotBeSet
+
       , class IsNullable
       , class UnwrapNullable
       , class ToParameters
@@ -231,13 +231,6 @@ instance UnwrapNullable (Maybe t) t
 else instance UnwrapNullable t u => UnwrapNullable (Joined t) u
 
 else instance UnwrapNullable t t
-
--- | Field types that cannot be inserted or updated
-class FieldCannotBeSet (t ∷ Type)
-
-instance Fail (Text "Identity columns cannot be inserted or updated") ⇒ FieldCannotBeSet Identity
-
-else instance FieldCannotBeSet t
 
 class IsNullable (t ∷ Type)
 

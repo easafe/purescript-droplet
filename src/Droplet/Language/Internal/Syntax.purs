@@ -17,7 +17,11 @@ module Droplet.Language.Internal.Syntax
       , class QueryOptionallyAliased
       , class ToJoin
       , class QualifiedColumn
+      , class ExcludeField
       , class OnComparision
+      , class ConstraintsToRowList
+      , class IncludeField
+      , class IncludesRequiredFields
       , Join(..)
       , Inclusion(..)
       , Side
@@ -109,11 +113,12 @@ module Droplet.Language.Internal.Syntax
       ) where
 
 import Prelude
+import Prim hiding (Constraint)
 
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class FieldCannotBeSet, class ToValue, Unique, class UnwrapNullable, Identity, Default, E(..), Empty, Joined, Path, PrimaryKey, Star, Table)
+import Droplet.Language.Internal.Definition (Constraint, class AppendPath, class ToValue, Unique, class UnwrapNullable, Identity, Default, E(..), Empty, Joined, Path, PrimaryKey, Star, Table)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Boolean (False, True)
@@ -121,6 +126,8 @@ import Prim.Row (class Cons, class Lacks, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
+import Type.Data.Boolean (class If, class Or)
+import Type.Data.Symbol (class Equals)
 import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
 
@@ -829,47 +836,93 @@ data Into (name ∷ Symbol) (fields ∷ Row Type) fieldNames rest = Into fieldNa
 
 data Values fieldValues rest = Values fieldValues rest
 
-class InsertList (fields ∷ Row Type) (fieldNames ∷ Type) (inserted ∷ Row Type) | fieldNames → fields inserted
+-- | Filter identity (can't be inserted) and default (don't need to be inserted) constraints
+class ConstraintsToRowList (source ∷ Type) (constraints ∷ RowList Type) | source → constraints
+
+instance ConstraintsToRowList Unit Nil
 
 instance
-      ( FieldCannotBeSet t
-      , Cons name t e fields
-      , Cons name t () single
+      ( ConstraintsToRowList (Constraint name f t) head
+      , ConstraintsToRowList (Constraint name rest t) tail
+      , RowListAppend head tail all
       ) ⇒
-      InsertList fields (Proxy name) single
+      ConstraintsToRowList (Constraint name (f /\ rest) t) all
+
+else instance ConstraintsToRowList (Constraint name field Identity) (Cons field Identity Nil)
+
+else instance ConstraintsToRowList (Constraint name field Default) (Cons field Default Nil)
+
+else instance ConstraintsToRowList (Constraint name field t) Nil
 
 instance
-      ( InsertList fields f head
-      , InsertList fields rest tail
+      ( ConstraintsToRowList c head
+      , ConstraintsToRowList rest tail
+      , RowListAppend head tail all
+      ) ⇒
+      ConstraintsToRowList (c /\ rest) all
+
+-- | Filters valid, non optional inserted fields
+class InsertList (names ∷ Type) (fields ∷ Row Type) (constraints ∷ RowList Type) (inserted ∷ Row Type) | names → inserted
+
+instance
+      ( Cons name t e fields
+      , ExcludeField name t constraints single
+      ) ⇒
+      InsertList (Proxy name) fields constraints single
+
+instance
+      ( InsertList n fields constraints head
+      , InsertList rest fields constraints tail
       , Union head tail all
       ) ⇒
-      InsertList fields (f /\ rest) all
+      InsertList (n /\ rest) fields constraints all
 
-class RequiredFields (fieldList ∷ RowList Type) (required ∷ Row Type) | fieldList → required
+-- this is the same as IncludeField, except for the fail.....
+-- | Exclude field if optional or identity
+class ExcludeField (name ∷ Symbol) (t ∷ Type) (constraints ∷ RowList Type) (single ∷ Row Type) | name → single
 
-instance RequiredFields Nil ()
+instance ExcludeField name (Maybe t) constraints ()
 
-instance RequiredFields rest required ⇒ RequiredFields (Cons n Identity rest) required
-
-else instance RequiredFields rest required ⇒ RequiredFields (Cons n PrimaryKey rest) required
-
-else instance RequiredFields rest required ⇒ RequiredFields (Cons n Default rest) required
-
-else instance RequiredFields rest required ⇒ RequiredFields (Cons n PrimaryKey rest) required
-
-else instance RequiredFields rest required ⇒ RequiredFields (Cons n Unique rest) required
-
-else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Maybe t) rest) required
+else instance Cons name t () single ⇒ ExcludeField name t Nil single
 
 else instance
-      ( RequiredFields rest tail
-      , Cons name t () head
-      , Lacks name tail
+      ( Append "Identity column " name start
+      , Append start " cannot be inserted or updated" finish
+      , Fail (Text finish)
+      ) ⇒
+      ExcludeField name t (Cons name Identity rest) ()
+
+else instance ExcludeField name t (Cons name Default rest) ()
+
+else instance ExcludeField name t rest single ⇒ ExcludeField name t (Cons other u rest) single
+
+-- | Fields that must be inserted
+class RequiredFields (fields ∷ RowList Type) (constraints ∷ RowList Type) (required ∷ Row Type) | fields → required
+
+instance RequiredFields Nil constraints ()
+
+else instance
+      ( IncludeField name t constraints head
+      , RequiredFields rest constraints tail
       , Union head tail required
       ) ⇒
-      RequiredFields (Cons name t rest) required
+      RequiredFields (Cons name t rest) constraints required
 
-class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type)
+-- | Include a field if it is not in the (identity/default) constraints list
+class IncludeField (name ∷ Symbol) (t ∷ Type) (constraints ∷ RowList Type) (single ∷ Row Type) | name → single
+
+instance IncludeField name (Maybe t) constraints ()
+
+else instance Cons name t () single ⇒ IncludeField name t Nil single
+
+else instance IncludeField name t (Cons name Identity rest) ()
+
+else instance IncludeField name t (Cons name Default rest) ()
+
+else instance IncludeField name t rest single ⇒ IncludeField name t (Cons other u rest) single
+
+-- | Values inserted must match insert list
+class InsertValues (fields ∷ Row Type) (names ∷ Type) (t ∷ Type)
 
 -- | Multiple values, single column
 instance InsertValues fields (Proxy name) u ⇒ InsertValues fields (Proxy name) (Array u)
@@ -890,20 +943,26 @@ else instance (InsertValues fields name value, InsertValues fields some more) �
 -- | Multiple values, many columns
 else instance (InsertValues fields (name /\ some) (value /\ more)) ⇒ InsertValues fields (name /\ some) (Array (value /\ more))
 
+-- | Inserted fields contain required fields
+class IncludesRequiredFields (some ∷ Row Type) (more ∷ Row Type)
+
+instance IncludesRequiredFields fields fields
+
 insert ∷ Insert E
 insert = Insert E
 
 into ∷
-      ∀ tableName fields fieldNames constraints fieldList required e inserted.
+      ∀ tableName fields names constraints fieldList required constraintList inserted.
+      ConstraintsToRowList constraints constraintList ⇒
       RowToList fields fieldList ⇒
-      RequiredFields fieldList required ⇒
-      InsertList fields fieldNames inserted ⇒
-      Union required e inserted ⇒
+      InsertList names fields constraintList inserted ⇒
+      RequiredFields fieldList constraintList required ⇒
+      IncludesRequiredFields required inserted ⇒
       Table tableName fields constraints →
-      fieldNames →
+      names →
       Insert E →
-      Insert (Into tableName fields fieldNames E)
-into _ fieldNames _ = Insert (Into fieldNames E)
+      Insert (Into tableName fields names E)
+into _ names _ = Insert (Into names E)
 
 values ∷ ∀ tableName fields fieldNames fieldValues. InsertValues fields fieldNames fieldValues ⇒ fieldValues → Insert (Into tableName fields fieldNames E) → Insert (Into tableName fields fieldNames (Values fieldValues E))
 values fieldValues (Insert (Into fieldNames _)) = Insert <<< Into fieldNames $ Values fieldValues E
@@ -941,20 +1000,20 @@ data Set pairs rest = Set pairs rest
 
 class ToUpdatePairs (fields ∷ Row Type) (pairs ∷ Type)
 
-instance Cons name Default e fields ⇒ ToUpdatePairs fields (Op (Proxy name) Default)
+-- instance Cons name Default e fields ⇒ ToUpdatePairs fields (Op (Proxy name) Default)
 
-else instance
-      ( FieldCannotBeSet t
-      , ToValue t
-      , Cons name t e fields
-      ) ⇒
-      ToUpdatePairs fields (Op (Proxy name) t)
+-- else instance
+--       ( ExcludeField t
+--       , ToValue t
+--       , Cons name t e fields
+--       ) ⇒
+--       ToUpdatePairs fields (Op (Proxy name) t)
 
-instance
-      ( ToUpdatePairs fields head
-      , ToUpdatePairs fields tail
-      ) ⇒
-      ToUpdatePairs fields (head /\ tail)
+-- instance
+--       ( ToUpdatePairs fields head
+--       , ToUpdatePairs fields tail
+--       ) ⇒
+--       ToUpdatePairs fields (head /\ tail)
 
 update ∷ ∀ name fields constraints. Table name fields constraints → Update name fields E
 update _ = Update E
