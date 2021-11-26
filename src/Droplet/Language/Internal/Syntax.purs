@@ -39,6 +39,7 @@ module Droplet.Language.Internal.Syntax
       , class StarProjection
       , class SymbolListSingleton
       , class SourceAlias
+      , class UpdatedFields
       , class ToPath
       , class QueryMustBeAliased
       , class UniqueSources
@@ -49,21 +50,21 @@ module Droplet.Language.Internal.Syntax
       , class QueryOptionallyAliased
       , class ToJoin
       , class QualifiedColumn
-      , class ExcludeField
+      , class ExcludeIdentity
       , class OnComparision
       , class ConstraintsToRowList
-      , class IncludeField
+      , class IncludeMandatoryField
       , class IncludesRequiredFields
       , class ValidGroupByProjection
       , class GroupByFields
       , class ToGroupBy
       , class ToOuterFields
       , class ToUnion
-      , class RequiredFields
+      , class RequiredColumns
       , class ToAs
       , class ToFrom
       , class GroupBySource
-      , class InsertList
+      , class IncludedFields
       , class InsertValues
       , class ToPrepare
       , class ToProjection
@@ -72,7 +73,7 @@ module Droplet.Language.Internal.Syntax
       , class ToSubExpression
       , class IncludeAllColumns
       , class SourceFields
-      , class ToUpdatePairs
+      , class UpdatedPairs
       , class ToReturning
       , class ToReturningFields
       , class UniqueAliases
@@ -146,7 +147,7 @@ instance ToPrepare (Select s p (From f fields rest))
 
 instance ToPrepare (Insert (Into name fields inserted names (Values v rest)))
 
-instance ToPrepare (Update name fields (Set v rest))
+instance ToPrepare (Update name fields constraints (Set v rest))
 
 instance ToPrepare (Delete (From f fields rest))
 
@@ -512,7 +513,7 @@ class ToWhere (c ∷ Type) (q ∷ Type)
 
 instance (SourceAlias f alias, ToCondition c fields alias) ⇒ ToWhere c (Select s projection (From f fields E))
 
-instance ToCondition c fields Empty ⇒ ToWhere c (Update name fields (Set v E))
+instance ToCondition c fields Empty ⇒ ToWhere c (Update name fields constraints (Set v E))
 
 instance ToCondition c fields Empty ⇒ ToWhere c (Delete (From f fields E))
 
@@ -831,16 +832,16 @@ INSERT INTO
 
 -}
 
--- | Trick to support default values
-data D (t ∷ Type)
-
 newtype Insert rest = Insert rest
 
 data Into (name ∷ Symbol) (fields ∷ Row Type) (inserted ∷ Row Type) names rest = Into names rest
 
 data Values fieldValues rest = Values fieldValues rest
 
--- | Filter identity (can't be inserted) and default (don't need to be inserted) constraints
+-- | Trick to support default values
+data D (t ∷ Type)
+
+-- | Select identity (can't be inserted) and default (don't need to be inserted) constraints
 class ConstraintsToRowList (source ∷ Type) (constraints ∷ RowList Type) | source → constraints
 
 instance ConstraintsToRowList Unit Nil
@@ -865,62 +866,63 @@ instance
       ) ⇒
       ConstraintsToRowList (c /\ rest) all
 
--- | Valid insert fields
-class InsertList (names ∷ Type) (fields ∷ Row Type) (constraints ∷ RowList Type) (inserted ∷ Row Type) | names → inserted
+-- | Valid insert/update fields
+class IncludedFields (names ∷ Type) (fields ∷ Row Type) (constraints ∷ RowList Type) (included ∷ Row Type) | names → included
 
 instance
       ( Cons name t e fields
-      , ExcludeField name t constraints single
+      , ExcludeIdentity name t constraints single
       ) ⇒
-      InsertList (Proxy name) fields constraints single
+      IncludedFields (Proxy name) fields constraints single
 
 instance
-      ( InsertList n fields constraints head
-      , InsertList rest fields constraints tail
+      ( IncludedFields n fields constraints head
+      , IncludedFields rest fields constraints tail
       , Union head tail all
       ) ⇒
-      InsertList (n /\ rest) fields constraints all
+      IncludedFields (n /\ rest) fields constraints all
 
 -- | Exclude field if identity
-class ExcludeField (name ∷ Symbol) (t ∷ Type) (constraints ∷ RowList Type) (single ∷ Row Type) | name → single
+class ExcludeIdentity (name ∷ Symbol) (t ∷ Type) (constraints ∷ RowList Type) (single ∷ Row Type) | name → single
 
-instance Cons name t () single ⇒ ExcludeField name t Nil single
+instance Cons name t () single ⇒ ExcludeIdentity name t Nil single
 
-else instance Cons name (D t) () single ⇒ ExcludeField name t (Cons name Default rest) single
+else instance Cons name (D t) () single ⇒ ExcludeIdentity name t (Cons name Default rest) single
 
+--this clause is never kicking in
 else instance
       ( Append "Identity column " name start
       , Append start " cannot be inserted or updated" finish
       , Fail (Text finish)
       ) ⇒
-      ExcludeField name t (Cons name Identity rest) ()
+      ExcludeIdentity name t (Cons name Identity rest) ()
 
-else instance ExcludeField name t rest single ⇒ ExcludeField name t (Cons other u rest) single
+else instance ExcludeIdentity name t rest single ⇒ ExcludeIdentity name t (Cons other u rest) single
 
 -- | Fields that must be inserted
-class RequiredFields (fields ∷ RowList Type) (constraints ∷ RowList Type) (required ∷ Row Type) | fields → required
+class RequiredColumns (fields ∷ RowList Type) (constraints ∷ RowList Type) (required ∷ Row Type) | fields → required
 
-instance RequiredFields Nil constraints ()
+instance RequiredColumns Nil constraints ()
 
 else instance
-      ( IncludeField name t constraints head
-      , RequiredFields rest constraints tail
+      ( IncludeMandatoryField name t constraints head
+      , RequiredColumns rest constraints tail
       , Union head tail required
       ) ⇒
-      RequiredFields (Cons name t rest) constraints required
+      RequiredColumns (Cons name t rest) constraints required
 
 -- | Include a field if it is not in the (identity/default) constraints list
-class IncludeField (name ∷ Symbol) (t ∷ Type) (constraints ∷ RowList Type) (single ∷ Row Type) | name → single
+class IncludeMandatoryField (name ∷ Symbol) (t ∷ Type) (constraints ∷ RowList Type) (single ∷ Row Type) | name → single
 
-instance IncludeField name (Maybe t) constraints ()
+instance IncludeMandatoryField name (Maybe t) constraints ()
 
-else instance Cons name t () single ⇒ IncludeField name t Nil single
+else instance Cons name t () single ⇒ IncludeMandatoryField name t Nil single
 
-else instance IncludeField name t (Cons name Identity rest) ()
+else instance IncludeMandatoryField name t (Cons name Identity rest) ()
 
-else instance IncludeField name t (Cons name Default rest) ()
+else instance IncludeMandatoryField name t (Cons name Default rest) ()
 
-else instance IncludeField name t rest single ⇒ IncludeField name t (Cons other u rest) single
+else instance IncludeMandatoryField name t rest single ⇒ IncludeMandatoryField name t (Cons other u rest) single
 
 -- | Inserted values must match insert list
 class InsertValues (fields ∷ Row Type) (names ∷ Type) (t ∷ Type)
@@ -950,7 +952,12 @@ class IsDefault (t ∷ Type) (name ∷ Symbol) | t → name
 
 instance IsDefault (D t) name
 
-else instance (Append name " does not have a DEFAULT constraint" message, Fail (Text message)) ⇒ IsDefault t name
+else instance
+      ( Append "Column " name start
+      , Append start " does not have a DEFAULT constraint" message
+      , Fail (Text message)
+      ) ⇒
+      IsDefault t name
 
 class UnwrapDefault (t ∷ Type) (u ∷ Type) | t → u
 
@@ -971,8 +978,8 @@ into ∷
       ∀ tableName fields names constraints fieldList required constraintList inserted.
       ConstraintsToRowList constraints constraintList ⇒
       RowToList fields fieldList ⇒
-      InsertList names fields constraintList inserted ⇒
-      RequiredFields fieldList constraintList required ⇒
+      IncludedFields names fields constraintList inserted ⇒
+      RequiredColumns fieldList constraintList required ⇒
       IncludesRequiredFields required inserted ⇒
       Table tableName fields constraints →
       names →
@@ -1010,31 +1017,53 @@ UPDATE table name
       [WHERE conditions]
 -}
 
-newtype Update (name ∷ Symbol) (fields ∷ Row Type) rest = Update rest
+newtype Update (name ∷ Symbol) (fields ∷ Row Type) (constraints ∷ Type) rest = Update rest
 
 data Set pairs rest = Set pairs rest
 
-class ToUpdatePairs (fields ∷ Row Type) (pairs ∷ Type)
+-- | Select all fields being updated
+class UpdatedFields (pairs ∷ Type) (names ∷ Type) | pairs → names
 
--- instance Cons name Default e fields ⇒ ToUpdatePairs fields (Op (Proxy name) Default)
+instance UpdatedFields (Op name t) name
 
--- else instance
---       ( ExcludeField t
---       , ToValue t
---       , Cons name t e fields
---       ) ⇒
---       ToUpdatePairs fields (Op (Proxy name) t)
+instance
+      ( UpdatedFields head some
+      , UpdatedFields tail more
+      ) ⇒
+      UpdatedFields (head /\ tail) (some /\ more)
 
--- instance
---       ( ToUpdatePairs fields head
---       , ToUpdatePairs fields tail
---       ) ⇒
---       ToUpdatePairs fields (head /\ tail)
+-- | Updated fields must be valid
+class UpdatedPairs (fields ∷ Row Type) (pairs ∷ Type)
 
-update ∷ ∀ name fields constraints. Table name fields constraints → Update name fields E
+-- | Default
+instance (Cons name t e fields, IsDefault t name) ⇒ UpdatedPairs fields (Op (Proxy name) Default)
+
+-- | Value
+else instance
+      ( Cons name u e fields
+      , UnwrapDefault u t
+      , ToValue t
+      ) ⇒
+      UpdatedPairs fields (Op (Proxy name) t)
+
+instance
+      ( UpdatedPairs fields head
+      , UpdatedPairs fields tail
+      ) ⇒
+      UpdatedPairs fields (head /\ tail)
+
+update ∷ ∀ tableName fields constraints. Table tableName fields constraints → Update tableName fields constraints E
 update _ = Update E
 
-set ∷ ∀ name fields pairs. ToUpdatePairs fields pairs ⇒ pairs → Update name fields E → Update name fields (Set pairs E)
+set ∷
+      ∀ tableName names fields constraints updated constraintList pairs.
+      ConstraintsToRowList constraints constraintList ⇒
+      UpdatedFields pairs names ⇒
+      IncludedFields names fields constraintList updated ⇒
+      UpdatedPairs updated pairs ⇒
+      pairs →
+      Update tableName fields constraints E →
+      Update tableName fields constraints (Set pairs E)
 set pairs (Update _) = Update $ Set pairs E
 
 ---------------------------DELETE------------------------------------------
@@ -1425,7 +1454,7 @@ else instance Resume rest b c ⇒ Resume (Limit rest) b (Limit c) where
 else instance Resume rest b c ⇒ Resume (Offset rest) b (Offset c) where
       resume (Offset n rest) b = Offset n $ resume rest b
 
-else instance Resume rest b c ⇒ Resume (Update n f rest) b (Update n f c) where
+else instance Resume rest b c ⇒ Resume (Update n f constraints rest) b (Update n f constraints c) where
       resume (Update rest) b = Update $ resume rest b
 
 else instance Resume rest b c ⇒ Resume (Insert rest) b (Insert c) where

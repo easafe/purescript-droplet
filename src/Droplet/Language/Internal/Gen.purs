@@ -135,7 +135,7 @@ instance Translate (Insert (Into name fields inserted fieldNames (Values v E))) 
       toQuery q = translate q
 
 -- | UPDATE
-instance Translate (Update table fields (Set values rest)) ⇒ ToQuery (Update table fields (Set values rest)) () where
+instance Translate (Update table fields constraints (Set values rest)) ⇒ ToQuery (Update table fields constraints (Set values rest)) () where
       toQuery q = translate q
 
 -- | DELETE
@@ -786,7 +786,7 @@ else instance ToValue p ⇒ ValueList p where
             pure $ "$" <> show (DA.length parameters)
 
 -- | UPDATE
-instance (IsSymbol name, NameValuePairs pairs, Translate rest) ⇒ Translate (Update name fields (Set pairs rest)) where
+instance (IsSymbol name, NameValuePairs pairs, Translate rest) ⇒ Translate (Update name fields constraints (Set pairs rest)) where
       translate (Update (Set pairs rest)) = do
             q ← nameValuePairs pairs
             otherQ ← translate rest
