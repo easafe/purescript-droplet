@@ -2,7 +2,7 @@ module Test.OrderBy where
 
 import Data.Tuple.Nested ((/\))
 import Droplet.Language
-import Droplet.Language.Internal.Query as DLIQ
+import Droplet.Language.Internal.Translate as DLIQ
 import Prelude (discard, void, (#), ($))
 import Test.Model as TM
 import Test.Types (date_part_age, id, date, messages, n, name, t, u, users)

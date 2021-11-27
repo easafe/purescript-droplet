@@ -27,14 +27,24 @@ import Droplet.Language.Internal.Definition
       ( class FromValue
       , class ToParameters
       , class ToValue
-      , Auto(..)
+      , Identity
+      , NamedConstraint
+      , ConstraintDefinition
+      , RenamedColumn
+      , Column
+      , SharedConstraint
+      , ForeignKey
+      , ColumnDefinition
+      , Default(..)
+      , PrimaryKey
+      , Constraint
+      , Unique
       , E
       , Path
-      , Default(..)
       , Star(..)
       , Table(..)
-      , star
       , fromValue
+      , star
       , toValue
       , (...)
       ) as Exported
@@ -49,8 +59,8 @@ import Droplet.Language.Internal.Function
       , FunctionSignature'
       , random
       ) as Exported
-import Droplet.Language.Internal.Query (class ToQuery, Query(..))
-import Droplet.Language.Internal.Query as DLIQ
+import Droplet.Language.Internal.Translate (class ToQuery, Query(..))
+import Droplet.Language.Internal.Translate as DLIQ
 import Droplet.Language.Internal.Syntax
       ( As
       , Inner

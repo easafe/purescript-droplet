@@ -16,7 +16,7 @@ import Data.Maybe as DM
 import Data.Show (class ShowRecordFields)
 import Data.Tuple.Nested ((/\))
 import Droplet.Driver (class FromResult, Configuration, Connection, PgError)
-import Droplet.Language.Internal.Query (class ToQuery, Query(..))
+import Droplet.Language.Internal.Translate (class ToQuery, Query(..))
 import Droplet.Driver (defaultConfiguration, newPool, query, withConnection) as DD
 import Droplet.Driver.Unsafe as DDU
 import Effect.Aff (Aff)
@@ -109,8 +109,8 @@ insertDefaultRecords = do
                   pure unit
                   void <<< DD.query connection $ insert # into users (name /\ surname /\ birthday) # values ("josh" /\ "j." /\ makeDate 1990 1 1)
                   void <<< DD.query connection $ insert # into users (name /\ surname /\ birthday) # values ("mary" /\ "sue" /\ makeDate 1900 11 11)
-                  void <<< DD.query connection $ insert # into messages (sender /\ recipient /\ sent /\ date /\ second_date) # values (1 /\ 2 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
-                  void <<< DD.query connection $ insert # into messages (sender /\ recipient /\ sent /\ date /\ second_date) # values (2 /\ 1 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
+                  void <<< DD.query connection $ insert # into messages (sender /\ recipient /\ sent /\ date /\ secondDate) # values (1 /\ 2 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
+                  void <<< DD.query connection $ insert # into messages (sender /\ recipient /\ sent /\ date /\ secondDate) # values (2 /\ 1 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
                   void <<< DD.query connection $ insert # into tags (name /\ _by) # values ("tagged" /\ Just 1)
 
 connectionInfo ∷ Configuration

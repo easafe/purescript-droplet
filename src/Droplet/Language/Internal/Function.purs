@@ -61,8 +61,6 @@ instance TextColumn String
 
 instance TextColumn (Maybe String)
 
-instance TextColumn (Default String)
-
 -- | Function arguments must match input type
 class MatchArgumentList (input ∷ Type) (args ∷ Type) (fields ∷ Row Type)
 

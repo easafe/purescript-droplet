@@ -1,7 +1,7 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, OuterScope, In, class Comparision, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, OuterScope, In, class Comparison, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
 
 import Prelude
 
@@ -57,27 +57,27 @@ else instance ToCondition (Op a b) fields alias ⇒ ToCondition (Op In (Op a (Ar
 
 -- | Comparisons
 else instance
-      ( Comparision a fields alias t
-      , Comparision b fields alias u
+      ( Comparison a fields alias t
+      , Comparison b fields alias u
       , ValidComparision t u
       ) ⇒
       ToCondition (Op a b) fields alias
 
 -- | Whether expression can be compared
-class Comparision (c ∷ Type) (fields ∷ Row Type) (alias ∷ Symbol) (t ∷ Type) | c → fields t
+class Comparison (c ∷ Type) (fields ∷ Row Type) (alias ∷ Symbol) (t ∷ Type) | c → fields t
 
-instance (Cons name t d fields, UnwrapDefinition t u) ⇒ Comparision (Proxy name) fields alias u
+instance (Cons name t d fields, UnwrapDefinition t u) ⇒ Comparison (Proxy name) fields alias u
 
 else instance
       ( Cons name t d fields
       , UnwrapDefinition t u
       , UnwrapNullable u v
       ) ⇒
-      Comparision (Path alias name) fields alias v
+      Comparison (Path alias name) fields alias v
 
-else instance Comparision (Path table name) fields alias OuterScope
+else instance Comparison (Path table name) fields alias OuterScope
 
-else instance ToValue t ⇒ Comparision t fields alias t
+else instance ToValue t ⇒ Comparison t fields alias t
 
 -- | Whether given types can be compared
 class ValidComparision (t ∷ Type) (u ∷ Type)

@@ -1,7 +1,7 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class ArgumentList, argumentList, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class NameList, class NameValuePairs, class ValueList, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, nameList, translateConditions, nameValuePairs, valueList, translate, buildQuery, unsafeBuildQuery) where
+module Droplet.Language.Internal.Translate (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class ArgumentList, argumentList, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class NameList, class NameValuePairs, class ValueList, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, nameList, translateConditions, nameValuePairs, valueList, translate, buildQuery, unsafeBuildQuery) where
 
 import Control.Monad.State (State)
 import Control.Monad.State as CMS
@@ -499,7 +499,7 @@ else instance Translate q ⇒ TranslateColumn q where
 instance (IsSymbol name, Translate rest) ⇒ Translate (From (Table name fields) fields rest) where
       translate (From _ rest) = do
             q ← translate rest
-            pure $ fromKeyword <> DS.reflectSymbol (Proxy ∷ Proxy name) <> q
+            pure $ fromKeyword <> quote (Proxy ∷ Proxy name) <> q
 
 else instance (Translate (Join k fields l r a more), Translate rest) ⇒ Translate (From (Join k fields l r a more) fields rest) where
       translate (From j rest) = do
@@ -523,10 +523,10 @@ instance Translate (Select s ppp more) ⇒ TranslateSource (Select s ppp more) w
             translate s
 
 instance (IsSymbol name, IsSymbol alias) ⇒ TranslateSource (As alias (Table name fd)) where
-      translateSource _ = pure $ DS.reflectSymbol (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
+      translateSource _ = pure $ quote (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
 
 instance IsSymbol name ⇒ TranslateSource (Table name fd) where
-      translateSource _ = pure $ DS.reflectSymbol (Proxy ∷ Proxy name)
+      translateSource _ = pure $ quote (Proxy ∷ Proxy name)
 
 instance (ToJoinType k, Translate (Join k fields l r a rest)) ⇒ TranslateSource (Join k fields l r a rest) where
       translateSource j = translate j
@@ -662,7 +662,7 @@ instance
             q ← valueList v
             otherQ ← translate rest
             pure $ insertKeyword
-                  <> DS.reflectSymbol (Proxy ∷ Proxy name)
+                  <> quote (Proxy ∷ Proxy name)
                   <> openBracket
                   <> nameList fieldNames
                   <> closeBracket
@@ -751,7 +751,7 @@ else instance ValueList u ⇒ ValueList (Array u) where
             let sep = closeBracket <> comma <> openBracket --work around Translate Insert adding brackets
             pure $ DST.joinWith sep q
 
-else instance ValueList (Default t) where
+else instance ValueList Default where
       valueList _ = pure defaultKeyword
 
 else instance ToValue p ⇒ ValueList p where
@@ -765,17 +765,16 @@ instance (IsSymbol name, NameValuePairs pairs, Translate rest) ⇒ Translate (Up
             q ← nameValuePairs pairs
             otherQ ← translate rest
             pure $ updateKeyword
-                  <> DS.reflectSymbol (Proxy ∷ Proxy name)
+                  <> quote (Proxy ∷ Proxy name)
                   <> setKeyword
                   <> q
-                  <>
-                        otherQ
+                  <> otherQ
 
 -- | UPDATE list
 class NameValuePairs pairs where
       nameValuePairs ∷ pairs → State QueryState String
 
-instance IsSymbol name ⇒ NameValuePairs (Op (Proxy name) (Default t)) where
+instance IsSymbol name ⇒ NameValuePairs (Op (Proxy name) Default) where
       nameValuePairs (Op _ name _) = pure $ DS.reflectSymbol name <> equalsSymbol <> defaultKeyword
 
 else instance (IsSymbol name, ToValue p) ⇒ NameValuePairs (Op (Proxy name) p) where
@@ -833,7 +832,7 @@ printFunction (PgFunction name args) = do
 quote ∷ ∀ alias. IsSymbol alias ⇒ Proxy alias → String
 quote name = quoteSymbol <> DS.reflectSymbol name <> quoteSymbol
 
--- | Columns in the format alias.name must be quoted to avoid problems with ambiguous column names and *
+-- | Columns in the format alias.name must be aliased to avoid problems with ambiguous column names and *
 quotePath ∷ ∀ alias name. IsSymbol alias ⇒ IsSymbol name ⇒ Proxy alias → Proxy name → String
 quotePath alias name = quote alias <> dotSymbol <> quote name
 

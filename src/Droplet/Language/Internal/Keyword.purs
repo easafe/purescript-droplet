@@ -141,3 +141,6 @@ simpleQuoteSymbol = "'"
 
 quoteSymbol ∷ String
 quoteSymbol = """""""
+
+createKeyword :: String
+createKeyword = "CREATE "

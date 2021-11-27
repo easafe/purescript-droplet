@@ -8,8 +8,8 @@ import Data.Array.Partial as DAP
 import Data.Maybe (Maybe(..))
 import Data.Maybe as DM
 import Data.Tuple.Nested ((/\))
-import Droplet.Language.Internal.Query (Query(..))
-import Droplet.Language.Internal.Query as DLIQ
+import Droplet.Language.Internal.Translate (Query(..))
+import Droplet.Language.Internal.Translate as DLIQ
 import Foreign as F
 import Partial.Unsafe as PU
 import Test.Model as TM

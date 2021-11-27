@@ -6,7 +6,7 @@ import Test.Types (b, id, name, u, users)
 
 import Data.BigInt as BG
 import Data.Tuple.Nested ((/\))
-import Droplet.Language.Internal.Query as DLIQ
+import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
 import Test.Unit (TestSuite)
 import Test.Unit as TU

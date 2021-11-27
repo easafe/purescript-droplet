@@ -46,7 +46,7 @@ jobs:
           path: |
             .spago
             output
-      - run: psql -f test/sql/main.sql postgresql://droplet:droplet@localhost:5432/droplet
+      - run: psql -f test/sql/index.sql postgresql://droplet:droplet@localhost:5432/droplet
       - run: npm install
       - run: spago build
       - run: spago test --no-install
