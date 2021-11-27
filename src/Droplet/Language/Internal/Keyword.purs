@@ -130,6 +130,9 @@ limitKeyword = " LIMIT "
 offsetKeyword ∷ String
 offsetKeyword = " OFFSET "
 
+createKeyword :: String
+createKeyword = "CREATE "
+
 dotSymbol ∷ String
 dotSymbol = "."
 

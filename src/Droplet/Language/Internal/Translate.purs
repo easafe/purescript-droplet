@@ -1,8 +1,10 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Gen
-      ( class FilteredQuery
+module Droplet.Language.Internal.Translate
+      ( Query(..)
+      , QueryState
+      , class FilteredQuery
       , class QualifiedProjection
       , class TranslateSource
       , class ToNakedProjection
@@ -15,19 +17,18 @@ module Droplet.Language.Internal.Gen
       , class IsValidAggregation
       , class ToJoinType
       , class ArgumentList
-      , argumentList
+      , class TranslateFieldDefinition
       , class QueryMustNotBeAliased
       , class ToQuery
-      , toQuery
       , class TranslateNakedColumn
-      , translateNakedColumn
       , class NameList
       , class NameValuePairs
       , class ValueList
       , class Translate
-      , Query(..)
+      , argumentList
+      , toQuery
+      , translateNakedColumn
       , translateSource
-      , QueryState
       , translateColumn
       , toJoinType
       , nameList
@@ -60,7 +61,7 @@ import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNo
 import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToValue, class UnwrapNullable, Default, E(..), Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
 import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
-import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Create(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
@@ -140,6 +141,10 @@ instance Translate (Update table fields constraints (Set values rest)) ⇒ ToQue
 
 -- | DELETE
 instance Translate (Delete (From f fields rest)) ⇒ ToQuery (Delete (From f fields rest)) () where
+      toQuery q = translate q
+
+-- | CREATE TABLE
+instance Translate (Create (Table name fields constraints)) ⇒ ToQuery (Create (Table name fields constraints)) () where
       toQuery q = translate q
 
 -- | Unsafe queries
@@ -843,6 +848,29 @@ instance Translate rest ⇒ Translate (Offset rest) where
             q ← translate rest
             pure $ offsetKeyword <> show n <> q
 
+-- | CREATE
+instance
+      ( Translate rest
+      , RowToList fields fieldsList
+      , TranslateFieldDefinition fieldsList
+      ) ⇒
+      Translate (Create (Table name fields constraints)) where
+      translate _ = do
+            pure $ createKeyword
+                  <> quote (Proxy ∷ Proxy name)
+                  <> openBracket
+                  <> DST.joinWith (comma <> newline) (translateFieldDefinition (Proxy ∷ Proxy fieldsList))
+                  <> closeBracket
+
+class TranslateFieldDefinition (list ∷ RowList Type) where
+      translateFieldDefinition ∷ Proxy ∷ Proxy list → Array String
+
+instance TranslateFieldDefinition Nil where
+      translateFieldDefinition _ = []
+
+instance (ToFieldDefinition t, TranslateFieldDefinition rest) ⇒ TranslateFieldDefinition (Cons name t rest) where
+      translateFieldDefinition _ = (quote name <> space <> toFieldDefinition (Proxy ∷ Proxy t)) : translateFieldDefinition (Proxy ∷ Proxy rest)
+
 printAggregation ∷ ∀ inp fields rest out. NameList inp ⇒ ArgumentList rest ⇒ Aggregate inp rest fields out → State QueryState String
 printAggregation = case _ of
       Count f → pure $ countFunctionName <> openBracket <> nameList f <> closeBracket
@@ -858,7 +886,7 @@ printFunction (PgFunction name args) = do
 quote ∷ ∀ alias. IsSymbol alias ⇒ Proxy alias → String
 quote name = quoteSymbol <> DS.reflectSymbol name <> quoteSymbol
 
--- | Columns in the format alias.name must be quoted to avoid problems with ambiguous column names and *
+-- | Columns in the format alias.name must be aliased to avoid problems with ambiguous column names and *
 quotePath ∷ ∀ alias name. IsSymbol alias ⇒ IsSymbol name ⇒ Proxy alias → Proxy name → String
 quotePath alias name = quote alias <> dotSymbol <> quote name
 

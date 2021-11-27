@@ -20,8 +20,8 @@ import Droplet.Language.Internal.Definition (class FromValue, class ToParameters
 import Droplet.Language.Internal.Definition as DIED
 import Droplet.Language.Internal.Syntax (Plan(..))
 import Droplet.Driver.Internal.Pool (Pool)
-import Droplet.Language.Internal.Gen (class ToQuery, Query(..))
-import Droplet.Language.Internal.Gen as DIMQ
+import Droplet.Language.Internal.Translate (class ToQuery, Query(..))
+import Droplet.Language.Internal.Translate as DIMQ
 import Effect (Effect)
 import Effect.Aff (Aff, bracket)
 import Effect.Aff as EA

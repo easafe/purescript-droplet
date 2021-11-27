@@ -2,33 +2,33 @@
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
 module Droplet.Language.Internal.Definition
-      ( class FromValue
-      , Empty
-
-      , class IsNullable
-      , class UnwrapNullable
-      , class ToParameters
-      , class ToValue
+      ( Empty
       , Identity
       , Default(..)
       , Star(..)
       , ForeignKey
       , PrimaryKey
       , Table(..)
-      , class ToConstraintValue
-      , toConstraintValue
       , Unique
-      , star
       , Constraint
+      , Joined(..)
+      , E(..)
+      , Path
+      , class FromValue
+      , class IsNullable
+      , class UnwrapNullable
+      , class ToParameters
+      , class ToValue
+      , class ToConstraintValue
+      , class ToFieldDefinition
+      , toFieldDefinition
+      , toConstraintValue
+      , star
       , toParameters
       , fromValue
       , toValue
-      , Joined(..)
       , path
       , (...)
-      , E(..)
-      , Path
-      , class AppendPath
       ) where
 
 import Prelude
@@ -62,7 +62,6 @@ import Foreign as F
 import Prim.Row (class Cons)
 import Prim.RowList (RowList, Cons, Nil)
 import Prim.Symbol (class Append)
-import Prim.TypeError (class Fail, Text)
 import Record as R
 import Type.Proxy (Proxy(..))
 
@@ -82,6 +81,7 @@ star = Star
 -- | Identity field equivalent to GENERATED ALWAYS AS IDENTITY
 data Identity
 
+-- | DEFAULT constraint
 data Default = Default
 
 data PrimaryKey
@@ -90,7 +90,7 @@ data Unique
 
 data ForeignKey (field ∷ Symbol) (table ∷ Type)
 
-data Constraint :: forall f t. Symbol -> f -> t -> Type
+data Constraint ∷ ∀ f t. Symbol → f → t → Type
 data Constraint name fields t
 
 -- | A trick to mark left joined columns as nullable
@@ -223,12 +223,12 @@ parseTime input errorMessage =
                   DE.note errorMessage result
             _ → Left errorMessage
 
--- | Convenience to remove Maybe wrappers
+-- | Convenience to remove nullable wrappers
 class UnwrapNullable (w ∷ Type) (t ∷ Type) | w → t
 
 instance UnwrapNullable (Maybe t) t
 
-else instance UnwrapNullable t u => UnwrapNullable (Joined t) u
+else instance UnwrapNullable t u ⇒ UnwrapNullable (Joined t) u
 
 else instance UnwrapNullable t t
 
@@ -238,6 +238,9 @@ instance IsNullable (Maybe t)
 
 instance IsNullable (Joined t)
 
+-- | How to represent parameters
+-- |
+-- | User code needs only to implement `ToValue`
 class ToParameters record (list ∷ RowList Type) where
       toParameters ∷ Proxy list → Record record → Array (Tuple String Foreign)
 
@@ -260,9 +263,11 @@ class AppendPath (alias ∷ Symbol) (name ∷ Symbol) (fullPath ∷ Symbol) | al
 
 instance (Append alias Dot path, Append path name fullPath) ⇒ AppendPath alias name fullPath
 
---here we need literals and functions
--- | How a value should be generated for DEFAULT, CHECK and other constraints
+-- | How a value should be generated for DEFAULT and other constraints
 -- |
 -- | Required only if using migrations; other cases are handled by `ToValue`
 class ToConstraintValue (t ∷ Type) where
       toConstraintValue ∷ Proxy t → Foreign
+
+class ToFieldDefinition (t :: Type) where
+      toFieldDefinition ∷ Proxy t → String

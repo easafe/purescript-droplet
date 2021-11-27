@@ -31,7 +31,6 @@ module Droplet.Language.Internal.Syntax
       , Offset(..)
       , Where(..)
       , Sort(..)
-      , Tabl(..)
       , class SortFieldsSource
       , class IncludeColumn
       , class UnwrapAll
@@ -101,7 +100,7 @@ module Droplet.Language.Internal.Syntax
       , delete
       , asc
       , desc
-      , tabl
+      , table
       , from
       , insert
       , limit
@@ -1488,6 +1487,9 @@ newtype Create rest = Create rest
 create ∷ Create E
 create = Create E
 
+---------------------------OR REPLACE------------------------------------------
+
+
 ---------------------------TABLE------------------------------------------
 
 {-
@@ -1589,10 +1591,11 @@ CREATE TABLE table_definition
 where table_definition is the Table type
 -}
 
-data Tabl (name ∷ Symbol) (fields ∷ Row Type) = Tabl
+--NEEDS SECURITY CHECKS
+table ∷ ∀ name fields constraints. Create E → Table name fields constraints → Create (Table name fields constraints)
+table _ _ = Create Table
 
-tabl ∷ ∀ name fields constraints. Create E → Table name fields constraints → Create (Tabl name fields)
-tabl _ _ = Create Tabl
+
 
 ---------------------------ALTER------------------------------------------
 

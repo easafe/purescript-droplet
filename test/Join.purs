@@ -3,7 +3,7 @@ module Test.Join where
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 import Droplet.Language (as, from, join, leftJoin, limit, on, orderBy, select, wher, (.&&.), (...), (.=.))
-import Droplet.Language.Internal.Gen as DLIQ
+import Droplet.Language.Internal.Translate as DLIQ
 import Prelude (discard, (#), ($))
 import Test.Model as TM
 import Test.Types (b, id, messages, n, name, sender, sent, t, tags, u, users)

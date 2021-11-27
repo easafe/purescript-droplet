@@ -6,7 +6,7 @@ import Data.BigInt as DB
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 import Droplet.Language (as, coalesce, count, from, orderBy, random, select, star, string_agg, (...))
-import Droplet.Language.Internal.Gen as DLIQ
+import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
 import Test.Types
 import Test.Unit (TestSuite)

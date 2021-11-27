@@ -34,6 +34,13 @@ type MessagesColumns =
       , sent ∷ Boolean
       )
 
+-- t
+-- Column t name
+-- Column t constraint
+-- Column t name (Constraint name)
+-- Column t name constraint
+
+
 type MessagesConstraints =
       ( Constraint "pk_messages" "id" PrimaryKey
               /\ Constraint "id_messages" "id" Identity

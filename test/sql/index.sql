@@ -54,9 +54,28 @@ create table unique_values (
     by integer unique
 );
 
-create table default_columns  (
+create table default_columns (
     recipient integer unique not null default (recipient_default()),
     sender integer default (44)
+);
+
+create table double_primary_key (
+    id integer generated always as identity,
+    second_id integer generated always as identity ,
+
+    constraint pk_double_primary_key primary key (id, second_id)
+);
+
+create table composite (
+    id integer generated always as identity,
+    second_id integer not null,
+    name text not null,
+    created date,
+    sender integer,
+    recipient integer,
+
+    constraint pk_composite primary key (id, second_id),
+    constraint sr_user foreign key (sender, recipient) references double_primary_key(id, second_id )
 );
 
 create or replace function truncate_tables()
@@ -69,6 +88,8 @@ begin
     truncate table maybe_keys cascade;
     truncate table unique_values cascade;
     truncate table default_columns cascade;
+    truncate table double_primary_key cascade;
+    truncate table composite cascade;
 end;
   $body$
   language plpgsql;
