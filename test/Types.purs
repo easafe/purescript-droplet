@@ -24,8 +24,8 @@ type Messages =
       ( id ∷ Column Int (PrimaryKey /\ Identity)
       , sender ∷ Column Int (NamedConstraint "sender_user" (ForeignKey "id" UsersTable))
       , recipient ∷ Int
-      , date ∷ Column Date Default
-      , secondDate ∷ ColumnDefinition Date "second_date" Default
+      , date ∷ Column DateTime Default
+      , second_date ∷ Column DateTime Default
       , sent ∷ Boolean
       )
 
@@ -51,18 +51,18 @@ type DefaultColumns =
       )
 
 type DoublePrimaryKey =
-      ( id ∷ Column Int (ConstraintDefinition "pk_double_primary_key" (Proxy "id" /\ Proxy "secondId") (PrimaryKey /\ Identity))
-      , secondId ∷ RenamedColumn Int "second_id"
+      ( id ∷ Column Int (ConstraintDefinition "pk_double_primary_key" (Proxy "id" /\ Proxy "second_id") (PrimaryKey /\ Identity))
+      , second_id ∷ Int
       )
 
 type DoublePrimaryKeyTable = Table "double_primary_key" DoublePrimaryKey
 
 type Composite =
-      ( id ∷ Column Int (Identity /\ ConstraintDefinition "pk_composite" (Proxy "id" /\ Proxy "secondId") PrimaryKey)
-      , secondId ∷ RenamedColumn Int "second_id"
+      ( id ∷ Column Int (Identity /\ ConstraintDefinition "pk_composite" (Proxy "id" /\ Proxy "second_id") PrimaryKey)
+      , second_id ∷ Int
       , create ∷ Maybe Date
       , name ∷ String
-      , sender ∷ Column Int (ConstraintDefinition "sr_user" (Proxy "sender" /\ Proxy "recipient") (ForeignKey (Proxy "id" /\ Proxy "secondId") DoublePrimaryKeyTable))
+      , sender ∷ Column Int (ConstraintDefinition "sr_user" (Proxy "sender" /\ Proxy "recipient") (ForeignKey (Proxy "id" /\ Proxy "second_id") DoublePrimaryKeyTable))
       , recipient ∷ Int
       )
 
@@ -143,6 +143,9 @@ recipient = Proxy
 
 secondDate ∷ Proxy "second_date"
 secondDate = Proxy
+
+secondId ∷ Proxy "second_id"
+secondId = Proxy
 
 created ∷ Proxy "created"
 created = Proxy

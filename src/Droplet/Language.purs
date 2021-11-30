@@ -30,11 +30,9 @@ import Droplet.Language.Internal.Definition
       , Identity
       , NamedConstraint
       , ConstraintDefinition
-      , RenamedColumn
       , Column
       , SharedConstraint
       , ForeignKey
-      , ColumnDefinition
       , Default(..)
       , PrimaryKey
       , Constraint
@@ -75,27 +73,30 @@ import Droplet.Language.Internal.Syntax
       , Select
       , Set
       , Update
+      , Join
+      , Offset
       , Returning
       , Limit
+      , Create
       , Values
+      , On
+      , Distinct
       , Where
+      , Union
       , as
       , delete
       , from
       , insert
+      , create
       , into
+      , table
       , orderBy
       , join
       , leftJoin
       , groupBy
-      , Join
-      , Offset
       , offset
-      , Union
       , union
       , unionAll
-      , On
-      , Distinct
       , distinct
       , exists
       , prepare

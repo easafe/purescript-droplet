@@ -35,6 +35,7 @@ module Droplet.Language.Internal.Syntax
       , class IncludeColumn
       , class UnwrapAll
       , class UniqueColumnNames
+      , class IsRequiredField
       , class ToOrderBy
       , class SortFields
       , class ToLimit
@@ -42,6 +43,7 @@ module Droplet.Language.Internal.Syntax
       , class StarProjection
       , class SymbolListSingleton
       , class SourceAlias
+      , class MissingRequiredFields
       , class ToPath
       , class QueryMustBeAliased
       , class UniqueSources
@@ -112,14 +114,14 @@ import Prelude
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class FieldCannotBeSet, class ToValue, class UnwrapDefinition, class UnwrapNullable, Identity, Default, E(..), Empty, Joined, Path, Star, Table(..))
+import Droplet.Language.Internal.Definition (class AppendPath, class FieldCannotBeSet, class ToValue, class UnwrapDefinition, class UnwrapNullable, Column, Column, Default(..), Dot, E(..), Empty, Identity, Joined, Path, Star, Table(..))
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
-import Droplet.Language.Internal.Keyword (Dot)
 import Prim.Boolean (False, True)
-import Prim.Row (class Cons, class Lacks, class Nub, class Union)
+import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
+import Type.Data.Boolean (class And, class If, class Or)
 import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
 
@@ -350,8 +352,6 @@ from ∷ ∀ f q fields sql. ToFrom f q fields ⇒ Resume q (From f fields E) sq
 from f q = resume q $ From f E
 
 -------------------------------JOIN----------------------------
-
---WE NEED TO REMOVE WRAPPERS BEFORE UNIONING FIELDS FOR JOIN
 
 -- | Kind for OUTER and INNER joins
 data Side
@@ -826,10 +826,12 @@ INSERT INTO
 
 newtype Insert rest = Insert rest
 
+insert ∷ Insert E
+insert = Insert E
+
 data Into (name ∷ Symbol) (fields ∷ Row Type) fieldNames rest = Into fieldNames rest
 
-data Values fieldValues rest = Values fieldValues rest
-
+-- | Compute list of inserted fields
 class InsertList (fields ∷ Row Type) (fieldNames ∷ Type) (inserted ∷ Row Type) | fieldNames → fields inserted
 
 instance
@@ -846,61 +848,100 @@ instance
       ) ⇒
       InsertList fields (f /\ rest) all
 
---refactor: error messages are quite bad
+-- | Compute list of required fields
 class RequiredFields (fieldList ∷ RowList Type) (required ∷ Row Type) | fieldList → required
 
--- instance RequiredFields Nil ()
+instance RequiredFields Nil ()
 
--- instance RequiredFields rest required ⇒ RequiredFields (Cons n (Identity t) rest) required
+else instance
+      ( IsRequiredField t is
+      , Cons name t () h
+      , If is h () head
+      , RequiredFields rest tail
+      , Union head tail required
+      ) ⇒
+      RequiredFields (Cons name t rest) required
 
--- else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Default t) rest) required
+class IsRequiredField (t ∷ Type) (required ∷ Boolean) | t → required
 
--- else instance RequiredFields rest required ⇒ RequiredFields (Cons n (Maybe t) rest) required
+instance
+      ( IsRequiredField t tp
+      , IsRequiredField constraints cn
+      , And tp cn required
+      ) ⇒
+      IsRequiredField (Column t constraints) required
 
--- else instance
---       ( RequiredFields rest tail
---       , Cons name t () head
---       , Lacks name tail
---       , Union head tail required
---       ) ⇒
---       RequiredFields (Cons name t rest) required
+else instance IsRequiredField constraints required ⇒ IsRequiredField (Maybe t) False
 
-class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type)
+else instance
+      ( IsRequiredField some s
+      , IsRequiredField more m
+      , And s m required
+      ) ⇒
+      IsRequiredField (some /\ more) required
 
--- -- | Multiple values, single column
--- instance InsertValues fields (Proxy name) u ⇒ InsertValues fields (Proxy name) (Array u)
+else instance IsRequiredField Default False
 
--- -- | DEFAULT
--- else instance Cons name (Default t) e fields ⇒ InsertValues fields (Proxy name) (Default t)
+else instance IsRequiredField Identity False
 
--- -- | Values
--- else instance
---       ( UnwrapDefinition t u
---       , Cons name t e fields
---       , ToValue u
---       ) ⇒
---       InsertValues fields (Proxy name) u
+else instance IsRequiredField t True
 
--- -- | Column list
--- else instance (InsertValues fields name value, InsertValues fields some more) ⇒ InsertValues fields (name /\ some) (value /\ more)
+-- | Slightly clearer type errors for missing columns
+class MissingRequiredFields (required ∷ Row Type) (inserted ∷ Row Type)
 
--- -- | Multiple values, many columns
--- else instance (InsertValues fields (name /\ some) (value /\ more)) ⇒ InsertValues fields (name /\ some) (Array (value /\ more))
-
-insert ∷ Insert E
-insert = Insert E
+instance Union required e inserted ⇒ MissingRequiredFields required inserted
 
 into ∷
-      ∀ tableName fields fieldNames fieldList required e inserted.
+      ∀ tableName fields fieldNames fieldList required inserted.
       RowToList fields fieldList ⇒
       RequiredFields fieldList required ⇒
       InsertList fields fieldNames inserted ⇒
-      Union required e inserted ⇒
+      MissingRequiredFields required inserted ⇒
       Table tableName fields →
       fieldNames →
       Insert E →
       Insert (Into tableName fields fieldNames E)
 into _ fieldNames _ = Insert (Into fieldNames E)
+
+data Values fieldValues rest = Values fieldValues rest
+
+class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type)
+
+-- | Multiple values, single column
+instance InsertValues fields (Proxy name) u ⇒ InsertValues fields (Proxy name) (Array u)
+
+-- | DEFAULT
+else instance (Cons name t e fields, IsDefault t name) ⇒ InsertValues fields (Proxy name) Default
+
+-- | Values
+else instance
+      ( UnwrapDefinition t u
+      , Cons name t e fields
+      , ToValue u
+      ) ⇒
+      InsertValues fields (Proxy name) u
+
+-- | Column list
+else instance (InsertValues fields name value, InsertValues fields some more) ⇒ InsertValues fields (name /\ some) (value /\ more)
+
+-- | Multiple values, many columns
+else instance (InsertValues fields (name /\ some) (value /\ more)) ⇒ InsertValues fields (name /\ some) (Array (value /\ more))
+
+-- | Clearer error message in case of misplaced default value
+class IsDefault (t ∷ Type) (name ∷ Symbol) | t → name
+
+instance IsDefault constraints name ⇒ IsDefault (Column t constraints) name
+
+else instance (IsDefault some name, IsDefault more name) ⇒ IsDefault (some /\ more) name
+
+else instance IsDefault Default name
+
+else instance
+      ( Append "Column " name start
+      , Append start " does not have a DEFAULT constraint" message
+      , Fail (Text message)
+      ) ⇒
+      IsDefault t name
 
 values ∷ ∀ tableName fields fieldNames fieldValues. InsertValues fields fieldNames fieldValues ⇒ fieldValues → Insert (Into tableName fields fieldNames E) → Insert (Into tableName fields fieldNames (Values fieldValues E))
 values fieldValues (Insert (Into fieldNames _)) = Insert <<< Into fieldNames $ Values fieldValues E
@@ -1470,7 +1511,7 @@ where table_definition is the Table type
 -}
 
 --NEEDS SECURITY CHECKS
-table ∷ ∀ name fields constraints. Create E → Table name fields → Create (Table name fields)
+table ∷ ∀ name fields. Table name fields → Create E → Create (Table name fields)
 table _ _ = Create Table
 
 ---------------------------ALTER------------------------------------------

@@ -1,7 +1,5 @@
 -- | SQL Keywords and tokens
-module Droplet.Language.Internal.Keyword where
-
-type Dot = "."
+module Droplet.Language.Internal.Token where
 
 --magic strings
 selectKeyword ∷ String
@@ -130,6 +128,9 @@ limitKeyword = " LIMIT "
 offsetKeyword ∷ String
 offsetKeyword = " OFFSET "
 
+semicolon :: String
+semicolon = ";"
+
 dotSymbol ∷ String
 dotSymbol = "."
 
@@ -139,8 +140,41 @@ string_aggFunctionName = "string_agg"
 simpleQuoteSymbol ∷ String
 simpleQuoteSymbol = "'"
 
+integerType ∷ String
+integerType = "INTEGER"
+
+bigIntegerType ∷ String
+bigIntegerType = "BIGINT"
+
+dateType ∷ String
+dateType = "DATE"
+
+tableKeyword :: String
+tableKeyword = "TABLE "
+
+notNullKeyword ∷ String
+notNullKeyword = " NOT NULL"
+
+dateTimeType ∷ String
+dateTimeType = "TIMESTAMPTZ"
+
+stringType ∷ String
+stringType = "TEXT"
+
+booleanType ∷ String
+booleanType = "BOOL"
+
+numberType ∷ String
+numberType = "DOUBLE PRECISION"
+
 quoteSymbol ∷ String
 quoteSymbol = """""""
 
 createKeyword :: String
 createKeyword = "CREATE "
+
+newline :: String
+newline = "\n"
+
+space :: String
+space = " "

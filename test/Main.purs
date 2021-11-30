@@ -3,6 +3,7 @@ module Test.Main where
 import Prelude
 
 import Effect (Effect)
+import Test.Create as TC
 import Test.As as TA
 import Test.Delete as TD
 import Test.Distinct as TDS
@@ -45,3 +46,4 @@ main = TUM.runTest do
       TL.tests
       TNS.tests
       TST.tests
+      TC.tests

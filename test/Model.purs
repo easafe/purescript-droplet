@@ -106,12 +106,17 @@ insertDefaultRecords = do
       DD.withConnection pool case _ of
             Left error → TU.failure $ "Error connecting" <> show error
             Right connection → do
-                  pure unit
                   void <<< DD.query connection $ insert # into users (name /\ surname /\ birthday) # values ("josh" /\ "j." /\ makeDate 1990 1 1)
                   void <<< DD.query connection $ insert # into users (name /\ surname /\ birthday) # values ("mary" /\ "sue" /\ makeDate 1900 11 11)
                   void <<< DD.query connection $ insert # into messages (sender /\ recipient /\ sent /\ date /\ secondDate) # values (1 /\ 2 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
                   void <<< DD.query connection $ insert # into messages (sender /\ recipient /\ sent /\ date /\ secondDate) # values (2 /\ 1 /\ true /\ makeDateTime 2000 3 4 /\ makeDateTime 2000 3 4)
                   void <<< DD.query connection $ insert # into tags (name /\ _by) # values ("tagged" /\ Just 1)
+                  void <<< DD.query connection $ insert # into maybeKeys id # values 1
+                  void <<< DD.query connection $ insert # into uniqueValues (name /\ _by) # values ("named" /\ Just 1)
+                  void <<< DD.query connection $ insert # into defaultColumns (recipient /\ sender) # values (RecipientColumn 3 /\ SenderColumn 1)
+                  void <<< DD.query connection $ insert # into doublePrimaryKey unit # values unit
+                  --NEED TO VALIDATE THAT SECOND ID IS MANDATORY
+                  -- void <<< DD.query connection $ insert # into composite (secondId /\ name) # values ( 1 /\ "adam")
 
 connectionInfo ∷ Configuration
 connectionInfo = (DD.defaultConfiguration "droplet")

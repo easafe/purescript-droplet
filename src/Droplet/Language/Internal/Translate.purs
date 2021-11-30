@@ -1,11 +1,49 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Translate (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class ArgumentList, argumentList, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class NameList, class NameValuePairs, class ValueList, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, nameList, translateConditions, nameValuePairs, valueList, translate, buildQuery, unsafeBuildQuery) where
+module Droplet.Language.Internal.Translate
+      ( Query(..)
+      , QueryState
+      , class FilteredQuery
+      , class TranslateFieldDefinition
+      , class QualifiedProjection
+      , class TranslateSource
+      , class ToNakedProjection
+      , class SingleQualifiedColumn
+      , class TranslateConditions
+      , class TranslateColumn
+      , class NoAggregations
+      , class OnlyAggregations
+      , class AggregatedQuery
+      , class IsValidAggregation
+      , class ToJoinType
+      , class ArgumentList
+      , class QueryMustNotBeAliased
+      , class ToQuery
+      , class TranslateNakedColumn
+      , class NameList
+      , class NameValuePairs
+      , class ValueList
+      , class Translate
+      , translateSource
+      , toQuery
+      , argumentList
+      , translateNakedColumn
+      , translateColumn
+      , toJoinType
+      , translateFieldDefinition
+      , nameList
+      , translateConditions
+      , nameValuePairs
+      , valueList
+      , translate
+      , buildQuery
+      , unsafeBuildQuery
+      ) where
 
 import Control.Monad.State (State)
 import Control.Monad.State as CMS
-import Data.Array ((..))
+import Data.Array ((..), (:))
 import Data.Array as DA
 import Data.Maybe (Maybe(..))
 import Data.String as DST
@@ -20,15 +58,16 @@ import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
-import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Default, E(..), Path, Star, Table, toParameters, toValue)
+import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToFieldDefinition, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Column, Default, E(..), Path, Star, Table, toParameters, toValue)
+import Droplet.Language.Internal.Definition as CLID
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
-import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
-import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Create, Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Token (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, createKeyword, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, semicolon, setKeyword, space, starSymbol, string_aggFunctionName, tableKeyword, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
-import Prim.RowList (class RowToList, Nil, RowList)
+import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
 import Type.Data.Boolean (class And)
@@ -103,6 +142,10 @@ instance Translate (Update table fields (Set values rest)) ⇒ ToQuery (Update t
 
 -- | DELETE
 instance Translate (Delete (From f fields rest)) ⇒ ToQuery (Delete (From f fields rest)) () where
+      toQuery q = translate q
+
+-- | CREATE TABLE
+instance Translate (Create (Table name fields)) ⇒ ToQuery (Create (Table name fields)) () where
       toQuery q = translate q
 
 -- | Unsafe queries
@@ -816,6 +859,30 @@ instance Translate rest ⇒ Translate (Offset rest) where
       translate (Offset n rest) = do
             q ← translate rest
             pure $ offsetKeyword <> show n <> q
+
+-- | CREATE TABLE
+instance (RowToList fields fieldsList, TranslateFieldDefinition fieldsList, IsSymbol name) ⇒ Translate (Create (Table name fields)) where
+      translate _ = do
+            pure $ createKeyword
+                  <> tableKeyword
+                  <> quote (Proxy ∷ Proxy name)
+                  <> space
+                  <> openBracket
+                  <> DST.joinWith comma (translateFieldDefinition (Proxy ∷ Proxy fieldsList))
+                  <> closeBracket
+                  <> semicolon
+
+class TranslateFieldDefinition (list ∷ RowList Type) where
+      translateFieldDefinition ∷ Proxy list → Array String
+
+instance TranslateFieldDefinition Nil where
+      translateFieldDefinition _ = []
+
+instance (ToFieldDefinition t, TranslateFieldDefinition rest, IsSymbol name) ⇒ TranslateFieldDefinition (Cons name (Column t d) rest) where
+      translateFieldDefinition _ = (quote (Proxy ∷ Proxy name) <> space <> CLID.toFieldDefinition (Proxy ∷ Proxy t)) : translateFieldDefinition (Proxy ∷ Proxy rest)
+
+else instance (ToFieldDefinition t, TranslateFieldDefinition rest, IsSymbol name) ⇒ TranslateFieldDefinition (Cons name t rest) where
+      translateFieldDefinition _ = (quote (Proxy ∷ Proxy name) <> space <> CLID.toFieldDefinition (Proxy ∷ Proxy t) <> notNullKeyword) : translateFieldDefinition (Proxy ∷ Proxy rest)
 
 printAggregation ∷ ∀ inp fields rest out. NameList inp ⇒ ArgumentList rest ⇒ Aggregate inp rest fields out → State QueryState String
 printAggregation = case _ of
