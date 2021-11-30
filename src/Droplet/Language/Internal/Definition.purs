@@ -8,6 +8,7 @@ module Droplet.Language.Internal.Definition
       , Star(..)
       , ForeignKey
       , PrimaryKey
+      , Dot
       , Table(..)
       , Unique
       , Constraint
@@ -18,6 +19,7 @@ module Droplet.Language.Internal.Definition
       , class IsNullable
       , class UnwrapNullable
       , class ToParameters
+      , class AppendPath
       , class ToValue
       , class ToConstraintValue
       , class ToFieldDefinition
@@ -56,7 +58,7 @@ import Data.Symbol as DS
 import Data.Traversable as DT
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
-import Droplet.Language.Internal.Keyword (Dot, dotSymbol)
+import Droplet.Language.Internal.Token (dotSymbol)
 import Foreign (Foreign)
 import Foreign as F
 import Prim.Row (class Cons)
@@ -70,6 +72,8 @@ foreign import showForeigner ∷ Foreign → String
 
 -- | Marks the query end
 data E = E
+
+type Dot = "."
 
 type Empty = ""
 

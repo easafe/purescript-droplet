@@ -34,13 +34,6 @@ type MessagesColumns =
       , sent ∷ Boolean
       )
 
--- t
--- Column t name
--- Column t constraint
--- Column t name (Constraint name)
--- Column t name constraint
-
-
 type MessagesConstraints =
       ( Constraint "pk_messages" "id" PrimaryKey
               /\ Constraint "id_messages" "id" Identity
@@ -62,7 +55,6 @@ type TagsConstraints =
               /\ Constraint "id_tags" "id" Identity
       )
 
--- we should not generate maybe for pks without identity or default
 type MaybeKeysColumns =
       ( id ∷ Int
       )
