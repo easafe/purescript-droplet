@@ -21,12 +21,10 @@ module Droplet.Language.Internal.Definition
       , class UnwrapNullable
       , class FromValue
       , class ToParameters
-      , class ToFieldDefinition
       , class ToValue
       , class UnwrapDefinition
       , class AppendPath
       , star
-      , toFieldDefinition
       , toParameters
       , fromValue
       , toValue
@@ -60,7 +58,7 @@ import Data.Symbol as DS
 import Data.Traversable as DT
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
-import Droplet.Language.Internal.Token (bigIntegerType, booleanType, dateTimeType, dateType, dotSymbol, integerType, numberType, stringType)
+import Droplet.Language.Internal.Token (dotSymbol)
 import Foreign (Foreign)
 import Foreign as F
 import Prim.Row (class Cons)
@@ -283,27 +281,3 @@ instance (Append alias Dot path, Append path name fullPath) ⇒ AppendPath alias
 -- | Required only if using migrations; other cases are handled by `ToValue`
 class ToConstraintValue (t ∷ Type) where
       toConstraintValue ∷ Proxy t → Foreign
-
-class ToFieldDefinition (t ∷ Type) where
-      toFieldDefinition ∷ Proxy t → String
-
-instance ToFieldDefinition Int where
-      toFieldDefinition _ = integerType
-
-instance ToFieldDefinition BigInt where
-      toFieldDefinition _ = bigIntegerType
-
-instance ToFieldDefinition Date where
-      toFieldDefinition _ = dateType
-
-instance ToFieldDefinition DateTime where
-      toFieldDefinition _ = dateTimeType
-
-instance ToFieldDefinition String where
-      toFieldDefinition _ = stringType
-
-instance ToFieldDefinition Number where
-      toFieldDefinition _ = numberType
-
-instance ToFieldDefinition Boolean where
-      toFieldDefinition _ = booleanType

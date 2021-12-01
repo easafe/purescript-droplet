@@ -56,6 +56,7 @@ import Droplet.Language.Internal.Function
       , random
       ) as Exported
 import Droplet.Language.Internal.Translate (class ToQuery, Query(..))
+import Droplet.Language.Internal.Translate (class ToFieldDefinition, toFieldDefinition) as Exported
 import Droplet.Language.Internal.Translate as DLIQ
 import Droplet.Language.Internal.Syntax
       ( As
