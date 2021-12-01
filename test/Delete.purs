@@ -7,9 +7,11 @@ import Test.Types
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
 
-import Test.Spec  as TS
+import Test.Spec (Spec)
+import Test.Spec as TS
 
 
+tests ∷ Spec Unit
 tests = do
       TS.describe "delete" do
             TS.it "all" do

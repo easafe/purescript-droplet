@@ -8,6 +8,7 @@ import Prelude
 import Data.Maybe (Maybe(..))
 import Droplet.Language.Internal.Definition (class IsNullable, class ToValue, class UnwrapDefinition, class UnwrapNullable, Path)
 import Prim.Row (class Cons)
+import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
 
 data BinaryOperator
@@ -76,6 +77,8 @@ else instance
       Comparison (Path alias name) fields alias v
 
 else instance Comparison (Path table name) fields alias OuterScope
+
+else instance Fail (Text "Comparisons must not be wrapped in Maybe") ⇒ Comparison (Maybe t) fields alias t
 
 else instance ToValue t ⇒ Comparison t fields alias t
 

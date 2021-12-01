@@ -14,10 +14,12 @@ import Foreign as F
 import Partial.Unsafe as PU
 import Test.Model as TM
 
-import Test.Spec  as TS
+import Test.Spec (Spec)
+import Test.Spec as TS
 import Test.Spec.Assertions  as TSA
 
 
+tests ∷ Spec Unit
 tests = do
       TS.describe "unsafe queries" do
             TS.it "select" do

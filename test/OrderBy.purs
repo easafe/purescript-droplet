@@ -3,13 +3,15 @@ module Test.OrderBy where
 import Data.Tuple.Nested ((/\))
 import Droplet.Language
 import Droplet.Language.Internal.Translate as DLIQ
-import Prelude (discard, void, (#), ($))
+import Prelude hiding (join)
 import Test.Model as TM
 import Test.Types (date_part_age, id, date, messages, n, name, t, u, users)
 
-import Test.Spec  as TS
+import Test.Spec (Spec)
+import Test.Spec as TS
 
 
+tests ∷ Spec Unit
 tests =
       TS.describe "order by" do
             TS.it "projection" do

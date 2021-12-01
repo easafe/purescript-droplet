@@ -9,9 +9,11 @@ import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
 
-import Test.Spec  as TS
+import Test.Spec (Spec)
+import Test.Spec as TS
 
 
+tests ∷ Spec Unit
 tests =
       TS.describe "group by" do
             TS.it "single field" do

@@ -10,9 +10,11 @@ import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
 import Test.Types
 
-import Test.Spec  as TS
+import Test.Spec (Spec)
+import Test.Spec as TS
 
 
+tests ∷ Spec Unit
 tests = TS.describe "functions" do
       TS.describe "user defined functions" do
             TS.it "value" do

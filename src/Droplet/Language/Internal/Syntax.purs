@@ -1006,21 +1006,21 @@ data Set pairs rest = Set pairs rest
 
 class ToUpdatePairs (fields ∷ Row Type) (pairs ∷ Type)
 
--- instance Cons name (Default t) e fields ⇒ ToUpdatePairs fields (Op (Proxy name) (Default t))
+instance Cons name (Default t) e fields ⇒ ToUpdatePairs fields (Op (Proxy name) (Default t))
 
--- else instance
---       ( ColumnCannotBeSet t
---       , UnwrapDefinition t u
---       , ToValue u
---       , Cons name t e fields
---       ) ⇒
---       ToUpdatePairs fields (Op (Proxy name) u)
+else instance
+      ( ColumnCannotBeSet t
+      , UnwrapDefinition t u
+      , ToValue u
+      , Cons name t e fields
+      ) ⇒
+      ToUpdatePairs fields (Op (Proxy name) u)
 
--- instance
---       ( ToUpdatePairs fields head
---       , ToUpdatePairs fields tail
---       ) ⇒
---       ToUpdatePairs fields (head /\ tail)
+instance
+      ( ToUpdatePairs fields head
+      , ToUpdatePairs fields tail
+      ) ⇒
+      ToUpdatePairs fields (head /\ tail)
 
 update ∷ ∀ name fields. Table name fields → Update name fields E
 update _ = Update E

@@ -23,7 +23,8 @@ import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Partial.Unsafe as PU
 import Prim.RowList (class RowToList)
-import Test.Spec  as TS
+import Test.Spec (Spec)
+import Test.Spec as TS
 import Test.Spec.Assertions as TSA
 
 makeDate ∷ Int → Int → Int → Date

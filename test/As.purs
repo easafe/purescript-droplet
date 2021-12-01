@@ -8,10 +8,12 @@ import Data.Maybe (Maybe(..))
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
 
-import Test.Spec  as TS
+import Test.Spec (Spec)
+import Test.Spec as TS
 import Type.Proxy (Proxy(..))
 
 
+tests ∷ Spec Unit
 tests =
       TS.describe "as" do
             TS.describe "named field" do

@@ -10,10 +10,11 @@ import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
+import Test.Spec (Spec)
+import Test.Spec as TS
 
-import Test.Spec  as TS
 
-
+tests ∷ Spec Unit
 tests =
       TS.describe "create" do
             TS.describe "table" do
@@ -26,7 +27,4 @@ tests =
                         TM.notParameterized """CREATE TABLE "test" ("id" INTEGER, "name" TEXT NOT NULL);""" $ DLIQ.buildQuery q
                         void $ TM.resultOnly q
                   TS.describe "constraints" do
-                        TS.it "single" do
-                              let q = create # table (Table :: Table "test" (id :: Maybe Int, name :: String))
-                              TM.notParameterized """CREATE TABLE "test" ("id" INTEGER, "name" TEXT NOT NULL);""" $ DLIQ.buildQuery q
-                              void $ TM.resultOnly q
+                        TS.pending "single"
