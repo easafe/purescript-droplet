@@ -28,12 +28,10 @@ import Droplet.Language.Internal.Definition
       , class ToParameters
       , class ToValue
       , Identity
-      , NamedConstraint
-      , ConstraintDefinition
       , Column
-      , SharedConstraint
       , ForeignKey
       , Default(..)
+      , Composite
       , PrimaryKey
       , Constraint
       , Unique
@@ -82,10 +80,12 @@ import Droplet.Language.Internal.Syntax
       , On
       , Distinct
       , Where
+      , DefaultValues
       , Union
       , as
       , delete
       , from
+      , defaultValues
       , insert
       , create
       , into

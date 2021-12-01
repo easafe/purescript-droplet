@@ -88,8 +88,9 @@ begin
     truncate table maybe_keys cascade;
     truncate table unique_values cascade;
     truncate table default_columns cascade;
-    truncate table double_primary_key cascade;
-    truncate table composite cascade;
+    truncate table double_primary_key restart identity cascade;
+    truncate table composite restart identity cascade;
+    drop table if exists test;
 end;
   $body$
   language plpgsql;

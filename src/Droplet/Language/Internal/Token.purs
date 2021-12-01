@@ -90,7 +90,7 @@ insertKeyword ∷ String
 insertKeyword = "INSERT INTO "
 
 valuesKeyword ∷ String
-valuesKeyword = " VALUES "
+valuesKeyword = " VALUES"
 
 updateKeyword ∷ String
 updateKeyword = "UPDATE "

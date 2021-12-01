@@ -61,7 +61,7 @@ import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNo
 import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToFieldDefinition, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, Column, Default, E(..), Path, Star, Table, toParameters, toValue)
 import Droplet.Language.Internal.Definition as CLID
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
-import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Create, Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Create, DefaultValues(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
 import Droplet.Language.Internal.Token (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, createKeyword, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, semicolon, setKeyword, space, starSymbol, string_aggFunctionName, tableKeyword, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
@@ -124,12 +124,24 @@ instance
       ToQuery (Union q r) final where
       toQuery q = translate q
 
+-- | INSERT DEFAULT VALUES ... RETURNING
+instance
+      ( ToProjection f fields Nil projection
+      , Translate (Insert (Into name fields DefaultValues (Returning f)))
+      ) ⇒
+      ToQuery (Insert (Into name fields DefaultValues (Returning f))) projection where
+      toQuery q = translate q
+
 -- | INSERT ... RETURNING
 instance
       ( ToProjection f fields Nil projection
       , Translate (Insert (Into name fields fieldNames (Values v (Returning f))))
       ) ⇒
       ToQuery (Insert (Into name fields fieldNames (Values v (Returning f)))) projection where
+      toQuery q = translate q
+
+-- | INSERT DEFAULT VALUES
+instance Translate (Insert (Into name fields DefaultValues E)) ⇒ ToQuery (Insert (Into name fields DefaultValues E)) () where
       toQuery q = translate q
 
 -- | INSERT
@@ -693,8 +705,23 @@ printInclusion = case _ of
       All → allKeyword
       Unique → ""
 
--- | INSERT
+-- | INSERT DEFAULT VALUES
 instance
+      ( IsSymbol name
+      , Translate rest
+      ) ⇒
+      Translate (Insert (Into name fields DefaultValues rest)) where
+      translate (Insert (Into DefaultValues rest)) = do
+            otherQ ← translate rest
+            pure $ insertKeyword
+                  <> quote (Proxy ∷ Proxy name)
+                  <> space
+                  <> defaultKeyword
+                  <> valuesKeyword
+                  <> otherQ
+
+-- | INSERT
+else instance
       ( IsSymbol name
       , NameList fieldNames
       , ValueList v
@@ -710,11 +737,11 @@ instance
                   <> nameList fieldNames
                   <> closeBracket
                   <> valuesKeyword
+                  <> space
                   <> openBracket
                   <> q
                   <> closeBracket
-                  <>
-                        otherQ
+                  <> otherQ
 
 -- | Names (possibly) separated by comma
 -- |

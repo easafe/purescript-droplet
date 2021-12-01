@@ -114,9 +114,8 @@ insertDefaultRecords = do
                   void <<< DD.query connection $ insert # into maybeKeys id # values 1
                   void <<< DD.query connection $ insert # into uniqueValues (name /\ _by) # values ("named" /\ Just 1)
                   void <<< DD.query connection $ insert # into defaultColumns (recipient /\ sender) # values (RecipientColumn 3 /\ SenderColumn 1)
-                  void <<< DD.query connection $ insert # into doublePrimaryKey unit # values unit
-                  --NEED TO VALIDATE THAT SECOND ID IS MANDATORY
-                  -- void <<< DD.query connection $ insert # into composite (secondId /\ name) # values ( 1 /\ "adam")
+                  void <<< DD.query connection $ insert # into doublePrimaryKey defaultValues
+                  void <<< DD.query connection $ insert # into composite (secondId /\ name /\ sender /\ recipient) # values ( 1 /\ "adam" /\ 1 /\ 2)
 
 connectionInfo ∷ Configuration
 connectionInfo = (DD.defaultConfiguration "droplet")

@@ -22,7 +22,7 @@ type UsersTable = Table "users" Users
 
 type Messages =
       ( id ∷ Column Int (PrimaryKey /\ Identity)
-      , sender ∷ Column Int (NamedConstraint "sender_user" (ForeignKey "id" UsersTable))
+      , sender ∷ Column Int (Constraint "sender_user" (ForeignKey "id" UsersTable))
       , recipient ∷ Int
       , date ∷ Column DateTime Default
       , second_date ∷ Column DateTime Default
@@ -33,7 +33,7 @@ type Tags =
       ( id ∷ Column Int (PrimaryKey /\ Identity)
       , name ∷ String
       , created ∷ Maybe Date
-      , by ∷ Column (Maybe Int) (NamedConstraint "by_user" (ForeignKey "id" UsersTable))
+      , by ∷ Column (Maybe Int) (Constraint "by_user" (ForeignKey "id" UsersTable))
       )
 
 type MaybeKeys =
@@ -46,24 +46,24 @@ type UniqueValues =
       )
 
 type DefaultColumns =
-      ( sender ∷ Column SenderColumn (Constraint (Unique /\ Default))
+      ( sender ∷ Column SenderColumn (Unique /\ Default)
       , recipient ∷ Column RecipientColumn Default
       )
 
 type DoublePrimaryKey =
-      ( id ∷ Column Int (ConstraintDefinition "pk_double_primary_key" (Proxy "id" /\ Proxy "second_id") (PrimaryKey /\ Identity))
-      , second_id ∷ Int
+      ( id ∷ Column Int (Constraint (Composite "pk_double_primary_key") (PrimaryKey /\ Identity))
+      , second_id ∷ Column Int (Constraint (Composite "pk_double_primary_key") (PrimaryKey /\ Identity))
       )
 
 type DoublePrimaryKeyTable = Table "double_primary_key" DoublePrimaryKey
 
-type Composite =
-      ( id ∷ Column Int (Identity /\ ConstraintDefinition "pk_composite" (Proxy "id" /\ Proxy "second_id") PrimaryKey)
-      , second_id ∷ Int
+type CompositeT =
+      ( id ∷ Column Int (Identity /\ Constraint (Composite "pk_composite") PrimaryKey)
+      , second_id ∷ Column Int (Constraint (Composite "pk_composite") PrimaryKey)
       , create ∷ Maybe Date
       , name ∷ String
-      , sender ∷ Column Int (ConstraintDefinition "sr_user" (Proxy "sender" /\ Proxy "recipient") (ForeignKey (Proxy "id" /\ Proxy "second_id") DoublePrimaryKeyTable))
-      , recipient ∷ Int
+      , sender ∷ Column Int (Constraint (Composite "sr_user") (ForeignKey "id" DoublePrimaryKeyTable))
+      , recipient ∷ Column Int (Constraint (Composite "sr_user") (ForeignKey "second_id" DoublePrimaryKeyTable))
       )
 
 newtype SenderColumn = SenderColumn Int
@@ -111,7 +111,7 @@ defaultColumns = Table
 doublePrimaryKey ∷ DoublePrimaryKeyTable
 doublePrimaryKey = Table
 
-composite ∷ Table "composite" Composite
+composite ∷ Table "composite" CompositeT
 composite = Table
 
 id ∷ Proxy "id"

@@ -17,6 +17,7 @@ module Droplet.Language.Internal.Syntax
       , OrderBy(..)
       , Limit(..)
       , GroupBy(..)
+      , DefaultValues(..)
       , Into(..)
       , Plan(..)
       , Distinct(..)
@@ -31,19 +32,21 @@ module Droplet.Language.Internal.Syntax
       , Offset(..)
       , SymbolList
       , class ToOffset
-      , class SortFieldsSource
+      , class SortColumnsSource
       , class IncludeColumn
+      , class ColumnCannotBeSet
       , class UnwrapAll
       , class UniqueColumnNames
-      , class IsRequiredField
+      , class IsRequiredColumn
       , class ToOrderBy
-      , class SortFields
+      , class SortColumns
       , class ToLimit
       , class Resume
       , class StarProjection
+      , class IsDefault
       , class SymbolListSingleton
       , class SourceAlias
-      , class MissingRequiredFields
+      , class MissingRequiredColumns
       , class ToPath
       , class QueryMustBeAliased
       , class UniqueSources
@@ -54,14 +57,14 @@ module Droplet.Language.Internal.Syntax
       , class QualifiedColumn
       , class OnComparision
       , class ValidGroupByProjection
-      , class GroupByFields
+      , class GroupByColumns
       , class ToGroupBy
-      , class ToOuterFields
+      , class ToOuterColumns
       , class ToWhere
       , class JoinedToMaybe
       , class CompatibleProjection
       , class ToUnion
-      , class RequiredFields
+      , class RequiredColumns
       , class ToAs
       , class ToFrom
       , class GroupBySource
@@ -73,18 +76,19 @@ module Droplet.Language.Internal.Syntax
       , class ToSingleColumn
       , class ToSubExpression
       , class IncludeAllColumns
-      , class SourceFields
+      , class SourceColumns
       , class ToUpdatePairs
       , class ToReturning
-      , class ToReturningFields
+      , class ReturningColumns
       , class UniqueAliases
-      , class QualifiedFields
+      , class QualifiedColumns
       , join
       , create
       , table
       , leftJoin
       , resume
       , exists
+      , defaultValues
       , on
       , union
       , groupBy
@@ -110,18 +114,19 @@ module Droplet.Language.Internal.Syntax
       ) where
 
 import Prelude
+import Prim hiding (Constraint)
 
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class FieldCannotBeSet, class ToValue, class UnwrapDefinition, class UnwrapNullable, Column, Column, Default(..), Dot, E(..), Empty, Identity, Joined, Path, Star, Table(..))
+import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, Column, Constraint, Default(..), Dot, E(..), Empty, Identity, Joined, Path, Star, Table(..))
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Text)
-import Type.Data.Boolean (class And, class If, class Or)
+import Type.Data.Boolean (class And, class If)
 import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
 
@@ -327,9 +332,9 @@ else instance
       ) ⇒
       ToFrom (Join k fields l r aliases (On c rest)) (Select s unique E) fields
 
--- | Anything `SourceFields` can compute
+-- | Anything `SourceColumns` can compute
 else instance
-      ( SourceFields f fields aliases
+      ( SourceColumns f fields aliases
       , ToProjection s fields aliases selected
       , Nub selected unique
       , UniqueColumnNames selected unique
@@ -381,36 +386,36 @@ else instance
       ( ToJoin l left las
       , ToJoin r right ras
       , RowToList right list
-      , ToOuterFields list out
+      , ToOuterColumns list out
       , Union left out all
       , Nub all fields
       , RowListAppend las ras aliases
       ) ⇒
       ToJoin (Join Outer fd l r a (On c rest)) fields aliases
 
-else instance SourceFields q fields aliases ⇒ ToJoin q fields aliases
+else instance SourceColumns q fields aliases ⇒ ToJoin q fields aliases
 
 -- | OUTER JOINs make one side nullable, as a corresponding record may not be found
 -- |
 -- | For ease of use, this class marks the nullable side fields with `Joined`, later on `ToProjection` will flatten it to `Maybe`
-class ToOuterFields (list ∷ RowList Type) (fields ∷ Row Type) | list → fields
+class ToOuterColumns (list ∷ RowList Type) (fields ∷ Row Type) | list → fields
 
-instance ToOuterFields Nil ()
+instance ToOuterColumns Nil ()
 
 -- | Avoid nesting `Joined`s
 instance
       ( Cons name (Joined t) () head
-      , ToOuterFields rest tail
+      , ToOuterColumns rest tail
       , Union head tail all
       ) ⇒
-      ToOuterFields (Cons name (Joined t) rest) all
+      ToOuterColumns (Cons name (Joined t) rest) all
 
 else instance
       ( Cons name (Joined t) () head
-      , ToOuterFields rest tail
+      , ToOuterColumns rest tail
       , Union head tail all
       ) ⇒
-      ToOuterFields (Cons name t rest) all
+      ToOuterColumns (Cons name t rest) all
 
 -- | INNER JOIN statement
 -- |
@@ -449,7 +454,7 @@ leftJoin ∷
       Union left lf source ⇒
       Union right rf source ⇒
       RowToList lf list ⇒
-      ToOuterFields list out ⇒
+      ToOuterColumns list out ⇒
       Union rf out fields ⇒
       l →
       r →
@@ -536,7 +541,7 @@ instance GroupBySource (Table name fields) fields
 
 instance
       ( RowToList fields list
-      , QualifiedFields list alias aliased
+      , QualifiedColumns list alias aliased
       , Union aliased fields all
       ) ⇒
       GroupBySource (As alias (Table name fields)) all
@@ -546,14 +551,14 @@ instance GroupBySource (Join k fields q r a rest) fields
 instance
       ( QueryMustBeAliased rest alias
       , RowToList projection list
-      , QualifiedFields list alias aliased
+      , QualifiedColumns list alias aliased
       , Union aliased projection all
       ) ⇒
       GroupBySource (Select s projection (From f fd rest)) all
 
-class GroupByFields (f ∷ Type) (fields ∷ Row Type) (grouped ∷ Row Type) | f → fields grouped
+class GroupByColumns (f ∷ Type) (fields ∷ Row Type) (grouped ∷ Row Type) | f → fields grouped
 
-instance (Cons name t e fields, Cons name t () grouped) ⇒ GroupByFields (Proxy name) fields grouped
+instance (Cons name t e fields, Cons name t () grouped) ⇒ GroupByColumns (Proxy name) fields grouped
 
 instance
       ( AppendPath alias name fullPath
@@ -561,14 +566,14 @@ instance
       , Cons fullPath t () g
       , Cons name t g grouped
       ) ⇒
-      GroupByFields (Path alias name) fields grouped
+      GroupByColumns (Path alias name) fields grouped
 
 instance
-      ( GroupByFields a fields some
-      , GroupByFields b fields more
+      ( GroupByColumns a fields some
+      , GroupByColumns b fields more
       , Union some more grouped
       ) ⇒
-      GroupByFields (a /\ b) fields grouped
+      GroupByColumns (a /\ b) fields grouped
 
 -- | Asserts that a SELECT ... GROUP BY projection contains only grouped columns or aggregate functions
 class ValidGroupByProjection (s ∷ Type) (grouped ∷ Row Type) | s → grouped
@@ -587,7 +592,7 @@ else instance ValidGroupByProjection q grouped
 groupBy ∷
       ∀ f s q sql grouped fields.
       ToGroupBy q s fields ⇒
-      GroupByFields f fields grouped ⇒
+      GroupByColumns f fields grouped ⇒
       ValidGroupByProjection s grouped ⇒
       Resume q (GroupBy f E) sql ⇒
       f →
@@ -629,13 +634,13 @@ data Sort (f ∷ Type) = Asc | Desc
 -- | ORDER BY must be last statement
 class ToOrderBy (f ∷ Type) (q ∷ Type)
 
-instance (SortFieldsSource s projection f fields available, SortFields st available) ⇒ ToOrderBy st (Select s projection (From f fields E))
+instance (SortColumnsSource s projection f fields available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f fields E))
 
-instance (SortFieldsSource s projection f fields available, SortFields st available) ⇒ ToOrderBy st (Select s projection (From f fields (GroupBy g E)))
+instance (SortColumnsSource s projection f fields available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f fields (GroupBy g E)))
 
-instance (SortFieldsSource s projection f fields available, SortFields st available) ⇒ ToOrderBy st (Select s projection (From f fields (Where cd E)))
+instance (SortColumnsSource s projection f fields available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f fields (Where cd E)))
 
-instance (SortFieldsSource s projection f fields available, SortFields st available) ⇒ ToOrderBy st (Select s projection (From f fields (Where cd (GroupBy g E))))
+instance (SortColumnsSource s projection f fields available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f fields (Where cd (GroupBy g E))))
 
 -- for aggregate/window functions
 instance ToOrderBy (Proxy name) String
@@ -646,35 +651,35 @@ instance ToOrderBy (Path alias name) String
 -- | Fields available for sorting this query
 -- |
 -- | N.B: SELECT DISTINCT queries can only be sorted by fields in the projection
-class SortFieldsSource (s ∷ Type) (projection ∷ Row Type) (f ∷ Type) (fields ∷ Row Type) (available ∷ Row Type) | s → available
+class SortColumnsSource (s ∷ Type) (projection ∷ Row Type) (f ∷ Type) (fields ∷ Row Type) (available ∷ Row Type) | s → available
 
-instance SortFieldsSource (Distinct s) projection f fields projection
+instance SortColumnsSource (Distinct s) projection f fields projection
 
 else instance
       ( SourceAlias f alias
       , RowToList fields list
-      , QualifiedFields list alias qual
+      , QualifiedColumns list alias qual
       , Union projection fields pf
       , Union qual pf all
       ) ⇒
-      SortFieldsSource s projection f fields all
+      SortColumnsSource s projection f fields all
 
-class SortFields (f ∷ Type) (fields ∷ Row Type) | f → fields
+class SortColumns (f ∷ Type) (fields ∷ Row Type) | f → fields
 
-instance Cons name t e fields ⇒ SortFields (Proxy name) fields
+instance Cons name t e fields ⇒ SortColumns (Proxy name) fields
 
 --not allowing out of scope qualified fields yet
-instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ SortFields (Path alias name) fields
+instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ SortColumns (Path alias name) fields
 
-instance Cons name t e fields ⇒ SortFields (Sort (Proxy name)) fields
+instance Cons name t e fields ⇒ SortColumns (Sort (Proxy name)) fields
 
-instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ SortFields (Sort (Path alias name)) fields
+instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ SortColumns (Sort (Path alias name)) fields
 
-instance Fail (Text "Cannot sort by void function") ⇒ SortFields (PgFunction input args fields Unit) fields
+instance Fail (Text "Cannot sort by void function") ⇒ SortColumns (PgFunction input args fields Unit) fields
 
-else instance SortFields (PgFunction input args fields output) fields
+else instance SortColumns (PgFunction input args fields output) fields
 
-instance (SortFields a fields, SortFields b fields) ⇒ SortFields (a /\ b) fields
+instance (SortColumns a fields, SortColumns b fields) ⇒ SortColumns (a /\ b) fields
 
 -- | ASC
 asc ∷ ∀ name. name → Sort name
@@ -834,8 +839,10 @@ data Into (name ∷ Symbol) (fields ∷ Row Type) fieldNames rest = Into fieldNa
 -- | Compute list of inserted fields
 class InsertList (fields ∷ Row Type) (fieldNames ∷ Type) (inserted ∷ Row Type) | fieldNames → fields inserted
 
+instance InsertList fields DefaultValues ()
+
 instance
-      ( FieldCannotBeSet t
+      ( ColumnCannotBeSet t
       , Cons name t e fields
       , Cons name t () single
       ) ⇒
@@ -849,54 +856,69 @@ instance
       InsertList fields (f /\ rest) all
 
 -- | Compute list of required fields
-class RequiredFields (fieldList ∷ RowList Type) (required ∷ Row Type) | fieldList → required
+class RequiredColumns (fieldList ∷ RowList Type) (required ∷ Row Type) | fieldList → required
 
-instance RequiredFields Nil ()
+instance RequiredColumns Nil ()
 
 else instance
-      ( IsRequiredField t is
+      ( IsRequiredColumn t is
       , Cons name t () h
       , If is h () head
-      , RequiredFields rest tail
+      , RequiredColumns rest tail
       , Union head tail required
       ) ⇒
-      RequiredFields (Cons name t rest) required
+      RequiredColumns (Cons name t rest) required
 
-class IsRequiredField (t ∷ Type) (required ∷ Boolean) | t → required
+class IsRequiredColumn (t ∷ Type) (required ∷ Boolean) | t → required
 
 instance
-      ( IsRequiredField t tp
-      , IsRequiredField constraints cn
+      ( IsRequiredColumn t tp
+      , IsRequiredColumn constraints cn
       , And tp cn required
       ) ⇒
-      IsRequiredField (Column t constraints) required
+      IsRequiredColumn (Column t constraints) required
 
-else instance IsRequiredField constraints required ⇒ IsRequiredField (Maybe t) False
+else instance IsRequiredColumn t required ⇒ IsRequiredColumn (Constraint n t) required
+
+else instance IsRequiredColumn (Maybe t) False
 
 else instance
-      ( IsRequiredField some s
-      , IsRequiredField more m
+      ( IsRequiredColumn some s
+      , IsRequiredColumn more m
       , And s m required
       ) ⇒
-      IsRequiredField (some /\ more) required
+      IsRequiredColumn (some /\ more) required
 
-else instance IsRequiredField Default False
+else instance IsRequiredColumn Default False
 
-else instance IsRequiredField Identity False
+else instance IsRequiredColumn Identity False
 
-else instance IsRequiredField t True
+else instance IsRequiredColumn t True
+
+-- | Fields that cannot be inserted or updated
+class ColumnCannotBeSet (t ∷ Type)
+
+instance ColumnCannotBeSet constraints ⇒ ColumnCannotBeSet (Column t constraints)
+
+else instance ColumnCannotBeSet t ⇒ ColumnCannotBeSet (Constraint n t)
+
+else instance Fail (Text "Identity columns cannot be inserted or updated") ⇒ ColumnCannotBeSet Identity
+
+else instance (ColumnCannotBeSet some, ColumnCannotBeSet more) ⇒ ColumnCannotBeSet (some /\ more)
+
+else instance ColumnCannotBeSet t
 
 -- | Slightly clearer type errors for missing columns
-class MissingRequiredFields (required ∷ Row Type) (inserted ∷ Row Type)
+class MissingRequiredColumns (required ∷ Row Type) (inserted ∷ Row Type)
 
-instance Union required e inserted ⇒ MissingRequiredFields required inserted
+instance Union required e inserted ⇒ MissingRequiredColumns required inserted
 
 into ∷
       ∀ tableName fields fieldNames fieldList required inserted.
       RowToList fields fieldList ⇒
-      RequiredFields fieldList required ⇒
+      RequiredColumns fieldList required ⇒
       InsertList fields fieldNames inserted ⇒
-      MissingRequiredFields required inserted ⇒
+      MissingRequiredColumns required inserted ⇒
       Table tableName fields →
       fieldNames →
       Insert E →
@@ -904,6 +926,8 @@ into ∷
 into _ fieldNames _ = Insert (Into fieldNames E)
 
 data Values fieldValues rest = Values fieldValues rest
+
+data DefaultValues = DefaultValues
 
 class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type)
 
@@ -946,6 +970,9 @@ else instance
 values ∷ ∀ tableName fields fieldNames fieldValues. InsertValues fields fieldNames fieldValues ⇒ fieldValues → Insert (Into tableName fields fieldNames E) → Insert (Into tableName fields fieldNames (Values fieldValues E))
 values fieldValues (Insert (Into fieldNames _)) = Insert <<< Into fieldNames $ Values fieldValues E
 
+defaultValues ∷ DefaultValues
+defaultValues = DefaultValues
+
 ---------------------------UPDATE------------------------------------------
 
 {-
@@ -982,7 +1009,7 @@ class ToUpdatePairs (fields ∷ Row Type) (pairs ∷ Type)
 -- instance Cons name (Default t) e fields ⇒ ToUpdatePairs fields (Op (Proxy name) (Default t))
 
 -- else instance
---       ( FieldCannotBeSet t
+--       ( ColumnCannotBeSet t
 --       , UnwrapDefinition t u
 --       , ToValue u
 --       , Cons name t e fields
@@ -1052,13 +1079,15 @@ newtype Returning f = Returning f
 
 class ToReturning (f ∷ Type) (q ∷ Type) | q → f
 
-instance ToReturningFields f fields ⇒ ToReturning f (Insert (Into tn fields fn (Values fv E)))
+instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields fn (Values fv E)))
 
-class ToReturningFields (f ∷ Type) (fields ∷ Row Type) | f → fields
+instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields DefaultValues E))
 
-instance Cons name t e fields ⇒ ToReturningFields (Proxy name) fields
+class ReturningColumns (f ∷ Type) (fields ∷ Row Type) | f → fields
 
-instance (ToReturningFields a fields, ToReturningFields b fields) ⇒ ToReturningFields (a /\ b) fields
+instance Cons name t e fields ⇒ ReturningColumns (Proxy name) fields
+
+instance (ReturningColumns a fields, ReturningColumns b fields) ⇒ ReturningColumns (a /\ b) fields
 
 returning ∷ ∀ f q sql. ToReturning f q ⇒ Resume q (Returning f) sql ⇒ f → q → sql
 returning f q = resume q $ Returning f
@@ -1303,18 +1332,18 @@ instance
       UnwrapAll (Cons name t rest) projection
 
 -- | Computes all source fields with their alias
-class QualifiedFields (list ∷ RowList Type) (alias ∷ Symbol) (fields ∷ Row Type) | list alias → fields
+class QualifiedColumns (list ∷ RowList Type) (alias ∷ Symbol) (fields ∷ Row Type) | list alias → fields
 
-instance QualifiedFields Nil alias ()
+instance QualifiedColumns Nil alias ()
 
 instance
       ( ToPath alias path
       , Append path name fullPath
       , Cons fullPath t () head
-      , QualifiedFields rest alias tail
+      , QualifiedColumns rest alias tail
       , Union head tail fields
       ) ⇒
-      QualifiedFields (Cons name t rest) alias fields
+      QualifiedColumns (Cons name t rest) alias fields
 
 -- | Optionally add source field alias
 class ToPath (alias ∷ Symbol) (path ∷ Symbol) | alias → path
@@ -1340,29 +1369,29 @@ class SymbolListSingleton (alias ∷ Symbol) (list ∷ SymbolList) | alias → l
 instance SymbolListSingleton alias (Cons alias alias Nil)
 
 -- | Given a source `f`, compute its (non and qualified) fields
-class SourceFields (f ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) | f → fields aliases
+class SourceColumns (f ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) | f → fields aliases
 
 -- | Tables
-instance SourceFields (Table name fields) fields Nil
+instance SourceColumns (Table name fields) fields Nil
 
 -- | Aliased tables
 instance
       ( RowToList source list
-      , QualifiedFields list alias aliased
+      , QualifiedColumns list alias aliased
       , Union aliased source fields
       , SymbolListSingleton alias single
       ) ⇒
-      SourceFields (As alias (Table name source)) fields single
+      SourceColumns (As alias (Table name source)) fields single
 
 -- | Aliased subqueries
 instance
       ( QueryMustBeAliased rest alias
       , RowToList projection list
-      , QualifiedFields list alias aliased
+      , QualifiedColumns list alias aliased
       , Union projection aliased fields
       , SymbolListSingleton alias single
       ) ⇒
-      SourceFields (Select s projection (From f fd rest)) fields single
+      SourceColumns (Select s projection (From f fd rest)) fields single
 
 ---------------------------Resume machinery------------------------------------------
 
