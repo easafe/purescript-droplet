@@ -20,6 +20,12 @@ allKeyword = "ALL "
 fromKeyword ∷ String
 fromKeyword = " FROM "
 
+identityKeyword ∷ String
+identityKeyword = " GENERATED ALWAYS AS IDENTITY"
+
+uniqueKeyword :: String
+uniqueKeyword = " UNIQUE"
+
 whereKeyword ∷ String
 whereKeyword = " WHERE "
 
@@ -34,6 +40,9 @@ asKeyword = " AS "
 
 innerKeyword ∷ String
 innerKeyword = " INNER "
+
+primaryKeyKeyword :: String
+primaryKeyKeyword = " PRIMARY KEY"
 
 defaultKeyword ∷ String
 defaultKeyword = "DEFAULT"

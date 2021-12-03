@@ -40,9 +40,15 @@ module Droplet.Language.Internal.Syntax
       , class IsRequiredColumn
       , class ToOrderBy
       , class SortColumns
+      , class ValidConstraints
       , class ToLimit
       , class Resume
+      , class UniqueConstraints
+      , class IsRepeated
+      , class MatchingForeignKey
+      , class ValidNullableConstraints
       , class StarProjection
+      , class IsValidNullableConstraint
       , class IsDefault
       , class SymbolListSingleton
       , class SourceAlias
@@ -119,13 +125,13 @@ import Prim hiding (Constraint)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, Column, Constraint, Default(..), Dot, E(..), Empty, Identity, Joined, Path, Star, Table(..))
+import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, Column, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, Star, Table(..), Unique)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
-import Prim.TypeError (class Fail, Text)
+import Prim.TypeError (class Fail, Beside, Quote, QuoteLabel, Text)
 import Type.Data.Boolean (class And, class If)
 import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
@@ -1006,13 +1012,13 @@ data Set pairs rest = Set pairs rest
 
 class ToUpdatePairs (fields ∷ Row Type) (pairs ∷ Type)
 
-instance Cons name (Default t) e fields ⇒ ToUpdatePairs fields (Op (Proxy name) (Default t))
+instance (Cons name t e fields, IsDefault t name) ⇒ ToUpdatePairs fields (Op (Proxy name) Default)
 
 else instance
-      ( ColumnCannotBeSet t
+      ( Cons name t e fields
+      , ColumnCannotBeSet t
       , UnwrapDefinition t u
       , ToValue u
-      , Cons name t e fields
       ) ⇒
       ToUpdatePairs fields (Op (Proxy name) u)
 
@@ -1534,13 +1540,81 @@ exclude_element in an EXCLUDE constraint is:
 -}
 
 {-
+
 full create table syntax supported by droplet
 CREATE TABLE table_definition
 where table_definition is the Table type
+
 -}
 
---NEEDS SECURITY CHECKS
-table ∷ ∀ name fields. Table name fields → Create E → Create (Table name fields)
+--check
+
+--repeated constraints on same column
+--foreign key that doesnt match targets
+--constraints taht doesnt make sense (e.g. maybe with default, maybe with primary key, maybe with identity )
+
+-- | Fail on invalid constraints
+class ValidConstraints (fields :: RowList Type)
+
+instance ValidConstraints Nil
+
+instance (UniqueConstraints name constraints, MatchingForeignKey t constraints, ValidNullableConstraints name t constraints, ValidConstraints rest) => ValidConstraints (Cons name (Column t constraints) rest)
+
+else instance ValidConstraints rest => ValidConstraints (Cons name t rest)
+
+-- | Constraints must be unique per column
+class UniqueConstraints (name :: Symbol) (constraints :: Type)
+
+instance (IsRepeated name some more, UniqueConstraints name more) => UniqueConstraints name (some /\ more)
+
+else instance UniqueConstraints name t
+
+-- | If a constraint appears more than once in a column
+class IsRepeated (name :: Symbol) (t :: Type) (constraints :: Type)
+
+instance (IsRepeated name t some, IsRepeated name t more) => IsRepeated name t (some /\ more)
+
+else instance Fail (Beside (Beside (Beside (Text "Column  ") (QuoteLabel name)) (Beside (Text ": Constraint ") (Quote t))) (Text " declared more than once")) => IsRepeated name t t
+
+else instance IsRepeated name t s
+
+-- | Foreign key name and type must match
+class MatchingForeignKey (t :: Type) (constraints :: Type)
+
+instance (MatchingForeignKey t some, MatchingForeignKey t more) => MatchingForeignKey t (some /\ more)
+
+else instance Cons name t e fields => MatchingForeignKey t (ForeignKey name (Table n fields))
+
+else instance MatchingForeignKey t s
+
+-- | Nullable constraints can only be unique or foreign key
+class ValidNullableConstraints (name :: Symbol) (t :: Type) (constraints :: Type)
+
+instance IsValidNullableConstraint name constraints => ValidNullableConstraints name (Maybe t) constraints
+
+else instance ValidNullableConstraints name t constraints
+
+class IsValidNullableConstraint (name :: Symbol) (constraints :: Type)
+
+instance (IsValidNullableConstraint name some, IsValidNullableConstraint name more) => IsValidNullableConstraint name (some /\ more)
+
+else instance IsValidNullableConstraint name Unique
+
+else instance IsValidNullableConstraint name (ForeignKey n f)
+
+else instance Fail (Beside (Beside (Beside (Text "Nullable column  ") (QuoteLabel name)) (Beside (Text ": cannot have ") (Quote t))) (Text " constraint")) => IsValidNullableConstraint name t
+
+
+--check more than one primary key constarint (and not composite)
+--repeated constraint names
+--composites with unmatching constraints
+
+--compute
+--composite constraints
+table ∷ ∀ name fields fieldList.
+      RowToList fields fieldList =>
+      ValidConstraints fieldList =>
+      Table name fields → Create E → Create (Table name fields)
 table _ _ = Create Table
 
 ---------------------------ALTER------------------------------------------
