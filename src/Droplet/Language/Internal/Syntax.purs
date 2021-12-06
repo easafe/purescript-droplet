@@ -38,8 +38,12 @@ module Droplet.Language.Internal.Syntax
       , class UnwrapAll
       , class UniqueColumnNames
       , class IsRequiredColumn
+      , class IncludeConstraint
       , class ToOrderBy
       , class SortColumns
+      , class ConstraintsToRowList
+      , class CheckComposite
+      , class ValidComposites
       , class ValidConstraints
       , class ToLimit
       , class Resume
@@ -125,14 +129,14 @@ import Prim hiding (Constraint)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, Column, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, Star, Table(..), Unique)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, Column, Composite, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, PrimaryKey, Star, Table(..), Unique)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Beside, Quote, QuoteLabel, Text)
-import Type.Data.Boolean (class And, class If)
+import Type.Data.Boolean (class And, class If, class Or)
 import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
 
@@ -1549,72 +1553,128 @@ where table_definition is the Table type
 
 --check
 
---repeated constraints on same column
---foreign key that doesnt match targets
 --constraints taht doesnt make sense (e.g. maybe with default, maybe with primary key, maybe with identity )
 
 -- | Fail on invalid constraints
-class ValidConstraints (fields :: RowList Type)
+class ValidConstraints (fields ∷ RowList Type)
 
 instance ValidConstraints Nil
 
-instance (UniqueConstraints name constraints, MatchingForeignKey t constraints, ValidNullableConstraints name t constraints, ValidConstraints rest) => ValidConstraints (Cons name (Column t constraints) rest)
+instance
+      ( UniqueConstraints name constraints
+      , MatchingForeignKey t constraints
+      , ValidNullableConstraints name t constraints
+      , ValidConstraints rest
+      ) ⇒
+      ValidConstraints (Cons name (Column t constraints) rest)
 
-else instance ValidConstraints rest => ValidConstraints (Cons name t rest)
+else instance ValidConstraints rest ⇒ ValidConstraints (Cons name t rest)
 
 -- | Constraints must be unique per column
-class UniqueConstraints (name :: Symbol) (constraints :: Type)
+class UniqueConstraints (name ∷ Symbol) (constraints ∷ Type)
 
-instance (IsRepeated name some more, UniqueConstraints name more) => UniqueConstraints name (some /\ more)
+instance (IsRepeated name some more, UniqueConstraints name more) ⇒ UniqueConstraints name (some /\ more)
 
 else instance UniqueConstraints name t
 
 -- | If a constraint appears more than once in a column
-class IsRepeated (name :: Symbol) (t :: Type) (constraints :: Type)
+class IsRepeated (name ∷ Symbol) (t ∷ Type) (constraints ∷ Type)
 
-instance (IsRepeated name t some, IsRepeated name t more) => IsRepeated name t (some /\ more)
+instance (IsRepeated name t some, IsRepeated name t more) ⇒ IsRepeated name t (some /\ more)
 
-else instance Fail (Beside (Beside (Beside (Text "Column  ") (QuoteLabel name)) (Beside (Text ": Constraint ") (Quote t))) (Text " declared more than once")) => IsRepeated name t t
+else instance Fail (Beside (Beside (Beside (Text "Column  ") (QuoteLabel name)) (Beside (Text ": Constraint ") (Quote t))) (Text " declared more than once")) ⇒ IsRepeated name t t
 
 else instance IsRepeated name t s
 
 -- | Foreign key name and type must match
-class MatchingForeignKey (t :: Type) (constraints :: Type)
+class MatchingForeignKey (t ∷ Type) (constraints ∷ Type)
 
-instance (MatchingForeignKey t some, MatchingForeignKey t more) => MatchingForeignKey t (some /\ more)
+instance (MatchingForeignKey t some, MatchingForeignKey t more) ⇒ MatchingForeignKey t (some /\ more)
 
-else instance Cons name t e fields => MatchingForeignKey t (ForeignKey name (Table n fields))
+else instance Cons name t e fields ⇒ MatchingForeignKey t (ForeignKey name (Table n fields))
 
 else instance MatchingForeignKey t s
 
 -- | Nullable constraints can only be unique or foreign key
-class ValidNullableConstraints (name :: Symbol) (t :: Type) (constraints :: Type)
+class ValidNullableConstraints (name ∷ Symbol) (t ∷ Type) (constraints ∷ Type)
 
-instance IsValidNullableConstraint name constraints => ValidNullableConstraints name (Maybe t) constraints
+instance IsValidNullableConstraint name constraints ⇒ ValidNullableConstraints name (Maybe t) constraints
 
 else instance ValidNullableConstraints name t constraints
 
-class IsValidNullableConstraint (name :: Symbol) (constraints :: Type)
+class IsValidNullableConstraint (name ∷ Symbol) (constraints ∷ Type)
 
-instance (IsValidNullableConstraint name some, IsValidNullableConstraint name more) => IsValidNullableConstraint name (some /\ more)
+instance (IsValidNullableConstraint name some, IsValidNullableConstraint name more) ⇒ IsValidNullableConstraint name (some /\ more)
 
 else instance IsValidNullableConstraint name Unique
 
 else instance IsValidNullableConstraint name (ForeignKey n f)
 
-else instance Fail (Beside (Beside (Beside (Text "Nullable column  ") (QuoteLabel name)) (Beside (Text ": cannot have ") (Quote t))) (Text " constraint")) => IsValidNullableConstraint name t
+else instance Fail (Beside (Beside (Beside (Text "Nullable column  ") (QuoteLabel name)) (Beside (Text ": cannot have ") (Quote t))) (Text " constraint")) ⇒ IsValidNullableConstraint name t
 
+-- | Flatten constraints into a list
+class ConstraintsToRowList (source ∷ RowList Type) (constraints ∷ RowList Type) | source → constraints
 
---check more than one primary key constarint (and not composite)
---repeated constraint names
---composites with unmatching constraints
+instance ConstraintsToRowList Nil Nil
 
---compute
---composite constraints
-table ∷ ∀ name fields fieldList.
-      RowToList fields fieldList =>
-      ValidConstraints fieldList =>
-      Table name fields → Create E → Create (Table name fields)
+instance
+      ( IncludeConstraint constraints head
+      , ConstraintsToRowList rest tail
+      , RowListAppend head tail all
+      ) ⇒
+      ConstraintsToRowList (Cons name (Column t constraints) rest) all
+
+else instance ConstraintsToRowList rest all ⇒ ConstraintsToRowList (Cons name r rest) all
+
+-- | Constraints that have to checked across columns
+class IncludeConstraint (constraints ∷ Type) (list ∷ RowList Type) | constraints → list
+
+instance
+      ( IncludeConstraint c head
+      , IncludeConstraint rest tail
+      , RowListAppend head tail all
+      ) ⇒
+      IncludeConstraint (c /\ rest) all
+
+else instance IncludeConstraint (Constraint (Composite name) t) (Cons name t Nil)
+
+else instance IncludeConstraint (Constraint name t) (Cons name t Nil)
+
+else instance IncludeConstraint PrimaryKey (Cons "pk" PrimaryKey Nil)
+
+else instance IncludeConstraint t Nil
+
+-- | Check constraints across columns
+class ValidComposites (name ∷ Symbol) (fields ∷ RowList Type)
+
+instance
+      ( CheckComposite name t rest
+      , ValidComposites name rest
+      ) ⇒
+      ValidComposites name (Cons n t rest)
+
+instance ValidComposites name Nil
+
+-- |
+class CheckComposite name (c ∷ Type) (rest ∷ RowList Type)
+
+instance CheckComposite name c Nil
+
+instance Fail (Beside (Text "Table ") (Beside (QuoteLabel name) (Text " has duplicated primary keys. You may want to use a named composite constraint."))) ⇒ CheckComposite name PrimaryKey (Cons n PrimaryKey rest)
+
+else instance Fail (Beside (Beside (Text "Column  ") (QuoteLabel name)) (Beside (Text ": Constraint name ") (Text " declared more than once"))) ⇒ CheckComposite name (Constraint n t) (Cons n (Constraint n s) rest)
+
+else instance CheckComposite name t rest ⇒ CheckComposite name t (Cons n s rest)
+
+table ∷
+      ∀ name fields fieldList list.
+      RowToList fields fieldList ⇒
+      ValidConstraints fieldList ⇒
+      ConstraintsToRowList fieldList list ⇒
+      ValidComposites name list ⇒
+      Table name fields →
+      Create E →
+      Create (Table name fields)
 table _ _ = Create Table
 
 ---------------------------ALTER------------------------------------------
