@@ -51,8 +51,8 @@ type DefaultColumns =
       )
 
 type DoublePrimaryKey =
-      ( id ∷ Column Int (Constraint (Composite "pk_double_primary_key") (PrimaryKey /\ Identity))
-      , second_id ∷ Column Int (Constraint (Composite "pk_double_primary_key") (PrimaryKey /\ Identity))
+      ( id ∷ Column Int (Identity /\ Constraint (Composite "pk_double_primary_key") PrimaryKey)
+      , second_id ∷ Column Int (Identity /\ Constraint (Composite "pk_double_primary_key") PrimaryKey)
       )
 
 type DoublePrimaryKeyTable = Table "double_primary_key" DoublePrimaryKey

@@ -5,6 +5,7 @@ import Prelude
 import Test.Types
 
 import Data.BigInt (BigInt)
+import Prim hiding (Constraint)
 import Data.Date (Date)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
@@ -16,7 +17,7 @@ import Test.Spec as TS
 
 tests ∷ Spec Unit
 tests =
-      TS.describeOnly "create" do
+      TS.describe "create" do
             TS.describe "table" do
                   TS.it "plain types" do
                         let q = create # table (Table :: Table "test" (id :: Int, name :: String, set :: Boolean, n :: Number, bigId :: BigInt, date :: Date, dateTime :: DateTime))
@@ -35,7 +36,15 @@ tests =
                               let q = create # table (Table :: Table "test" (id :: Maybe Int, d :: Column String (PrimaryKey /\ Unique), name :: String, c :: Column Int Identity ))
                               TM.notParameterized """CREATE TABLE "test" ("c" INTEGER NOT NULL GENERATED ALWAYS AS IDENTITY, "d" TEXT NOT NULL PRIMARY KEY UNIQUE, "id" INTEGER, "name" TEXT NOT NULL);""" $ DLIQ.buildQuery q
                               void $ TM.resultOnly q
-                        -- TS.it "foreign key" do
-                        --       let q = create # table (Table :: Table "test" (id :: Maybe Int, pk :: Column Int (ForeignKey "id" UsersTable)))
-                        --       TM.notParameterized """CREATE TABLE "test" ("id" INTEGER, "name" TEXT NOT NULL);""" $ DLIQ.buildQuery q
-                        --       void $ TM.resultOnly q
+                        TS.it "foreign key" do
+                              let q = create # table (Table :: Table "test" (id :: Maybe Int, fk :: Column Int (ForeignKey "id" UsersTable)))
+                              TM.notParameterized """CREATE TABLE "test" ("fk" INTEGER NOT NULL REFERENCES "users"("id"), "id" INTEGER);""" $ DLIQ.buildQuery q
+                              void $ TM.resultOnly q
+                        TS.describe "composite" do
+                              TS.it "primary key" do
+                                    let q = create # table (Table :: Table "test" (c :: Column Int (Constraint (Composite "pk") PrimaryKey), d :: Column Int (Constraint (Composite "pk") PrimaryKey)))
+                                    TM.notParameterized """CREATE TABLE "test" ("c" INTEGER NOT NULL, "d" INTEGER NOT NULL, CONSTRAINT "pk" PRIMARY KEY("c", "d"));""" $ DLIQ.buildQuery q
+                                    void $ TM.resultOnly q
+                              TS.it "foreign key" do
+                                    let q = create # table (Table :: Table "test" (id :: Maybe Int, fk1 :: Column Int (Constraint (Composite "fk") (ForeignKey "id" DoublePrimaryKeyTable)), fk2 :: Column Int (Constraint (Composite "fk") (ForeignKey "second_id" DoublePrimaryKeyTable))))
+                                    TM.notParameterized """CREATE TABLE "test" ("fk1" INTEGER NOT NULL, "fk2" INTEGER NOT NULL, "id" INTEGER, CONSTRAINT "fk" FOREIGN KEY("fk1", "fk2") REFERENCES "double_primary_key"("id", "second_id"));""" $ DLIQ.buildQuery q

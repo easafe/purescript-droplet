@@ -129,7 +129,7 @@ import Prim hiding (Constraint)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, Column, Composite, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, PrimaryKey, Star, Table(..), Unique)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, PrimaryKey, Star, Table(..), Unique)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
@@ -1591,7 +1591,7 @@ class MatchingForeignKey (t ∷ Type) (constraints ∷ Type)
 
 instance (MatchingForeignKey t some, MatchingForeignKey t more) ⇒ MatchingForeignKey t (some /\ more)
 
-else instance Cons name t e fields ⇒ MatchingForeignKey t (ForeignKey name (Table n fields))
+else instance Cons name t e fields ⇒ MatchingForeignKey (Column t c) (ForeignKey name (Table n fields))
 
 else instance MatchingForeignKey t s
 
@@ -1618,7 +1618,7 @@ class ConstraintsToRowList (source ∷ RowList Type) (constraints ∷ RowList Ty
 instance ConstraintsToRowList Nil Nil
 
 instance
-      ( IncludeConstraint constraints head
+      ( IncludeConstraint name constraints head
       , ConstraintsToRowList rest tail
       , RowListAppend head tail all
       ) ⇒
@@ -1626,23 +1626,23 @@ instance
 
 else instance ConstraintsToRowList rest all ⇒ ConstraintsToRowList (Cons name r rest) all
 
--- | Constraints that have to checked across columns
-class IncludeConstraint (constraints ∷ Type) (list ∷ RowList Type) | constraints → list
+-- | Constraints that have to be checked across columns
+class IncludeConstraint (name :: Symbol) (constraints ∷ Type) (list ∷ RowList Type) | constraints → list
 
 instance
-      ( IncludeConstraint c head
-      , IncludeConstraint rest tail
+      ( IncludeConstraint fn c head
+      , IncludeConstraint fn rest tail
       , RowListAppend head tail all
       ) ⇒
-      IncludeConstraint (c /\ rest) all
+      IncludeConstraint fn  (c /\ rest) all
 
-else instance IncludeConstraint (Constraint (Composite name) t) (Cons name t Nil)
+else instance IncludeConstraint fieldName (Constraint (Composite name) t) (Cons name (C fieldName t) Nil) -- we save the field name generate sql later
 
-else instance IncludeConstraint (Constraint name t) (Cons name t Nil)
+else instance IncludeConstraint fn (Constraint name t) (Cons name t Nil)
 
-else instance IncludeConstraint PrimaryKey (Cons "pk" PrimaryKey Nil)
+else instance IncludeConstraint fn PrimaryKey (Cons "0pk" PrimaryKey Nil)
 
-else instance IncludeConstraint t Nil
+else instance IncludeConstraint fn t Nil
 
 -- | Check constraints across columns
 class ValidComposites (name ∷ Symbol) (fields ∷ RowList Type)
@@ -1656,7 +1656,7 @@ instance
 instance ValidComposites name Nil
 
 -- |
-class CheckComposite name (c ∷ Type) (rest ∷ RowList Type)
+class CheckComposite (name :: Symbol) (c ∷ Type) (rest ∷ RowList Type)
 
 instance CheckComposite name c Nil
 
@@ -1665,6 +1665,8 @@ instance Fail (Beside (Text "Table ") (Beside (QuoteLabel name) (Text " has dupl
 else instance Fail (Beside (Beside (Text "Column  ") (QuoteLabel name)) (Beside (Text ": Constraint name ") (Text " declared more than once"))) ⇒ CheckComposite name (Constraint n t) (Cons n (Constraint n s) rest)
 
 else instance CheckComposite name t rest ⇒ CheckComposite name t (Cons n s rest)
+
+--needs to check if composite constraints have only one constraint (cant have tuples there)
 
 table ∷
       ∀ name fields fieldList list.

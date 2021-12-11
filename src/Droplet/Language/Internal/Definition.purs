@@ -17,6 +17,7 @@ module Droplet.Language.Internal.Definition
       , Constraint
       , Unique
       , Column
+      , C
       , class IsNullable
       , class UnwrapNullable
       , class FromValue
@@ -72,6 +73,9 @@ foreign import showForeigner ∷ Foreign → String
 
 -- | Marks the query end
 data E = E
+
+data C :: forall k. k -> Type -> Type
+data C n t
 
 type Empty = ""
 
