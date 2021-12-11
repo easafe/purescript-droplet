@@ -32,6 +32,7 @@ module Droplet.Language.Internal.Syntax
       , Offset(..)
       , SymbolList
       , class ToOffset
+      , class SingleTypeComposite
       , class SortColumnsSource
       , class IncludeColumn
       , class ColumnCannotBeSet
@@ -137,6 +138,7 @@ import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Beside, Quote, QuoteLabel, Text)
 import Type.Data.Boolean (class And, class If, class Or)
+import Type.Equality (class TypeEquals)
 import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
 
@@ -1551,10 +1553,6 @@ where table_definition is the Table type
 
 -}
 
---check
-
---constraints taht doesnt make sense (e.g. maybe with default, maybe with primary key, maybe with identity )
-
 -- | Fail on invalid constraints
 class ValidConstraints (fields ∷ RowList Type)
 
@@ -1563,6 +1561,7 @@ instance ValidConstraints Nil
 instance
       ( UniqueConstraints name constraints
       , MatchingForeignKey t constraints
+      , SingleTypeComposite constraints
       , ValidNullableConstraints name t constraints
       , ValidConstraints rest
       ) ⇒
@@ -1582,16 +1581,25 @@ class IsRepeated (name ∷ Symbol) (t ∷ Type) (constraints ∷ Type)
 
 instance (IsRepeated name t some, IsRepeated name t more) ⇒ IsRepeated name t (some /\ more)
 
-else instance Fail (Beside (Beside (Beside (Text "Column  ") (QuoteLabel name)) (Beside (Text ": Constraint ") (Quote t))) (Text " declared more than once")) ⇒ IsRepeated name t t
+else instance Fail (Beside (Beside (Text "Constraint ") (Quote t)) (Beside (Text " declared more than once for column ") (QuoteLabel name))) ⇒ IsRepeated name t t
 
 else instance IsRepeated name t s
+
+-- |
+class SingleTypeComposite (constraints ∷ Type)
+
+instance (SingleTypeComposite t, SingleTypeComposite s) ⇒ SingleTypeComposite (t /\ s)
+
+else instance Fail (Beside (Beside (Text "Composite ") (QuoteLabel name)) (Text " must not mix constraint types")) ⇒ SingleTypeComposite (Constraint (Composite name) (t /\ s))
+
+else instance SingleTypeComposite t
 
 -- | Foreign key name and type must match
 class MatchingForeignKey (t ∷ Type) (constraints ∷ Type)
 
 instance (MatchingForeignKey t some, MatchingForeignKey t more) ⇒ MatchingForeignKey t (some /\ more)
 
-else instance Cons name t e fields ⇒ MatchingForeignKey (Column t c) (ForeignKey name (Table n fields))
+else instance (Cons name s e fields, UnwrapDefinition s t) ⇒ MatchingForeignKey t (ForeignKey name (Table n fields))
 
 else instance MatchingForeignKey t s
 
@@ -1610,7 +1618,7 @@ else instance IsValidNullableConstraint name Unique
 
 else instance IsValidNullableConstraint name (ForeignKey n f)
 
-else instance Fail (Beside (Beside (Beside (Text "Nullable column  ") (QuoteLabel name)) (Beside (Text ": cannot have ") (Quote t))) (Text " constraint")) ⇒ IsValidNullableConstraint name t
+else instance Fail (Beside (Beside (Beside (Text "Nullable column ") (QuoteLabel name)) (Beside (Text " cannot have ") (Quote t))) (Text " constraint")) ⇒ IsValidNullableConstraint name t
 
 -- | Flatten constraints into a list
 class ConstraintsToRowList (source ∷ RowList Type) (constraints ∷ RowList Type) | source → constraints
@@ -1627,16 +1635,16 @@ instance
 else instance ConstraintsToRowList rest all ⇒ ConstraintsToRowList (Cons name r rest) all
 
 -- | Constraints that have to be checked across columns
-class IncludeConstraint (name :: Symbol) (constraints ∷ Type) (list ∷ RowList Type) | constraints → list
+class IncludeConstraint (name ∷ Symbol) (constraints ∷ Type) (list ∷ RowList Type) | constraints → list
 
 instance
       ( IncludeConstraint fn c head
       , IncludeConstraint fn rest tail
       , RowListAppend head tail all
       ) ⇒
-      IncludeConstraint fn  (c /\ rest) all
+      IncludeConstraint fn (c /\ rest) all
 
-else instance IncludeConstraint fieldName (Constraint (Composite name) t) (Cons name (C fieldName t) Nil) -- we save the field name generate sql later
+else instance IncludeConstraint fieldName (Constraint (Composite name) t) (Cons name (C fieldName t) Nil)
 
 else instance IncludeConstraint fn (Constraint name t) (Cons name t Nil)
 
@@ -1656,7 +1664,7 @@ instance
 instance ValidComposites name Nil
 
 -- |
-class CheckComposite (name :: Symbol) (c ∷ Type) (rest ∷ RowList Type)
+class CheckComposite (name ∷ Symbol) (c ∷ Type) (rest ∷ RowList Type)
 
 instance CheckComposite name c Nil
 
@@ -1665,8 +1673,6 @@ instance Fail (Beside (Text "Table ") (Beside (QuoteLabel name) (Text " has dupl
 else instance Fail (Beside (Beside (Text "Column  ") (QuoteLabel name)) (Beside (Text ": Constraint name ") (Text " declared more than once"))) ⇒ CheckComposite name (Constraint n t) (Cons n (Constraint n s) rest)
 
 else instance CheckComposite name t rest ⇒ CheckComposite name t (Cons n s rest)
-
---needs to check if composite constraints have only one constraint (cant have tuples there)
 
 table ∷
       ∀ name fields fieldList list.
