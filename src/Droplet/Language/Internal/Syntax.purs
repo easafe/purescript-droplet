@@ -1644,7 +1644,7 @@ instance
       ) ⇒
       IncludeConstraint fn (c /\ rest) all
 
-else instance IncludeConstraint fieldName (Constraint (Composite name) t) (Cons name (C fieldName t) Nil)
+else instance IncludeConstraint columnName (Constraint (Composite name) t) (Cons name (C columnName t) Nil)
 
 else instance IncludeConstraint fn (Constraint name t) (Cons name t Nil)
 
@@ -1653,26 +1653,32 @@ else instance IncludeConstraint fn PrimaryKey (Cons "0pk" PrimaryKey Nil)
 else instance IncludeConstraint fn t Nil
 
 -- | Check constraints across columns
-class ValidComposites (name ∷ Symbol) (fields ∷ RowList Type)
+class ValidComposites (columnName ∷ Symbol) (constraints ∷ RowList Type)
 
 instance
-      ( CheckComposite name t rest
-      , ValidComposites name rest
+      ( CheckComposite tableName name t rest
+      , ValidComposites tableName rest
       ) ⇒
-      ValidComposites name (Cons n t rest)
+      ValidComposites tableName (Cons name t rest)
 
-instance ValidComposites name Nil
+instance ValidComposites tn Nil
 
 -- |
-class CheckComposite (name ∷ Symbol) (c ∷ Type) (rest ∷ RowList Type)
+class CheckComposite (tableName ∷ Symbol) (name :: Symbol) (c ∷ Type) (rest ∷ RowList Type)
 
-instance CheckComposite name c Nil
+instance CheckComposite tn cn c Nil
 
-instance Fail (Beside (Text "Table ") (Beside (QuoteLabel name) (Text " has duplicated primary keys. You may want to use a named composite constraint."))) ⇒ CheckComposite name PrimaryKey (Cons n PrimaryKey rest)
+instance Fail (Beside (Text "Table ") (Beside (QuoteLabel tableName) (Text " has duplicated primary keys. You may want to use a named composite constraint."))) ⇒ CheckComposite tableName cn PrimaryKey (Cons n PrimaryKey rest)
 
-else instance Fail (Beside (Beside (Text "Column  ") (QuoteLabel name)) (Beside (Text ": Constraint name ") (Text " declared more than once"))) ⇒ CheckComposite name (Constraint n t) (Cons n (Constraint n s) rest)
+--composites are changed into C columnName constraintType
+--we need to spare same type constraints and same table foreign keys
+else instance CheckComposite tableName name (C cn t) (Cons name (C cn2 t) rest)
 
-else instance CheckComposite name t rest ⇒ CheckComposite name t (Cons n s rest)
+else instance CheckComposite tableName name (C cn (ForeignKey rcn table)) (Cons name (C cn2 (ForeignKey rcn2 table)) rest)
+
+else instance Fail (Beside (Beside (Text "Constraint ") (QuoteLabel name)) (Beside (Text " declared more than once for table ") (QuoteLabel tableName))) ⇒ CheckComposite tableName name s (Cons name t rest)
+
+else instance CheckComposite tn name t rest ⇒ CheckComposite tn name t (Cons n s rest)
 
 table ∷
       ∀ name fields fieldList list.
