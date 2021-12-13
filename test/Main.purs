@@ -15,6 +15,7 @@ import Test.Insert as TI
 import Test.Join as TJ
 import Test.Limit as TL
 import Test.NakedSelect as TNS
+import Test.Migration as TMG
 import Test.Offset as TOF
 import Test.OrderBy as TO
 import Test.Returning as TR
@@ -42,6 +43,7 @@ main = EA.launchAff_ $ TSR.runSpec [consoleReporter] do
       TG.tests
       TA.tests
       TSQ.tests
+      TMG.tests
       TOF.tests
       TO.tests
       TFC.tests

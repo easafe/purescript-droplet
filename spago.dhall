@@ -23,6 +23,7 @@ You can edit this file as you like.
   , "maybe"
   , "newtype"
   , "nullable"
+  , "ordered-collections"
   , "partial"
   , "prelude"
   , "profunctor"

@@ -1797,3 +1797,7 @@ index_parameters in UNIQUE, PRIMARY KEY, and EXCLUDE constraints are:
 exclude_element in an EXCLUDE constraint is:
 { column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]
 -}
+
+---------------------------DROP------------------------------------------
+
+---------------------------TABLE------------------------------------------
