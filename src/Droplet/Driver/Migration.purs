@@ -8,6 +8,8 @@ import Data.Foldable as DF
 import Data.Maybe (Maybe(..))
 import Data.Set (Set)
 import Data.Set as DS
+import Debug (spy)
+import Droplet.Driver.Internal.Migration as DDIM
 import Droplet.Driver.Internal.Pool (Pool)
 import Droplet.Driver.Internal.Query (Connection)
 import Droplet.Driver.Internal.Query as DDIQ
@@ -33,42 +35,18 @@ type Migration =
 migrate ∷ Pool → Array Migration → Aff Unit
 migrate pool migrations = do
       output <- DDIQ.withTransaction pool $ \connection -> do
-            createMigrationTable connection
-            identifiers <- fetchAlreadyRun connection
+            DDIM.createMigrationTable connection
+            identifiers <- DDIM.fetchAlreadyRun connection
             DF.traverse_ (runMigration connection) $ skipAlreadyRun identifiers migrations
       case output of
-            Left err → throw err
+            Left err → DDIM.throw err
             Right _ → pure unit
 
 runMigration ∷ Connection → Migration → Aff Unit
 runMigration connection migration = do
       migration.up connection
-      markAsRun connection migration
-
-fetchAlreadyRun ∷ Connection → Aff (Set String)
-fetchAlreadyRun connection = do
-      output ← DDIQ.unsafeQuery connection Nothing "SELECT identifier FROM migrations" {}
-      case output of
-            Right (rows :: Array { identifier :: String }) -> pure <<< DS.fromFoldable $ map _.identifier rows
-            Left err → throw err
+      DDIM.markAsRun connection migration
 
 skipAlreadyRun ∷ Set String → Array Migration → Array Migration
 skipAlreadyRun identifiers = DA.filter skip
       where skip migration = not $ DS.member migration.identifier identifiers
-
-markAsRun ∷ Connection → Migration → Aff Unit
-markAsRun connection migration =
-      execute connection "INSERT INTO migrations (identifier) VALUES (@identifier)" {identifier: migration.identifier}
-
-createMigrationTable ∷ Connection → Aff Unit
-createMigrationTable connection = execute connection "CREATE TABLE IF NOT EXISTS migrations (identifier TEXT NOT NULL PRIMARY KEY, run_at TIMESTAMPTZ NOT NULL DEFAULT NOW())" {}
-
-execute :: forall parameters list. RowToList parameters list => ToParameters parameters list => Connection -> String -> Record parameters -> Aff Unit
-execute connection sql parameters = do
-      output <- DDIQ.unsafeExecute connection Nothing sql parameters
-      case output of
-            Just err -> throw err
-            Nothing -> pure unit
-
-
-throw err = EA.throwError <<< EA.error $ show err

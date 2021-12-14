@@ -91,6 +91,8 @@ begin
     truncate table double_primary_key restart identity cascade;
     truncate table composite restart identity cascade;
     drop table if exists test;
+    drop table if exists migrated;
+    drop table if exists __droplet_migrations__;
 end;
   $body$
   language plpgsql;

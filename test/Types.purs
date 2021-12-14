@@ -57,6 +57,10 @@ type DoublePrimaryKey =
 
 type DoublePrimaryKeyTable = Table "double_primary_key" DoublePrimaryKey
 
+type Migrated =
+      ( id ∷ Column Int PrimaryKey)
+
+
 type CompositeT =
       ( id ∷ Column Int (Identity /\ Constraint (Composite "pk_composite") PrimaryKey)
       , second_id ∷ Column Int (Constraint (Composite "pk_composite") PrimaryKey)
@@ -113,6 +117,9 @@ doublePrimaryKey = Table
 
 composite ∷ Table "composite" CompositeT
 composite = Table
+
+migrated ∷ Table "migrated" Migrated
+migrated = Table
 
 id ∷ Proxy "id"
 id = Proxy
