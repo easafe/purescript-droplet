@@ -82,8 +82,8 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
 import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, E(..), ForeignKey, Identity, Path, PrimaryKey, Star, Table, Unique, toParameters, toValue)
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
-import Droplet.Language.Internal.Syntax (class ConstraintsToRowList, class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Create, DefaultValues(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
-import Droplet.Language.Internal.Token (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, bigIntegerType, booleanType, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, dateTimeType, dateType, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, integerType, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, numberType, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, semicolon, setKeyword, space, starSymbol, stringType, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Syntax (class ConstraintsToRowList, class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Create, DefaultValues(..), Delete(..), Distinct(..), Drop(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Token (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, bigIntegerType, booleanType, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, dateTimeType, dateType, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, integerType, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, numberType, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, stringType, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
 import Prim.Boolean (False, True)
@@ -180,6 +180,10 @@ instance Translate (Delete (From f fields rest)) ⇒ ToQuery (Delete (From f fie
 
 -- | CREATE TABLE
 instance Translate (Create (Table name fields)) ⇒ ToQuery (Create (Table name fields)) () where
+      toQuery q = translate q
+
+-- | DROP TABLE
+instance Translate (Drop (Table name fields)) ⇒ ToQuery (Drop (Table name fields)) () where
       toQuery q = translate q
 
 -- | Unsafe queries
@@ -927,7 +931,6 @@ instance
                   <> openBracket
                   <> DST.joinWith comma (translateFieldDefinition (Proxy ∷ _ fieldList) <> translateCompositeConstraint (Proxy ∷ _ composites))
                   <> closeBracket
-                  <> semicolon
 
 -- |
 class TranslateFieldDefinition (list ∷ RowList Type) where
@@ -1115,6 +1118,22 @@ instance CompositeFieldList Nil where
 
 instance (CompositeFieldList rest, IsSymbol name) ⇒ CompositeFieldList (Cons name t rest) where
       compositeFieldList _ = quote (Proxy ∷ _ name) : compositeFieldList (Proxy ∷ _ rest)
+
+
+-- | DROP TABLE
+instance
+      ( RowToList fields fieldList
+      , TranslateFieldDefinition fieldList
+      , ConstraintsToRowList fieldList list
+      , CompositeConstraints list composites
+      , TranslateCompositeConstraint composites
+      , IsSymbol name
+      ) ⇒
+      Translate (Drop (Table name fields)) where
+      translate _ = do
+            pure $ dropKeyword
+                  <> tableKeyword
+                  <> quote (Proxy ∷ _ name)
 
 printAggregation ∷ ∀ inp fields rest out. NameList inp ⇒ ArgumentList rest ⇒ Aggregate inp rest fields out → State QueryState String
 printAggregation = case _ of

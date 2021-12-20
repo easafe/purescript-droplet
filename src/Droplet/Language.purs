@@ -70,6 +70,7 @@ import Droplet.Language.Internal.Syntax
       , Plan
       , Prepare
       , Select
+      , Drop
       , Set
       , Update
       , Join
@@ -88,6 +89,7 @@ import Droplet.Language.Internal.Syntax
       , from
       , defaultValues
       , insert
+      , drop
       , create
       , into
       , table

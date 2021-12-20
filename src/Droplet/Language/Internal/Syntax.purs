@@ -27,6 +27,7 @@ module Droplet.Language.Internal.Syntax
       , Select(..)
       , Returning(..)
       , Set(..)
+      , Drop(..)
       , Update(..)
       , Values(..)
       , Offset(..)
@@ -50,6 +51,7 @@ module Droplet.Language.Internal.Syntax
       , class Resume
       , class UniqueConstraints
       , class IsRepeated
+      , class ToTable
       , class MatchingForeignKey
       , class ValidNullableConstraints
       , class StarProjection
@@ -103,6 +105,7 @@ module Droplet.Language.Internal.Syntax
       , on
       , union
       , groupBy
+      , drop
       , unionAll
       , distinct
       , orderBy
@@ -325,8 +328,7 @@ distinct = Distinct
 
 -------------------------------FROM----------------------------
 
---as it is, From does not try to carry all source fields (for example qualified and unqualified columns from table as alias)
--- reason being, it makes projection code a lot harder for joins and select *
+--as it is, From does not try to carry all source fields (for example qualified and unqualified columns from table as alias) because it makes projection code a lot harder for joins and select *
 -- this can change if a simpler design is found
 data From f (fields ∷ Row Type) rest = From f rest
 
@@ -1457,16 +1459,32 @@ else instance Resume rest b c ⇒ Resume (Delete rest) b (Delete c) where
 else instance Resume (As alias E) b (As alias b) where
       resume (As _) b = As b
 
+else instance Resume rest b c ⇒ Resume (Create rest) b (Create c) where
+      resume (Create rest) b = Create $ resume rest b
+
+else instance Resume rest b c ⇒ Resume (Drop rest) b (Drop c) where
+      resume (Drop rest) b = Drop $ resume rest b
+
 else instance Resume E b b where
       resume _ b = b
 
 else instance Resume b a c ⇒ Resume a b c where
       resume a b = resume b a
 
+---------------------------Table machinery------------------------------------------
+
+-- | Acceptable table operations
+class ToTable (q :: Type) (t :: Type) | q → t
+
+-- | Table up for modification
+table :: ∀ name q fields sql. ToTable q (Table name fields) ⇒ Resume q (Table name fields) sql ⇒ Table name fields → q → sql
+table _ q = resume q Table
+
 ---------------------------CREATE------------------------------------------
 
 newtype Create rest = Create rest
 
+-- | CREATE ...
 create ∷ Create E
 create = Create E
 
@@ -1474,6 +1492,7 @@ create = Create E
 
 {-
 full create table syntax supported by postgresql (https://www.postgresql.org/docs/current/sql-createtable.html)
+
 CREATE [ [ GLOBAL | LOCAL ] { TEMPORARY | TEMP } | UNLOGGED ] TABLE [ IF NOT EXISTS ] table_name ( [
   { column_name data_type [ COMPRESSION compression_method ] [ COLLATE collation ] [ column_constraint [ ... ] ]
     | table_constraint
@@ -1552,6 +1571,12 @@ CREATE TABLE table_definition
 where table_definition is the Table type
 
 -}
+
+-- | CREATE TABLE
+instance (RowToList fields fieldList,
+      ValidConstraints fieldList,
+      ConstraintsToRowList fieldList list,
+      ValidComposites name list) ⇒ ToTable (Create E) (Table name fields)
 
 -- | Fail on invalid constraints
 class ValidConstraints (fields ∷ RowList Type)
@@ -1680,16 +1705,6 @@ else instance Fail (Beside (Beside (Text "Constraint ") (QuoteLabel name)) (Besi
 
 else instance CheckComposite tn name t rest ⇒ CheckComposite tn name t (Cons n s rest)
 
-table ∷
-      ∀ name fields fieldList list.
-      RowToList fields fieldList ⇒
-      ValidConstraints fieldList ⇒
-      ConstraintsToRowList fieldList list ⇒
-      ValidComposites name list ⇒
-      Table name fields →
-      Create E →
-      Create (Table name fields)
-table _ _ = Create Table
 
 ---------------------------ALTER------------------------------------------
 
@@ -1697,6 +1712,7 @@ table _ _ = Create Table
 
 {-
 full alter table syntax supported by postgresql (https://www.postgresql.org/docs/current/sql-altertable.html)
+
 ALTER TABLE [ IF EXISTS ] [ ONLY ] name [ * ]
     action [, ... ]
 ALTER TABLE [ IF EXISTS ] [ ONLY ] name [ * ]
@@ -1800,4 +1816,19 @@ exclude_element in an EXCLUDE constraint is:
 
 ---------------------------DROP------------------------------------------
 
+newtype Drop rest = Drop rest
+
+-- | DROP ...
+drop :: Drop E
+drop = Drop E
+
 ---------------------------TABLE------------------------------------------
+
+{-
+full drop table supported by postgresql (https://www.postgresql.org/docs/current/sql-droptable.html)
+
+DROP TABLE [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
+
+-}
+
+instance ToTable (Drop E) (Table name fields)

@@ -20,13 +20,13 @@ allKeyword = "ALL "
 fromKeyword ∷ String
 fromKeyword = " FROM "
 
-constraintKeyword :: String
+constraintKeyword ∷ String
 constraintKeyword = "CONSTRAINT "
 
 identityKeyword ∷ String
 identityKeyword = " GENERATED ALWAYS AS IDENTITY"
 
-uniqueKeyword :: String
+uniqueKeyword ∷ String
 uniqueKeyword = " UNIQUE"
 
 whereKeyword ∷ String
@@ -47,7 +47,7 @@ asKeyword = " AS "
 innerKeyword ∷ String
 innerKeyword = " INNER "
 
-primaryKeyKeyword :: String
+primaryKeyKeyword ∷ String
 primaryKeyKeyword = " PRIMARY KEY"
 
 foreignKeyKeyword ∷ String
@@ -146,7 +146,7 @@ limitKeyword = " LIMIT "
 offsetKeyword ∷ String
 offsetKeyword = " OFFSET "
 
-semicolon :: String
+semicolon ∷ String
 semicolon = ";"
 
 dotSymbol ∷ String
@@ -167,7 +167,7 @@ bigIntegerType = "BIGINT"
 dateType ∷ String
 dateType = "DATE"
 
-tableKeyword :: String
+tableKeyword ∷ String
 tableKeyword = "TABLE "
 
 notNullKeyword ∷ String
@@ -182,17 +182,20 @@ stringType = "TEXT"
 booleanType ∷ String
 booleanType = "BOOL"
 
+dropKeyword ∷ String
+dropKeyword = "DROP "
+
 numberType ∷ String
 numberType = "DOUBLE PRECISION"
 
 quoteSymbol ∷ String
 quoteSymbol = """""""
 
-createKeyword :: String
+createKeyword ∷ String
 createKeyword = "CREATE "
 
-newline :: String
+newline ∷ String
 newline = "\n"
 
-space :: String
+space ∷ String
 space = " "
