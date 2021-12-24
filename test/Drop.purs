@@ -5,11 +5,7 @@ import Prelude
 import Prim hiding (Constraint)
 import Test.Types
 
-import Data.BigInt (BigInt)
-import Data.Date (Date)
-import Data.DateTime (DateTime)
 import Data.Maybe (Maybe(..))
-import Data.Tuple.Nested (type (/\))
 import Droplet.Driver as DD
 import Droplet.Driver.Unsafe as DDU
 import Droplet.Language.Internal.Translate as DLIQ
@@ -18,7 +14,7 @@ import Test.Model (connectionInfo)
 import Test.Model as TM
 import Test.Spec (Spec)
 import Test.Spec as TS
-
+            
 tests ∷ Spec Unit
 tests =
       TS.describe "drop" do

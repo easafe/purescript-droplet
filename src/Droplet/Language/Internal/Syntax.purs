@@ -26,8 +26,11 @@ module Droplet.Language.Internal.Syntax
       , Prepare(..)
       , Select(..)
       , Returning(..)
+      , T
       , Set(..)
       , Drop(..)
+      , Alter(..)
+      , Add(..)
       , Update(..)
       , Values(..)
       , Offset(..)
@@ -35,11 +38,15 @@ module Droplet.Language.Internal.Syntax
       , class ToOffset
       , class SingleTypeComposite
       , class SortColumnsSource
+      , class ValidColumnNames
       , class IncludeColumn
       , class ColumnCannotBeSet
+      , class ColumnNames
       , class UnwrapAll
       , class UniqueColumnNames
+      , class UniqueTableColumnNames
       , class IsRequiredColumn
+      , class TableChecks
       , class IncludeConstraint
       , class ToOrderBy
       , class SortColumns
@@ -105,12 +112,14 @@ module Droplet.Language.Internal.Syntax
       , on
       , union
       , groupBy
+      , alter
       , drop
       , unionAll
       , distinct
       , orderBy
       , offset
       , as
+      , add
       , delete
       , asc
       , desc
@@ -1465,6 +1474,9 @@ else instance Resume rest b c ⇒ Resume (Create rest) b (Create c) where
 else instance Resume rest b c ⇒ Resume (Drop rest) b (Drop c) where
       resume (Drop rest) b = Drop $ resume rest b
 
+else instance Resume rest b c ⇒ Resume (Alter rest) b (Alter c) where
+      resume (Alter rest) b = Alter $ resume rest b
+
 else instance Resume E b b where
       resume _ b = b
 
@@ -1473,11 +1485,14 @@ else instance Resume b a c ⇒ Resume a b c where
 
 ---------------------------Table machinery------------------------------------------
 
+-- | Helper data type for extending TABLE syntax
+newtype T (t ∷ Type) rest = T rest
+
 -- | Acceptable table operations
-class ToTable (q :: Type) (t :: Type) | q → t
+class ToTable (q ∷ Type) (t ∷ Type) | q → t
 
 -- | Table up for modification
-table :: ∀ name q fields sql. ToTable q (Table name fields) ⇒ Resume q (Table name fields) sql ⇒ Table name fields → q → sql
+table ∷ ∀ name q fields sql. ToTable q (Table name fields) ⇒ Resume q (Table name fields) sql ⇒ Table name fields → q → sql
 table _ q = resume q Table
 
 ---------------------------CREATE------------------------------------------
@@ -1573,13 +1588,49 @@ where table_definition is the Table type
 -}
 
 -- | CREATE TABLE
-instance (RowToList fields fieldList,
-      ValidConstraints fieldList,
-      ConstraintsToRowList fieldList list,
-      ValidComposites name list) ⇒ ToTable (Create E) (Table name fields)
+instance TableChecks (Table name columns) ⇒ ToTable (Create E) (Table name columns)
+
+-- | Reused by CREATE and ALTER
+class TableChecks (t ∷ Type)
+
+instance
+      ( RowToList columns columnList
+      , ValidColumnNames columnList
+      , ValidConstraints columnList
+      , ConstraintsToRowList columnList list
+      , ValidComposites name list
+      ) ⇒
+      TableChecks (Table name columns)
+
+-- | Fails on repeated column names
+class ValidColumnNames (columns ∷ RowList Type)
+
+instance
+      ( ColumnNames columns names
+      , RowListNub names nubbed
+      , UniqueTableColumnNames names nubbed
+      ) ⇒
+      ValidColumnNames columns
+
+-- | List of all column names in a table
+class ColumnNames (columns ∷ RowList Type) (names ∷ SymbolList) | columns → names
+
+instance ColumnNames Nil Nil
+
+instance
+      ( SymbolListSingleton name head
+      , ColumnNames rest tail
+      , RowListAppend head tail all
+      ) ⇒
+      ColumnNames (Cons name t rest) all
+
+-- |
+class UniqueTableColumnNames (some :: SymbolList) (more :: SymbolList)
+
+instance UniqueTableColumnNames columns columns
 
 -- | Fail on invalid constraints
-class ValidConstraints (fields ∷ RowList Type)
+class ValidConstraints (columns ∷ RowList Type)
 
 instance ValidConstraints Nil
 
@@ -1689,7 +1740,7 @@ instance
 instance ValidComposites tn Nil
 
 -- |
-class CheckComposite (tableName ∷ Symbol) (name :: Symbol) (c ∷ Type) (rest ∷ RowList Type)
+class CheckComposite (tableName ∷ Symbol) (name ∷ Symbol) (c ∷ Type) (rest ∷ RowList Type)
 
 instance CheckComposite tn cn c Nil
 
@@ -1705,8 +1756,13 @@ else instance Fail (Beside (Beside (Text "Constraint ") (QuoteLabel name)) (Besi
 
 else instance CheckComposite tn name t rest ⇒ CheckComposite tn name t (Cons n s rest)
 
-
 ---------------------------ALTER------------------------------------------
+
+newtype Alter rest = Alter rest
+
+-- ALTER ...
+alter ∷ Alter E
+alter = Alter E
 
 ---------------------------TABLE------------------------------------------
 
@@ -1814,12 +1870,34 @@ exclude_element in an EXCLUDE constraint is:
 { column_name | ( expression ) } [ opclass ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]
 -}
 
+{-
+full alter table syntax supported by droplet
+ALTER TABLE table_definition
+[ADD | ALTER TYPE | DROP] column_definition
+-}
+
+instance ToTable (Alter E) (Table name fields)
+
+---------------------------ADD--------------------------------------------
+
+newtype Add (name ∷ Symbol) rest = Add rest
+
+add ∷
+      ∀ t constraints name object columns extended.
+      Cons object (Column t constraints) columns extended ⇒
+      TableChecks (Table name extended) ⇒
+      Proxy object →
+      Column t constraints →
+      Alter (Table name columns) →
+      Alter (T (Table name columns) (Add object (Column t constraints)))
+add _ column (Alter _) = Alter <<< T $ Add column
+
 ---------------------------DROP------------------------------------------
 
 newtype Drop rest = Drop rest
 
 -- | DROP ...
-drop :: Drop E
+drop ∷ Drop E
 drop = Drop E
 
 ---------------------------TABLE------------------------------------------
@@ -1829,6 +1907,12 @@ full drop table supported by postgresql (https://www.postgresql.org/docs/current
 
 DROP TABLE [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
 
+-}
+
+{-
+full drop table syntax supported by droplet
+DROP TABLE table_definition
+where table_definition is the Table type
 -}
 
 instance ToTable (Drop E) (Table name fields)

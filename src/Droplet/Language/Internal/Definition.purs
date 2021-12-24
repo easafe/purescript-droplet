@@ -105,7 +105,7 @@ data ForeignKey (field :: Symbol) (table :: Type)
 data Constraint ∷ ∀ n. n → Type → Type
 data Constraint name t
 
-data Column (t :: Type) (constraint :: Type)
+data Column (t :: Type) (constraint :: Type) = Column
 
 data Table (name ∷ Symbol) (fields ∷ Row Type) = Table
 

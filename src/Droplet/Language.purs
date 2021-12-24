@@ -69,6 +69,7 @@ import Droplet.Language.Internal.Syntax
       , OrderBy
       , Plan
       , Prepare
+      , Alter
       , Select
       , Drop
       , Set
@@ -76,6 +77,7 @@ import Droplet.Language.Internal.Syntax
       , Join
       , Offset
       , Returning
+      , T
       , Limit
       , Create
       , Values
@@ -92,6 +94,7 @@ import Droplet.Language.Internal.Syntax
       , drop
       , create
       , into
+      , alter
       , table
       , orderBy
       , join
@@ -106,6 +109,7 @@ import Droplet.Language.Internal.Syntax
       , select
       , set
       , asc
+      , add
       , on
       , desc
       , update
