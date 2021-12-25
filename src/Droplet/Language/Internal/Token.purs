@@ -182,14 +182,17 @@ stringType = "TEXT"
 booleanType ∷ String
 booleanType = "BOOL"
 
+addKeyword ∷ String
+addKeyword = "ADD "
+
+alterKeyword ∷ String
+alterKeyword = "ALTER "
+
 dropKeyword ∷ String
 dropKeyword = "DROP "
 
 numberType ∷ String
 numberType = "DOUBLE PRECISION"
-
-quoteSymbol ∷ String
-quoteSymbol = """""""
 
 createKeyword ∷ String
 createKeyword = "CREATE "
@@ -199,3 +202,6 @@ newline = "\n"
 
 space ∷ String
 space = " "
+
+quoteSymbol ∷ String
+quoteSymbol = """""""

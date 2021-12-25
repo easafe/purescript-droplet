@@ -26,7 +26,7 @@ module Droplet.Language.Internal.Syntax
       , Prepare(..)
       , Select(..)
       , Returning(..)
-      , T
+      , T(..)
       , Set(..)
       , Drop(..)
       , Alter(..)
@@ -41,12 +41,14 @@ module Droplet.Language.Internal.Syntax
       , class ValidColumnNames
       , class IncludeColumn
       , class ColumnCannotBeSet
+      , class ToAdd
       , class ColumnNames
       , class UnwrapAll
       , class UniqueColumnNames
       , class UniqueTableColumnNames
       , class IsRequiredColumn
       , class TableChecks
+      , class ColumHasType
       , class IncludeConstraint
       , class ToOrderBy
       , class SortColumns
@@ -142,7 +144,7 @@ import Prim hiding (Constraint)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, PrimaryKey, Star, Table(..), Unique)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, PrimaryKey, Star, Table(..), Unique)
 import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
@@ -1625,7 +1627,7 @@ instance
       ColumnNames (Cons name t rest) all
 
 -- |
-class UniqueTableColumnNames (some :: SymbolList) (more :: SymbolList)
+class UniqueTableColumnNames (some ∷ SymbolList) (more ∷ SymbolList)
 
 instance UniqueTableColumnNames columns columns
 
@@ -1643,7 +1645,7 @@ instance
       ) ⇒
       ValidConstraints (Cons name (Column t constraints) rest)
 
-else instance ValidConstraints rest ⇒ ValidConstraints (Cons name t rest)
+else instance (ColumHasType t, ValidConstraints rest) ⇒ ValidConstraints (Cons name t rest)
 
 -- | Constraints must be unique per column
 class UniqueConstraints (name ∷ Symbol) (constraints ∷ Type)
@@ -1660,6 +1662,14 @@ instance (IsRepeated name t some, IsRepeated name t more) ⇒ IsRepeated name t 
 else instance Fail (Beside (Beside (Text "Constraint ") (Quote t)) (Beside (Text " declared more than once for column ") (QuoteLabel name))) ⇒ IsRepeated name t t
 
 else instance IsRepeated name t s
+
+-- | Constraints must be paired with `Column`
+class ColumHasType (column ∷ Type)
+
+-- | For ALTER
+instance ColumHasType (Proxy t)
+
+else instance ToType t ⇒ ColumHasType t
 
 -- |
 class SingleTypeComposite (constraints ∷ Type)
@@ -1882,14 +1892,22 @@ instance ToTable (Alter E) (Table name fields)
 
 newtype Add (name ∷ Symbol) rest = Add rest
 
+-- | ALTER table ADD objects
+class ToAdd (q ∷ Type)
+
+instance ToAdd (Column t constraints)
+
+instance ToAdd (Proxy q)
+
 add ∷
-      ∀ t constraints name object columns extended.
-      Cons object (Column t constraints) columns extended ⇒
+      ∀ q name object columns extended.
+      ToAdd q ⇒
+      Cons object q columns extended ⇒
       TableChecks (Table name extended) ⇒
       Proxy object →
-      Column t constraints →
+      q →
       Alter (Table name columns) →
-      Alter (T (Table name columns) (Add object (Column t constraints)))
+      Alter (T (Table name columns) (Add object q))
 add _ column (Alter _) = Alter <<< T $ Add column
 
 ---------------------------DROP------------------------------------------

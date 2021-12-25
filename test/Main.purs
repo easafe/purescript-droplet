@@ -27,6 +27,7 @@ import Test.Union as TUN
 import Test.Unsafe as TUS
 import Test.Update as TU
 import Test.Drop as TDR
+import Test.Alter as TAL
 import Test.Where as TW
 
 main ∷ Effect Unit
@@ -39,6 +40,7 @@ main = EA.launchAff_ $ TSR.runSpec [consoleReporter] do
       TF.tests
       TDS.tests
       TJ.tests
+      TAL.tests
       TW.tests
       TUN.tests
       TG.tests

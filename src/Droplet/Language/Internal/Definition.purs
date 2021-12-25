@@ -16,8 +16,9 @@ module Droplet.Language.Internal.Definition
       , PrimaryKey
       , Constraint
       , Unique
-      , Column
+      , Column(..)
       , C
+      , class ToType
       , class IsNullable
       , class UnwrapNullable
       , class FromValue
@@ -26,6 +27,7 @@ module Droplet.Language.Internal.Definition
       , class UnwrapDefinition
       , class AppendPath
       , star
+      , toType
       , toParameters
       , fromValue
       , toValue
@@ -33,8 +35,8 @@ module Droplet.Language.Internal.Definition
       , (...)
       ) where
 
-import Prim hiding (Constraint)
 import Prelude
+import Prim hiding (Constraint)
 
 import Control.Monad.Except as CME
 import Data.Array ((:))
@@ -59,7 +61,7 @@ import Data.Symbol as DS
 import Data.Traversable as DT
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
-import Droplet.Language.Internal.Token (dotSymbol)
+import Droplet.Language.Internal.Token (bigIntegerType, booleanType, dateTimeType, dateType, dotSymbol, integerType, numberType, stringType)
 import Foreign (Foreign)
 import Foreign as F
 import Prim.Row (class Cons)
@@ -285,3 +287,32 @@ instance (Append alias Dot path, Append path name fullPath) ⇒ AppendPath alias
 -- | Required only if using migrations; other cases are handled by `ToValue`
 class ToConstraintValue (t ∷ Type) where
       toConstraintValue ∷ Proxy t → Foreign
+
+
+-- | String representation of field types
+class ToType (t ∷ Type) where
+      toType ∷ Proxy t → String
+
+instance ToType Int where
+      toType _ = integerType
+
+instance ToType BigInt where
+      toType _ = bigIntegerType
+
+instance ToType Date where
+      toType _ = dateType
+
+instance ToType DateTime where
+      toType _ = dateTimeType
+
+instance ToType String where
+      toType _ = stringType
+
+instance ToType Number where
+      toType _ = numberType
+
+instance ToType Boolean where
+      toType _ = booleanType
+
+instance ToType t ⇒ ToType (Maybe t) where
+      toType _ = toType (Proxy ∷ _ t)

@@ -27,8 +27,9 @@ import Droplet.Language.Internal.Definition
       ( class FromValue
       , class ToParameters
       , class ToValue
+      , class ToType
       , Identity
-      , Column
+      , Column(..)
       , ForeignKey
       , Default(..)
       , Composite
@@ -41,6 +42,7 @@ import Droplet.Language.Internal.Definition
       , Table(..)
       , fromValue
       , star
+      , toType
       , toValue
       , (...)
       ) as Exported
@@ -56,7 +58,7 @@ import Droplet.Language.Internal.Function
       , random
       ) as Exported
 import Droplet.Language.Internal.Translate (class ToQuery, Query(..))
-import Droplet.Language.Internal.Translate (class ToType, toType) as Exported
+
 import Droplet.Language.Internal.Translate as DLIQ
 import Droplet.Language.Internal.Syntax
       ( As
