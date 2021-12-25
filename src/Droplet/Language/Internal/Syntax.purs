@@ -1883,7 +1883,7 @@ exclude_element in an EXCLUDE constraint is:
 {-
 full alter table syntax supported by droplet
 ALTER TABLE table_definition
-[ADD | ALTER TYPE | DROP] column_definition
+ADD column_definition
 -}
 
 instance ToTable (Alter E) (Table name fields)
