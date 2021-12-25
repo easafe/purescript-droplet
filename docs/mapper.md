@@ -47,7 +47,7 @@ single ::
 
 Because queries can be freely composed, a few checks can only be performed when using one of the querying functions above. This includes checking for out of scope column access, ill formed aggregations, invalid top levels, etc.
 
-For the mapping to work, all columns names in a projection must be unique -- same reason as why literals and functions must be aliased. Since names are always quote by the query mapper, it is safe to use any casing in columns or aliases. This also means table aliases are not stripped. For example, running the query `SELECT u.id FROM users AS u` on Postgres renders columns as "id"; the Droplet equivalent `select (u ... id) # from (users # as u)` results in the record `{ "u.id" :: Int }`.
+For the mapping to work, all columns names in a projection must be unique -- same reason as why literals and functions must be aliased. Since names are always quoted by the query mapper, it is safe to use any casing in columns or aliases. This also means table aliases are not stripped. For example, running the query `SELECT u.id FROM users AS u` on Postgres renders columns as "id"; the Droplet equivalent `select (u ... id) # from (users # as u)` results in the record `{ "u.id" :: Int }`.
 
 ## Unsafe queries
 
@@ -100,11 +100,12 @@ selectUnsafe = withConnection pool $ \c -> do
 selectUnsafe :: Aff (Maybe PgError)
 selectUnsafe = withConnection pool $ \c -> do
       ...
-      unsafeExecute connection Nothing "INSERT INTO users (name) VALUEs (@name)" { name : "mary" }
+      unsafeExecute connection Nothing "INSERT INTO users (name) VALUES (@name)" { name : "mary" }
 ```
 
 ## Type mapping
 
-Most common types (integers, strings, date/datetime, etc.) work out of the box. In case the default behavior isn't desirable, or you need to map columns to custom types, the type classes `FromValue` and `ToValue` can perform conversions. `FromValue` translates `Foreign` SQL values to PureScript; `ToValue` parses PureScript values into `Foreign`. All parameters must also have `ToValue` instances.
+Most common types (integers, strings, dates, etc.) work out of the box. In case the default behavior isn't desirable, or you need to map columns to custom types, the type classes `FromValue` and `ToValue` can perform conversions. `FromValue` translates `Foreign` SQL values to PureScript; `ToValue` parses PureScript values into `Foreign`. All parameters must also have `ToValue` instances.
 
 <a href="/edsl" class="direction previous">Previous: eDSL</a>
+<a href="/migrations" class="direction previous">Next: Migrations</a>
