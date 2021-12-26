@@ -12,7 +12,7 @@ This guide first covers the syntax used by the eDSL, how to run queries using a 
 Installation:
 
 ```
-npm i big-integer pg
+npm i big-integer pg @easafe/pebble
 
 spago install droplet
 ```

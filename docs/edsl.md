@@ -463,14 +463,72 @@ Prepared statements can be done with `prepare`.
 ```haskell
 prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
 ```
+Only the plan name is required. Parameters will be automatically parsed from the query
 
 ## CREATE
 
+### TABLE
+
+Tables can be created using the same table type used for queries
+
+```haskell
+myTable :: Table "my_table" (id :: Column Int PrimaryKey, name :: Maybe String)
+myTable = Table
+
+createTableExample = create # table myTable -- CREATE TABLE "my_table" (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
+```
+
+See the [migrations](/migrations) page for info on the column and constraint types
+
 ## ALTER
+
+### TABLE
+
+#### ADD
+
+To add a new column to a table, we can use
+
+```haskell
+add ::
+      forall q name object columns extended.
+      ToAdd q =>
+      Cons object q columns extended =>
+      TableChecks (Table name extended) =>
+      Proxy object ->
+      q ->
+      Alter (Table name columns) ->
+      Alter (T (Table name columns) (Add object q))
+```
+
+The object being added, `q`, can be either a ```Proxy``` type for columns without constraints
+
+```haskell
+myColumn :: Proxy "my_column"
+myColumn = Proxy
+
+addColumn = alter # table users # add myColumn (Proxy :: _ Int) --ALTER TABLE users ADD COLUMN my_column INTEGER NOT NULL
+```
+
+or ```Column```, if constraints are required
+
+```haskell
+addColumnConstraint = alter # table users # add myColumn (Column :: Column Int Unique) --ALTER TABLE users ADD COLUMN my_column INTEGER NOT NULL UNIQUE
+
+addColumnNamedConstraint = alter # table users # add myColumn (Column :: Column Int (Constraint "my_constraint" Unique)) --ALTER TABLE users ADD COLUMN my_column INTEGER NOT NULL CONSTRAINT my_constraint UNIQUE
+```
+
+Adding standalone constraints (without a new column) is not yet supported.
 
 ## DROP
 
-Only the plan name is required. Parameters will be automatically parsed from the query.
+### TABLE
+
+We can use the same table type in order to drop it.
+
+```haskell
+dropTableExample = drop # table users
+```
+
 
 <a href="/index" class="direction previous">Previous: Getting started</a>
 <a href="/mapper" class="direction">Next: Query Mapper</a>

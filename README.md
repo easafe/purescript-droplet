@@ -21,7 +21,7 @@ See the [project page](https://droplet.asafe.dev/) for an in-depth look, or [pur
 Install
 
 ```
-npm i big-integer pg
+npm i big-integer pg @easafe/pebble
 
 spago install droplet
 ```
