@@ -10,18 +10,18 @@ import Data.Newtype (class Newtype)
 import Data.Nullable (Nullable, null, toMaybe, toNullable)
 import Data.Nullable as DN
 import Data.Profunctor (lcmap)
-import Data.Show.Generic (genericShow)
+import Data.Show.Generic as DSG
 import Data.String (Pattern(..))
 import Data.String as String
 import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Traversable as DT
+import Droplet.Driver.Internal.Pool (Pool)
 import Droplet.Language.Internal.Definition (class FromValue, class ToParameters)
 import Droplet.Language.Internal.Definition as DIED
 import Droplet.Language.Internal.Syntax (Plan(..))
-import Droplet.Driver.Internal.Pool (Pool)
-import Droplet.Language.Internal.Query (class ToQuery, Query(..))
-import Droplet.Language.Internal.Query as DIMQ
+import Droplet.Language.Internal.Translate (class ToQuery, Query(..))
+import Droplet.Language.Internal.Translate as DIMQ
 import Effect (Effect)
 import Effect.Aff (Aff, bracket)
 import Effect.Aff as EA
@@ -82,7 +82,7 @@ type PGErrorDetail =
 newtype Connection = Connection (Either Pool Client)
 
 -- | APIs of the `Pool.query` and `Client.query` are the same.
--- | We can dse this polyformphis to simplify ffi.
+-- | We can dse this polymorphism to simplify ffi.
 foreign import data UntaggedConnection ∷ Type
 
 -- | PostgreSQL connection.
@@ -111,10 +111,11 @@ instance eqPGError ∷ Eq PgError where
             where
             eqErr err1 err2 =
                   let _error = Proxy ∷ Proxy "error" in eq (Record.delete _error err1) (Record.delete _error err2)
-derive instance genericPGError ∷ Generic PgError _
-derive instance newtypeConnection ∷ Newtype Connection _
-instance showPGError ∷ Show PgError where
-      show = genericShow
+
+derive instance Generic PgError _
+derive instance Newtype Connection _
+instance Show PgError where
+      show = DSG.genericShow
 
 class FromResult (projection ∷ RowList Type) result | projection → result where
       toResult ∷ Proxy projection → Object Foreign → Either String result
@@ -176,11 +177,11 @@ withClient p k = bracket (connect p) cleanup run
 connect ∷ Pool → Aff (Either PgError ConnectResult)
 connect = EAC.fromEffectFnAff <<< connect_ rightLeft
 
--- | Trivial helper / shortcut which also wraps
--- | the connection to provide `Connection`.
+-- | Runs queries with a connection
 withConnection ∷ ∀ a. Pool → (Either PgError Connection → Aff a) → Aff a
 withConnection p k = withClient p (lcmap (map fromClient) k)
 
+-- | Runs queries within a transaction
 withTransaction ∷ ∀ a. Pool → (Connection → Aff a) → Aff (Either PgError a)
 withTransaction pool action = withClient pool case _ of
       Right client → withClientTransaction client (action $ fromClient client)
@@ -205,6 +206,7 @@ withClientTransaction client action =
 
 -------------------------------QUERYING----------------------------------
 
+-- | Returns an array of `projection` records
 query ∷
       ∀ q projection pro.
       ToQuery q projection ⇒
@@ -230,6 +232,7 @@ query connection q = do
             , values: parameters
             }
 
+-- | Returns an array of `projection` records from a SQL string
 unsafeQuery ∷
       ∀ projection pro parameters pra.
       RowToList projection pro ⇒
@@ -243,6 +246,7 @@ unsafeQuery ∷
       Aff (Either PgError (Array (Record projection)))
 unsafeQuery connection plan q parameters = query connection $ DIMQ.unsafeBuildQuery plan q parameters
 
+-- | Runs a query without results
 execute ∷ ∀ q. ToQuery q () ⇒ Connection → q → Aff (Maybe PgError)
 execute connection q = do
       results ← query connection q
@@ -250,6 +254,7 @@ execute connection q = do
             Left err → Just err
             _ → Nothing
 
+-- | Runs a query without results from a SQL string
 unsafeExecute ∷
       ∀ parameters pra.
       RowToList parameters pra ⇒
@@ -265,6 +270,7 @@ unsafeExecute connection plan q parameters = do
             Left err → Just err
             _ → Nothing
 
+-- | Runs a query that returns zero or one results
 single ∷
       ∀ q projection pro.
       ToQuery q projection ⇒
@@ -281,6 +287,7 @@ single connection q = do
             Right [ r ] → Right $ Just r
             _ → Left TooManyRows
 
+-- | Runs a query that returns zero or one results from a SQL string
 unsafeSingle ∷
       ∀ parameters pra projection pro.
       RowToList parameters pra ⇒

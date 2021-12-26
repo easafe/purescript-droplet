@@ -2,29 +2,31 @@
 
 Composable, type-safe eDSL and query mapper for PureScript targeting PostgreSQL
 
-* eDSL made out of combinators (nearly) identical to their SQL counterparts
+* eDSL made out of combinators (almost) identical to their SQL counterparts
 
 * Generated SQL matches eDSL one-to-one, and is guaranteed to be correct and unambiguous
 
-* Supports nearly all common SQL operations for SELECT, INSERT, UPDATE and DELETE, including joins, aggregations, subqueries, etc
+* Supports nearly all common SQL operations for ```SELECT```, ```INSERT```, ```UPDATE```, ``DELETE`` and others, including joins, aggregations, subqueries, etc
 
 * Very little boilerplate: query results are automatically mapped to records, (valid) queries never require type annotations
 
+* Migration support via [pebble](https://github.com/easafe/haskell-pebble)
 
 ### Documentation
 
 See the [project page](https://droplet.asafe.dev/) for an in-depth look, or [pursuit](https://pursuit.purescript.org/packages/purescript-droplet) for API docs
-
 
 ### Quick start
 
 Install
 
 ```
-npm i big-integer pg
+npm i big-integer pg @easafe/pebble
+
+spago install droplet
 ```
 
-Write some SQL
+Create some tables
 
 ```sql
 create table users (
@@ -48,7 +50,9 @@ Define some types for your SQL
 
 ```purescript
 -- representation of the table itself
-users :: Table "users" Users
+type UsersTable = Table "users" Users
+
+users :: UsersTable
 users = Table
 
 messages :: Table "messages" Messages
@@ -56,24 +60,24 @@ messages = Table
 
 -- representation of the table's columns definitions
 type Users = (
-    id :: Auto Int, -- identity column
+    id :: Column Int (PrimaryKey /\ Identity), -- primary key, generated always as identity
     name :: String,
-    birthday :: Maybe Date, -- nullable column
+    birthday :: Maybe Date -- nullable column
 )
 
 type Messages = (
-    id :: Auto Int,
-    sender :: Int,
-    recipient :: Int,
-    date :: Default DateTime -- column with default
+    id :: Column Int (PrimaryKey /\ Identity),
+    sender :: Column Int (ForeignKey "id" UsersTable), -- foreign key to table users
+    recipient :: Column Int (ForeignKey "id" UsersTable),
+    date :: Column DateTime (Constraint "date_default_messages" Default) -- column with named default constrain
 )
 
 -- representation of column names to be used in queries
 id :: Proxy "id"
-"id" = Proxy
+id = Proxy
 
 name :: Proxy "name"
-"name" = Proxy
+name = Proxy
 
 birthday :: Proxy "birthday"
 birthday = Proxy
@@ -98,6 +102,8 @@ t :: Proxy "t"
 t = Proxy
 ```
 
+(Don't worry, table creation, typing and migration can be automated with [pebble](https://github.com/easafe/haskell-pebble))
+
 Prepare some queries
 
 ```purescript
@@ -117,7 +123,6 @@ gary bday =
 
 chat :: Int -> Int -> _
 chat from to = insert # into messages (sender /\ recipient) # values (from /\ to) -- `date` has a default value
-
 
 selectMessages :: _
 selectMessages =
@@ -178,8 +183,6 @@ runSql connection = do
 
             _, _ -> pure unit
 ```
-
-
 
 ### Licensing
 

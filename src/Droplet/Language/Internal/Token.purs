@@ -1,7 +1,5 @@
 -- | SQL Keywords and tokens
-module Droplet.Language.Internal.Keyword where
-
-type Dot = "."
+module Droplet.Language.Internal.Token where
 
 --magic strings
 selectKeyword ∷ String
@@ -22,8 +20,20 @@ allKeyword = "ALL "
 fromKeyword ∷ String
 fromKeyword = " FROM "
 
+constraintKeyword ∷ String
+constraintKeyword = "CONSTRAINT "
+
+identityKeyword ∷ String
+identityKeyword = " GENERATED ALWAYS AS IDENTITY"
+
+uniqueKeyword ∷ String
+uniqueKeyword = " UNIQUE"
+
 whereKeyword ∷ String
 whereKeyword = " WHERE "
+
+referencesKeyword ∷ String
+referencesKeyword = " REFERENCES "
 
 andKeyword ∷ String
 andKeyword = " AND "
@@ -36,6 +46,15 @@ asKeyword = " AS "
 
 innerKeyword ∷ String
 innerKeyword = " INNER "
+
+primaryKeyKeyword ∷ String
+primaryKeyKeyword = " PRIMARY KEY"
+
+foreignKeyKeyword ∷ String
+foreignKeyKeyword = " FOREIGN KEY"
+
+defaultKeyword ∷ String
+defaultKeyword = "DEFAULT"
 
 joinKeyword ∷ String
 joinKeyword = "JOIN "
@@ -89,7 +108,7 @@ insertKeyword ∷ String
 insertKeyword = "INSERT INTO "
 
 valuesKeyword ∷ String
-valuesKeyword = " VALUES "
+valuesKeyword = " VALUES"
 
 updateKeyword ∷ String
 updateKeyword = "UPDATE "
@@ -127,6 +146,9 @@ limitKeyword = " LIMIT "
 offsetKeyword ∷ String
 offsetKeyword = " OFFSET "
 
+semicolon ∷ String
+semicolon = ";"
+
 dotSymbol ∷ String
 dotSymbol = "."
 
@@ -135,6 +157,51 @@ string_aggFunctionName = "string_agg"
 
 simpleQuoteSymbol ∷ String
 simpleQuoteSymbol = "'"
+
+integerType ∷ String
+integerType = "INTEGER"
+
+bigIntegerType ∷ String
+bigIntegerType = "BIGINT"
+
+dateType ∷ String
+dateType = "DATE"
+
+tableKeyword ∷ String
+tableKeyword = "TABLE "
+
+notNullKeyword ∷ String
+notNullKeyword = " NOT NULL"
+
+dateTimeType ∷ String
+dateTimeType = "TIMESTAMPTZ"
+
+stringType ∷ String
+stringType = "TEXT"
+
+booleanType ∷ String
+booleanType = "BOOL"
+
+addKeyword ∷ String
+addKeyword = "ADD "
+
+alterKeyword ∷ String
+alterKeyword = "ALTER "
+
+dropKeyword ∷ String
+dropKeyword = "DROP "
+
+numberType ∷ String
+numberType = "DOUBLE PRECISION"
+
+createKeyword ∷ String
+createKeyword = "CREATE "
+
+newline ∷ String
+newline = "\n"
+
+space ∷ String
+space = " "
 
 quoteSymbol ∷ String
 quoteSymbol = """""""

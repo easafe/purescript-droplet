@@ -1,9 +1,42 @@
 -- | Definition of SQL columns types as well conversions from and to columns
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Definition (class FromValue, Empty, class InvalidField, class UnwrapNullable, class ToParameters, class ToValue, class UnwrapDefinition, Auto(..), Default(..), Star(..), Table(..), star, toParameters, fromValue, toValue, Joined(..), path, (...), E(..), Path, class AppendPath) where
+module Droplet.Language.Internal.Definition
+      ( Empty
+      , Identity
+      , Default(..)
+      , Star(..)
+      , Table(..)
+      , E(..)
+      , Dot
+      , Composite
+      , Path
+      , ForeignKey
+      , Joined
+      , PrimaryKey
+      , Constraint
+      , Unique
+      , Column(..)
+      , C
+      , class ToType
+      , class IsNullable
+      , class UnwrapNullable
+      , class FromValue
+      , class ToParameters
+      , class ToValue
+      , class UnwrapDefinition
+      , class AppendPath
+      , star
+      , toType
+      , toParameters
+      , fromValue
+      , toValue
+      , path
+      , (...)
+      ) where
 
 import Prelude
+import Prim hiding (Constraint)
 
 import Control.Monad.Except as CME
 import Data.Array ((:))
@@ -28,41 +61,57 @@ import Data.Symbol as DS
 import Data.Traversable as DT
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
-import Droplet.Language.Internal.Keyword (Dot, dotSymbol)
+import Droplet.Language.Internal.Token (bigIntegerType, booleanType, dateTimeType, dateType, dotSymbol, integerType, numberType, stringType)
 import Foreign (Foreign)
 import Foreign as F
 import Prim.Row (class Cons)
 import Prim.RowList (RowList, Cons, Nil)
 import Prim.Symbol (class Append)
-import Prim.TypeError (class Fail, Text)
 import Record as R
 import Type.Proxy (Proxy(..))
 
-foreign import readInt :: Foreign -> Nullable Int
-foreign import showForeigner :: Foreign -> String
+foreign import readInt ∷ Foreign → Nullable Int
+foreign import showForeigner ∷ Foreign → String
 
 -- | Marks the query end
 data E = E
 
+data C :: forall k. k -> Type -> Type
+data C n t
+
 type Empty = ""
+
+type Dot = "."
+
+data Composite (name :: Symbol)
+
+-- | A trick to mark left joined columns as nullable
+data Joined (t ∷ Type)
 
 data Star = Star
 
 star ∷ Star
 star = Star
 
--- | Identity fields
-newtype Auto a = Auto a
+-- | GENERATED ALWAYS AS IDENTITY constraint
+data Identity
 
--- | Defaul constraints
-newtype Default a = Default a
+data Default = Default
 
--- | A trick to mark left joined columns as nullable
-newtype Joined a = Joined a
+data PrimaryKey
+
+data Unique
+
+data ForeignKey (field :: Symbol) (table :: Type)
+
+data Constraint ∷ ∀ n. n → Type → Type
+data Constraint name t
+
+data Column (t :: Type) (constraint :: Type) = Column
 
 data Table (name ∷ Symbol) (fields ∷ Row Type) = Table
 
--- | Qualifieds columns (e.g, table.column)
+-- | Qualified columns (e.g, table.column)
 data Path (alias ∷ Symbol) (field ∷ Symbol) = Path
 
 path ∷ ∀ alias field path pathField. Append alias Dot path ⇒ Append path field pathField ⇒ Proxy alias → Proxy field → Path alias field
@@ -70,16 +119,7 @@ path _ _ = Path
 
 infix 7 path as ...
 
-derive instance Eq a ⇒ Eq (Default a)
-
-derive instance Eq a ⇒ Eq (Auto a)
-
-instance Show a ⇒ Show (Default a) where
-      show (Default a) = show a
-
-instance Show a ⇒ Show (Auto a) where
-      show (Auto a) = show a
-
+-- | Converts a PureScript value into Postgres
 class ToValue v where
       toValue ∷ v → Foreign
 
@@ -89,17 +129,14 @@ instance ToValue Int where
 instance ToValue String where
       toValue = F.unsafeToForeign
 
+instance ToValue Default where
+      toValue _ = F.unsafeToForeign $ DN.null
+
 instance ToValue Boolean where
       toValue = F.unsafeToForeign
 
 instance ToValue Number where
       toValue = F.unsafeToForeign
-
-instance ToValue a ⇒ ToValue (Default a) where
-      toValue (Default a) = toValue a
-
-instance ToValue a ⇒ ToValue (Auto a) where
-      toValue (Auto a) = toValue a
 
 instance ToValue a ⇒ ToValue (Maybe a) where
       toValue = case _ of
@@ -127,6 +164,7 @@ formatDate date = show y <> "-" <> show m <> "-" <> show d
       m = DEN.fromEnum $ DD.month date
       d = DEN.fromEnum $ DD.day date
 
+-- | Converts a Postgres value into PureScript
 class FromValue t where
       fromValue ∷ Foreign → Either String t
 
@@ -134,11 +172,11 @@ class FromValue t where
 -- this might arise out a invalid type definition on the users part;
 -- the number is actually a big int;
 -- something funky
---in the two former cases, readInt returns null, as well in the latter if the string can't be parsed as an integer
+--in the first two cases, readInt returns null, as well in the latter if the string can't be parsed as an integer
 instance FromValue Int where
       fromValue i = case DN.toMaybe $ readInt i of
-            Nothing -> Left $ "Could not parse value as integer: " <> showForeigner i
-            Just int -> Right int
+            Nothing → Left $ "Could not parse value as integer: " <> showForeigner i
+            Just int → Right int
 
 instance FromValue String where
       fromValue = DB.lmap show <<< CME.runExcept <<< F.readString
@@ -152,12 +190,6 @@ instance FromValue Number where
 --tricky, since pg might return empty string for select some_side_effect_function()
 instance FromValue Unit where
       fromValue _ = Right unit
-
-instance FromValue v ⇒ FromValue (Default v) where
-      fromValue v = Default <$> fromValue v
-
-instance FromValue v ⇒ FromValue (Auto v) where
-      fromValue v = Auto <$> fromValue v
 
 instance FromValue v ⇒ FromValue (Array v) where
       fromValue = DT.traverse fromValue <=< DB.lmap show <<< CME.runExcept <<< F.readArray
@@ -207,25 +239,26 @@ parseTime input errorMessage =
 -- | Convenience to remove type wrappers
 class UnwrapDefinition (w ∷ Type) (t ∷ Type) | w → t
 
-instance UnwrapDefinition (Auto t) t
-
-else instance UnwrapDefinition (Default t) t
+instance UnwrapDefinition (Column t c) t
 
 else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Joined t) u
 
 else instance UnwrapDefinition t t
 
+-- | Convenience to remove nullable wrappers
 class UnwrapNullable (w ∷ Type) (t ∷ Type) | w → t
 
 instance UnwrapNullable (Maybe t) t
 
 else instance UnwrapNullable t t
 
-class InvalidField (t ∷ Type)
+class IsNullable (t ∷ Type)
 
-instance Fail (Text "Auto columns cannot be inserted or updated") ⇒ InvalidField (Auto t)
+instance IsNullable (Column (Maybe t) c)
 
-else instance InvalidField t
+instance IsNullable (Maybe t)
+
+instance IsNullable (Joined t)
 
 class ToParameters record (list ∷ RowList Type) where
       toParameters ∷ Proxy list → Record record → Array (Tuple String Foreign)
@@ -244,7 +277,42 @@ instance
             where
             name = Proxy ∷ Proxy name
 
--- | Simplify append qualifiying column names
+-- | Simplify append qualifying column names
 class AppendPath (alias ∷ Symbol) (name ∷ Symbol) (fullPath ∷ Symbol) | alias name → fullPath
 
 instance (Append alias Dot path, Append path name fullPath) ⇒ AppendPath alias name fullPath
+
+-- | How a value should be generated for DEFAULT and other constraints
+-- |
+-- | Required only if using migrations; other cases are handled by `ToValue`
+class ToConstraintValue (t ∷ Type) where
+      toConstraintValue ∷ Proxy t → Foreign
+
+
+-- | String representation of field types
+class ToType (t ∷ Type) where
+      toType ∷ Proxy t → String
+
+instance ToType Int where
+      toType _ = integerType
+
+instance ToType BigInt where
+      toType _ = bigIntegerType
+
+instance ToType Date where
+      toType _ = dateType
+
+instance ToType DateTime where
+      toType _ = dateTimeType
+
+instance ToType String where
+      toType _ = stringType
+
+instance ToType Number where
+      toType _ = numberType
+
+instance ToType Boolean where
+      toType _ = booleanType
+
+instance ToType t ⇒ ToType (Maybe t) where
+      toType _ = toType (Proxy ∷ _ t)

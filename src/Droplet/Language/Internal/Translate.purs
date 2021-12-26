@@ -1,13 +1,73 @@
 -- | `ToQuery`, a type class to generate parameterized SQL statement strings
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
-module Droplet.Language.Internal.Query (class FilteredQuery, class QualifiedProjection, class TranslateSource, class ToNakedProjection, class SingleQualifiedColumn, class TranslateConditions, class TranslateColumn, class NoAggregations, class OnlyAggregations, class AggregatedQuery, class IsValidAggregation, class ToJoinType, class ArgumentList, argumentList, class QueryMustNotBeAliased, class ToQuery, toQuery, class TranslateNakedColumn, translateNakedColumn, class NameList, class ToFieldValuePairs, class ToFieldValues, class Translate, Query(..), translateSource, QueryState, translateColumn, toJoinType, nameList, translateConditions, toFieldValuePairs, toFieldValues, translate, buildQuery, unsafeBuildQuery) where
+module Droplet.Language.Internal.Translate
+      ( Query(..)
+      , QueryState
+      , class FilteredQuery
+      , class TranslateFieldDefinition
+      , class QualifiedProjection
+      , class TranslateSource
+      , class ToNakedProjection
+      , class SingleQualifiedColumn
+      , class TranslateConditions
+      , class TranslateColumn
+      , class NoAggregations
+      , class OnlyAggregations
+      , class AggregatedQuery
+      , class ToReferenceDefinition
+      , class IsValidAggregation
+      , class CompositeConstraints
+      , class CompositeFields
+      , class CompositeFieldList
+      , class TranslateCompositeConstraint
+      , class ToJoinType
+      , class SingleColumn
+      , class ToConstraintDefinition
+      , class ToNullableDefinition
+      , class ArgumentList
+      , class ReferenceList
+      , class ToCompositeConstraintDefinition
+      , class QueryMustNotBeAliased
+      , class ToQuery
+      , class TranslateNakedColumn
+      , class NameList
+      , class NameValuePairs
+      , class ValueList
+      , class Translate
+      , translateSource
+      , toQuery
+      , toConstraintDefinition
+      , toCompositeConstraintDefinition
+      , argumentList
+      , translateNakedColumn
+      , toReferenceDefinition
+      , toNullableDefinition
+      , translateColumn
+      , compositeFieldList
+      , translateCompositeConstraint
+      , toJoinType
+      , translateFieldDefinition
+      , nameList
+      , translateConditions
+      , nameValuePairs
+      , valueList
+      , translate
+      , buildQuery
+      , unsafeBuildQuery
+      ) where
+
+import Prim hiding (Constraint)
 
 import Control.Monad.State (State)
 import Control.Monad.State as CMS
-import Data.Array ((..))
+import Data.Array ((..), (:))
 import Data.Array as DA
+import Data.BigInt (BigInt)
+import Data.Date (Date)
+import Data.DateTime (DateTime)
 import Data.Maybe (Maybe(..))
+import Data.Maybe as DM
 import Data.String as DST
 import Data.String.Regex as DSR
 import Data.String.Regex.Flags (global)
@@ -20,19 +80,21 @@ import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
-import Droplet.Language.Internal.Definition (class AppendPath, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, E(..), Path, Star, Table, toParameters, toValue)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToType, class IsNullable, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, E(..), ForeignKey, Identity, Path, PrimaryKey, Star, Table(..), Unique)
+import Droplet.Language.Internal.Definition as DLID
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
-import Droplet.Language.Internal.Keyword (allKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, countFunctionName, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, equalsSymbol, existsKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, quoteSymbol, returningKeyword, selectKeyword, setKeyword, starSymbol, string_aggFunctionName, unionKeyword, updateKeyword, valuesKeyword, whereKeyword)
-import Droplet.Language.Internal.Syntax (class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, As(..), Delete(..), Distinct(..), From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Syntax (class ConstraintsToRowList, class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, Add, Alter(..), As(..), Create, DefaultValues(..), Delete(..), Distinct(..), Drop, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), T(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Token (addKeyword, allKeyword, alterKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, bigIntegerType, booleanType, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, dateTimeType, dateType, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, integerType, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, numberType, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, stringType, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Foreign (Foreign)
-import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<>), (==), (||))
+import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<<<), (<>), (==), (||))
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
-import Prim.RowList (class RowToList, Nil, RowList)
+import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.RowList as RL
 import Prim.TypeError (class Fail, Text)
 import Type.Data.Boolean (class And)
 import Type.Proxy (Proxy(..))
+import Type.RowList (class RowListRemove, class RowListSet)
 
 --this is all really ugly right now
 
@@ -85,12 +147,24 @@ instance
       ToQuery (Union q r) final where
       toQuery q = translate q
 
+-- | INSERT DEFAULT VALUES ... RETURNING
+instance
+      ( ToProjection f fields Nil projection
+      , Translate (Insert (Into name fields DefaultValues (Returning f)))
+      ) ⇒
+      ToQuery (Insert (Into name fields DefaultValues (Returning f))) projection where
+      toQuery q = translate q
+
 -- | INSERT ... RETURNING
 instance
       ( ToProjection f fields Nil projection
       , Translate (Insert (Into name fields fieldNames (Values v (Returning f))))
       ) ⇒
       ToQuery (Insert (Into name fields fieldNames (Values v (Returning f)))) projection where
+      toQuery q = translate q
+
+-- | INSERT DEFAULT VALUES
+instance Translate (Insert (Into name fields DefaultValues E)) ⇒ ToQuery (Insert (Into name fields DefaultValues E)) () where
       toQuery q = translate q
 
 -- | INSERT
@@ -103,6 +177,18 @@ instance Translate (Update table fields (Set values rest)) ⇒ ToQuery (Update t
 
 -- | DELETE
 instance Translate (Delete (From f fields rest)) ⇒ ToQuery (Delete (From f fields rest)) () where
+      toQuery q = translate q
+
+-- | CREATE TABLE
+instance Translate (Create (Table name fields)) ⇒ ToQuery (Create (Table name fields)) () where
+      toQuery q = translate q
+
+-- | ALTER TABLE
+instance Translate (Alter (T (Table name fields) rest)) ⇒ ToQuery (Alter (T (Table name fields) rest)) () where
+      toQuery q = translate q
+
+-- | DROP TABLE
+instance Translate (Drop (Table name fields)) ⇒ ToQuery (Drop (Table name fields)) () where
       toQuery q = translate q
 
 -- | Unsafe queries
@@ -274,7 +360,7 @@ else instance (FilteredQuery (Op a b) outer, FilteredQuery (Op c d) outer) ⇒ F
 
 else instance FilteredQuery (Op a b) outer ⇒ FilteredQuery (Op Not (Op a b)) outer
 
-else instance (AppendPath alias name fullPath, Cons fullPath (Maybe t) e outer) ⇒ FilteredQuery (Op IsNotNull (Path alias name)) outer
+else instance (AppendPath alias name fullPath, Cons fullPath t e outer, IsNullable t) ⇒ FilteredQuery (Op IsNotNull (Path alias name)) outer
 
 else instance
       (
@@ -391,12 +477,12 @@ class TranslateNakedColumn q where
       translateNakedColumn ∷ q → State QueryState String
 
 instance IsSymbol name ⇒ TranslateNakedColumn (As name Int) where
-      translateNakedColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ Proxy name)
+      translateNakedColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
 
 instance (IsSymbol name, ArgumentList args) ⇒ TranslateNakedColumn (As name (PgFunction inp args fields out)) where
       translateNakedColumn (As func) = do
             q ← printFunction func
-            pure $ q <> asKeyword <> quote (Proxy ∷ Proxy name)
+            pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
 
 instance (TranslateNakedColumn s, TranslateNakedColumn t) ⇒ TranslateNakedColumn (Tuple s t) where
       translateNakedColumn (Tuple s t) = do
@@ -448,26 +534,26 @@ else instance
       , AppendPath alias name fullPath
       ) ⇒
       TranslateColumn (Path alias name) where
-      translateColumn _ = pure $ quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name) <> " " <> quote (Proxy ∷ Proxy fullPath)
+      translateColumn _ = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name) <> " " <> quote (Proxy ∷ _ fullPath)
 
 else instance TranslateColumn Star where
       translateColumn _ = pure starSymbol
 
 else instance IsSymbol name ⇒ TranslateColumn (As name Int) where
-      translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ Proxy name)
+      translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
 
 else instance (IsSymbol name, NameList inp, ArgumentList rest) ⇒ TranslateColumn (As name (Aggregate inp rest fields out)) where
       translateColumn (As agg) = do
             q ← printAggregation agg
-            pure $ q <> asKeyword <> quote (Proxy ∷ Proxy name)
+            pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
 
 else instance (IsSymbol name, ArgumentList args) ⇒ TranslateColumn (As name (PgFunction inp args fields out)) where
       translateColumn (As func) = do
             q ← printFunction func
-            pure $ q <> asKeyword <> quote (Proxy ∷ Proxy name)
+            pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
 
 else instance (IsSymbol name, IsSymbol alias) ⇒ TranslateColumn (As alias (Proxy name)) where
-      translateColumn _ = pure $ quote (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
+      translateColumn _ = pure $ quote (Proxy ∷ _ name) <> asKeyword <> quote (Proxy ∷ _ alias)
 
 else instance
       ( IsSymbol fullPath
@@ -477,7 +563,7 @@ else instance
       , AppendPath table name fullPath
       ) ⇒
       TranslateColumn (As alias (Path table name)) where
-      translateColumn _ = pure $ quotePath (Proxy ∷ Proxy table) (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
+      translateColumn _ = pure $ quotePath (Proxy ∷ _ table) (Proxy ∷ _ name) <> asKeyword <> quote (Proxy ∷ _ alias)
 
 else instance (TranslateColumn s, TranslateColumn t) ⇒ TranslateColumn (Tuple s t) where
       translateColumn (s /\ t) = do
@@ -499,7 +585,7 @@ else instance Translate q ⇒ TranslateColumn q where
 instance (IsSymbol name, Translate rest) ⇒ Translate (From (Table name fields) fields rest) where
       translate (From _ rest) = do
             q ← translate rest
-            pure $ fromKeyword <> DS.reflectSymbol (Proxy ∷ Proxy name) <> q
+            pure $ fromKeyword <> quote (Proxy ∷ _ name) <> q
 
 else instance (Translate (Join k fields l r a more), Translate rest) ⇒ Translate (From (Join k fields l r a more) fields rest) where
       translate (From j rest) = do
@@ -523,7 +609,10 @@ instance Translate (Select s ppp more) ⇒ TranslateSource (Select s ppp more) w
             translate s
 
 instance (IsSymbol name, IsSymbol alias) ⇒ TranslateSource (As alias (Table name fd)) where
-      translateSource _ = pure $ DS.reflectSymbol (Proxy ∷ Proxy name) <> asKeyword <> quote (Proxy ∷ Proxy alias)
+      translateSource _ = pure $ quote (Proxy ∷ _ name) <> asKeyword <> quote (Proxy ∷ _ alias)
+
+instance IsSymbol name ⇒ TranslateSource (Table name fd) where
+      translateSource _ = pure $ quote (Proxy ∷ _ name)
 
 instance (ToJoinType k, Translate (Join k fields l r a rest)) ⇒ TranslateSource (Join k fields l r a rest) where
       translateSource j = translate j
@@ -540,7 +629,7 @@ instance
             left ← translateSource l
             right ← translateSource r
             q ← translate rest
-            pure $ left <> toJoinType (Proxy ∷ Proxy k) <> right <> q
+            pure $ left <> toJoinType (Proxy ∷ _ k) <> right <> q
 
 -- | Print join type
 class ToJoinType (k ∷ Side) where
@@ -563,7 +652,7 @@ instance (TranslateConditions c, Translate rest) ⇒ Translate (On c rest) where
 instance IsSymbol name ⇒ Translate (As name E) where
       translate _ = do
             CMS.modify_ (_ { bracketed = false })
-            pure $ closeBracket <> asKeyword <> quote (Proxy ∷ Proxy name)
+            pure $ closeBracket <> asKeyword <> quote (Proxy ∷ _ name)
 
 -- | WHERE
 instance (TranslateConditions c, Translate rest) ⇒ Translate (Where c rest) where
@@ -611,11 +700,11 @@ else instance IsSymbol name ⇒ TranslateConditions (Proxy name) where
       translateConditions name = pure $ quote name
 
 else instance (IsSymbol alias, IsSymbol name) ⇒ TranslateConditions (Path alias name) where
-      translateConditions _ = pure $ quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name)
+      translateConditions _ = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name)
 
 else instance ToValue v ⇒ TranslateConditions v where
       translateConditions p = do
-            { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ toValue p }
+            { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ DLID.toValue p }
             pure $ "$" <> show (DA.length parameters)
 
 printOperator ∷ Maybe BinaryOperator → String
@@ -647,28 +736,43 @@ printInclusion = case _ of
       All → allKeyword
       Unique → ""
 
--- | INSERT
+-- | INSERT DEFAULT VALUES
 instance
       ( IsSymbol name
+      , Translate rest
+      ) ⇒
+      Translate (Insert (Into name fields DefaultValues rest)) where
+      translate (Insert (Into DefaultValues rest)) = do
+            otherQ ← translate rest
+            pure $ insertKeyword
+                  <> quote (Proxy ∷ _ name)
+                  <> space
+                  <> defaultKeyword
+                  <> valuesKeyword
+                  <> otherQ
+
+-- | INSERT
+else instance
+      ( IsSymbol name
       , NameList fieldNames
-      , ToFieldValues v
+      , ValueList v
       , Translate rest
       ) ⇒
       Translate (Insert (Into name fields fieldNames (Values v rest))) where
       translate (Insert (Into fieldNames (Values v rest))) = do
-            q ← toFieldValues v
+            q ← valueList v
             otherQ ← translate rest
             pure $ insertKeyword
-                  <> DS.reflectSymbol (Proxy ∷ Proxy name)
+                  <> quote (Proxy ∷ _ name)
                   <> openBracket
                   <> nameList fieldNames
                   <> closeBracket
                   <> valuesKeyword
+                  <> space
                   <> openBracket
                   <> q
                   <> closeBracket
-                  <>
-                        otherQ
+                  <> otherQ
 
 -- | Names (possibly) separated by comma
 -- |
@@ -680,12 +784,12 @@ instance IsSymbol name ⇒ NameList (Proxy name) where
       nameList name = quote name
 
 instance (IsSymbol alias, IsSymbol name) ⇒ NameList (Path alias name) where
-      nameList _ = quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name)
+      nameList _ = quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name)
 
 instance NameList Star where
       nameList _ = starSymbol
 
-instance (NameList f, NameList rest) ⇒ NameList (Tuple f rest) where
+instance (NameList f, NameList rest) ⇒ NameList (f /\ rest) where
       nameList (Tuple f rest) = nameList f <> comma <> nameList rest
 
 -- | Name list for functions, or when fields and parameters can be mixed
@@ -696,7 +800,7 @@ instance IsSymbol name ⇒ ArgumentList (Proxy name) where
       argumentList name = pure $ quote name
 
 else instance (IsSymbol alias, IsSymbol name) ⇒ ArgumentList (Path alias name) where
-      argumentList _ = pure $ quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name)
+      argumentList _ = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name)
 
 else instance (ArgumentList s, Translate (OrderBy f E)) ⇒ ArgumentList (OrderBy f s) where
       argumentList (OrderBy f s) = do
@@ -705,12 +809,12 @@ else instance (ArgumentList s, Translate (OrderBy f E)) ⇒ ArgumentList (OrderB
             pure $ ns <> q
 
 else instance IsSymbol name ⇒ ArgumentList (Sort (Proxy name)) where
-      argumentList s = pure $ quote (Proxy ∷ Proxy name) <> case s of
+      argumentList s = pure $ quote (Proxy ∷ _ name) <> case s of
             Desc → descKeyword
             Asc → ascKeyword
 
 else instance (IsSymbol alias, IsSymbol name) ⇒ ArgumentList (Sort (Path alias name)) where
-      argumentList s = pure $ quotePath (Proxy ∷ Proxy alias) (Proxy ∷ Proxy name) <> case s of
+      argumentList s = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name) <> case s of
             Desc → descKeyword
             Asc → ascKeyword
 
@@ -724,59 +828,65 @@ else instance ArgumentList Unit where
 else instance ArgumentList E where
       argumentList _ = pure ""
 
-else instance (ArgumentList f, ArgumentList rest) ⇒ ArgumentList (Tuple f rest) where
-      argumentList (Tuple f rest) = do
+else instance (ArgumentList f, ArgumentList rest) ⇒ ArgumentList (f /\ rest) where
+      argumentList (f /\ rest) = do
             af ← argumentList f
             ar ← argumentList rest
             pure $ af <> comma <> ar
 
-else instance ToFieldValues v ⇒ ArgumentList v where
-      argumentList v = toFieldValues v
+else instance ValueList v ⇒ ArgumentList v where
+      argumentList v = valueList v
 
-class ToFieldValues fieldValues where
-      toFieldValues ∷ fieldValues → State QueryState String
+class ValueList fieldValues where
+      valueList ∷ fieldValues → State QueryState String
 
-instance (ToFieldValues p, ToFieldValues rest) ⇒ ToFieldValues (Tuple p rest) where
-      toFieldValues (Tuple p rest) = do
-            q ← toFieldValues p
-            otherQ ← toFieldValues rest
+instance (ValueList p, ValueList rest) ⇒ ValueList (p /\ rest) where
+      valueList (p /\ rest) = do
+            q ← valueList p
+            otherQ ← valueList rest
             pure $ q <> comma <> otherQ
 
-else instance ToFieldValues u ⇒ ToFieldValues (Array u) where
-      toFieldValues values = do
-            q ← DF.traverse toFieldValues values
+else instance ValueList u ⇒ ValueList (Array u) where
+      valueList values = do
+            q ← DF.traverse valueList values
             let sep = closeBracket <> comma <> openBracket --work around Translate Insert adding brackets
             pure $ DST.joinWith sep q
 
-else instance ToValue p ⇒ ToFieldValues p where
-      toFieldValues p = do
-            { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ toValue p }
+else instance ValueList Default where
+      valueList _ = pure defaultKeyword
+
+else instance ToValue p ⇒ ValueList p where
+      valueList p = do
+            { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ DLID.toValue p }
             pure $ "$" <> show (DA.length parameters)
 
 -- | UPDATE
-instance (IsSymbol name, ToFieldValuePairs pairs, Translate rest) ⇒ Translate (Update name fields (Set pairs rest)) where
+instance (IsSymbol name, NameValuePairs pairs, Translate rest) ⇒ Translate (Update name fields (Set pairs rest)) where
       translate (Update (Set pairs rest)) = do
-            q ← toFieldValuePairs pairs
+            q ← nameValuePairs pairs
             otherQ ← translate rest
             pure $ updateKeyword
-                  <> DS.reflectSymbol (Proxy ∷ Proxy name)
+                  <> quote (Proxy ∷ _ name)
                   <> setKeyword
                   <> q
-                  <>
-                        otherQ
+                  <> otherQ
 
-class ToFieldValuePairs pairs where
-      toFieldValuePairs ∷ pairs → State QueryState String
+-- | UPDATE list
+class NameValuePairs pairs where
+      nameValuePairs ∷ pairs → State QueryState String
 
-instance (IsSymbol name, ToValue p) ⇒ ToFieldValuePairs (Tuple (Proxy name) p) where
-      toFieldValuePairs (Tuple name p) = do
-            { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ toValue p }
+instance IsSymbol name ⇒ NameValuePairs (Op (Proxy name) Default) where
+      nameValuePairs (Op _ name _) = pure $ DS.reflectSymbol name <> equalsSymbol <> defaultKeyword
+
+else instance (IsSymbol name, ToValue p) ⇒ NameValuePairs (Op (Proxy name) p) where
+      nameValuePairs (Op _ name p) = do
+            { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ DLID.toValue p }
             pure $ DS.reflectSymbol name <> equalsSymbol <> "$" <> show (DA.length parameters)
 
-else instance (ToFieldValuePairs p, ToFieldValuePairs rest) ⇒ ToFieldValuePairs (Tuple p rest) where
-      toFieldValuePairs (Tuple p rest) = do
-            q ← toFieldValuePairs p
-            otherQ ← toFieldValuePairs rest
+instance (NameValuePairs p, NameValuePairs rest) ⇒ NameValuePairs (p /\ rest) where
+      nameValuePairs (p /\ rest) = do
+            q ← nameValuePairs p
+            otherQ ← nameValuePairs rest
             pure $ q <> comma <> otherQ
 
 -- | DELETE
@@ -808,6 +918,224 @@ instance Translate rest ⇒ Translate (Offset rest) where
             q ← translate rest
             pure $ offsetKeyword <> show n <> q
 
+-- | CREATE TABLE
+instance
+      ( RowToList columns columnList
+      , TranslateFieldDefinition columnList
+      , ConstraintsToRowList columnList list
+      , CompositeConstraints list composites
+      , TranslateCompositeConstraint composites
+      , IsSymbol name
+      ) ⇒
+      Translate (Create (Table name columns)) where
+      translate _ = do
+            pure $ createKeyword
+                  <> tableKeyword
+                  <> quote (Proxy ∷ _ name)
+                  <> space
+                  <> openBracket
+                  <> DST.joinWith comma (translateFieldDefinition (Proxy ∷ _ columnList) <> translateCompositeConstraint (Proxy ∷ _ composites))
+                  <> closeBracket
+
+-- |
+class TranslateFieldDefinition (list ∷ RowList Type) where
+      translateFieldDefinition ∷ Proxy list → Array String
+
+instance TranslateFieldDefinition Nil where
+      translateFieldDefinition _ = []
+
+instance
+      ( IsSymbol name
+      , ToType t
+      , ToNullableDefinition t
+      , ToConstraintDefinition c
+      , TranslateFieldDefinition rest
+      ) ⇒
+      TranslateFieldDefinition (Cons name (Column t c) rest) where
+      translateFieldDefinition _ =
+            ( quote (Proxy ∷ _ name)
+                    <> space
+                    <> DLID.toType _t
+                    <> toNullableDefinition _t
+                    <> toConstraintDefinition (Proxy ∷ _ c)
+            )
+                  : translateFieldDefinition (Proxy ∷ _ rest)
+            where
+            _t = Proxy ∷ _ t
+
+else instance (ToType t, ToNullableDefinition t, TranslateFieldDefinition rest, IsSymbol name) ⇒ TranslateFieldDefinition (Cons name t rest) where
+      translateFieldDefinition _ = (quote (Proxy ∷ _ name) <> space <> DLID.toType _t <> toNullableDefinition _t) : translateFieldDefinition (Proxy ∷ _ rest)
+            where
+            _t = Proxy ∷ _ t
+
+-- |
+class ToNullableDefinition (t ∷ Type) where
+      toNullableDefinition ∷ Proxy t → String
+
+instance ToNullableDefinition (Maybe t) where
+      toNullableDefinition _ = ""
+
+else instance ToNullableDefinition t where
+      toNullableDefinition _ = notNullKeyword
+
+-- | String representation of constraints
+class ToConstraintDefinition (c ∷ Type) where
+      toConstraintDefinition ∷ Proxy c → String
+
+instance ToConstraintDefinition Identity where
+      toConstraintDefinition _ = identityKeyword
+
+instance ToConstraintDefinition Unique where
+      toConstraintDefinition _ = uniqueKeyword
+
+instance ToConstraintDefinition PrimaryKey where
+      toConstraintDefinition _ = primaryKeyKeyword
+
+instance (IsSymbol tableName, IsSymbol fieldName) ⇒ ToConstraintDefinition (ForeignKey fieldName (Table tableName f)) where
+      toConstraintDefinition _ = referencesKeyword <> quote (Proxy ∷ _ tableName) <> openBracket <> quote (Proxy ∷ _ fieldName) <> closeBracket
+
+--ignore composites as they are special babies
+instance ToConstraintDefinition (Constraint (Composite n) t) where
+      toConstraintDefinition _ = ""
+
+else instance (IsSymbol name, ToConstraintDefinition t) => ToConstraintDefinition (Constraint name t) where
+      toConstraintDefinition _ = space <> constraintKeyword <> quote (Proxy :: _ name) <> toConstraintDefinition (Proxy :: _ t)
+
+instance (ToConstraintDefinition some, ToConstraintDefinition more) ⇒ ToConstraintDefinition (some /\ more) where
+      toConstraintDefinition _ = toConstraintDefinition (Proxy ∷ _ some) <> toConstraintDefinition (Proxy ∷ _ more)
+
+-- | Flatten constraints into a list
+class CompositeConstraints (source ∷ RowList Type) (constraints ∷ RowList Type) | source → constraints
+
+instance CompositeConstraints Nil Nil
+
+instance
+      ( CompositeFields name rest finishing
+      , RowListSet starting t finishing fields
+      , RowListRemove name rest later
+      , CompositeConstraints later tail
+      ) ⇒
+      CompositeConstraints (Cons name (C starting t) rest) (Cons name (C fields t) tail)
+
+else instance CompositeConstraints rest all ⇒ CompositeConstraints (Cons name r rest) all
+
+-- | Find all fields that are part of a composite constraint
+class CompositeFields (name ∷ Symbol) (rest ∷ RowList Type) (fields ∷ RowList Type) | name rest → fields
+
+instance CompositeFields name Nil Nil
+
+instance
+      ( CompositeFields name rest tail
+      , RowListSet field t tail all
+      ) ⇒
+      CompositeFields name (Cons name (C field t) rest) all
+
+else instance CompositeFields name rest all ⇒ CompositeFields name (Cons n t rest) all
+
+-- |
+class TranslateCompositeConstraint (list ∷ RowList Type) where
+      translateCompositeConstraint ∷ Proxy list → Array String
+
+instance TranslateCompositeConstraint Nil where
+      translateCompositeConstraint _ = []
+
+instance
+      ( IsSymbol name
+      , CompositeFieldList fields
+      , ToCompositeConstraintDefinition t
+      , TranslateCompositeConstraint rest
+      , ReferenceList fields constraints
+      , ToReferenceDefinition constraints
+      ) ⇒
+      TranslateCompositeConstraint (Cons name (C fields t) rest) where
+      translateCompositeConstraint _ =
+            ( constraintKeyword
+                    <> quote (Proxy ∷ _ name)
+                    <> toCompositeConstraintDefinition (Proxy ∷ _ t)
+                    <> openBracket
+                    <> DST.joinWith comma (compositeFieldList (Proxy ∷ _ fields))
+                    <> closeBracket
+                    <> toReferenceDefinition (Proxy ∷ _ constraints)
+            )
+                  : translateCompositeConstraint (Proxy ∷ _ rest)
+
+-- | While the rest stays the same, CONSTRAINT syntax uses and extra keyword for foreign keys
+class ToCompositeConstraintDefinition (t ∷ Type) where
+      toCompositeConstraintDefinition ∷ Proxy t → String
+
+instance ToCompositeConstraintDefinition (ForeignKey fn t) where
+      toCompositeConstraintDefinition _ = foreignKeyKeyword
+
+else instance ToConstraintDefinition t ⇒ ToCompositeConstraintDefinition t where
+      toCompositeConstraintDefinition _ = toConstraintDefinition (Proxy ∷ _ t)
+
+-- | For foreign keys, we need a list of referenced fields
+class ReferenceList (source ∷ RowList Type) (constraints ∷ RowList Type) | source → constraints
+
+instance ReferenceList Nil Nil
+
+instance (ReferenceList rest tail, RowListSet name (Composite tableName) tail all) ⇒ ReferenceList (Cons n (ForeignKey name (Table tableName fields)) rest) all
+
+--lists should be of same constraint
+else instance ReferenceList (Cons n t rest) Nil
+
+-- |
+class ToReferenceDefinition (source ∷ RowList Type) where
+      toReferenceDefinition ∷ Proxy source → String
+
+instance ToReferenceDefinition Nil where
+      toReferenceDefinition _ = ""
+
+else instance (IsSymbol tableName, CompositeFieldList (Cons fieldName (Composite tableName) rest)) ⇒ ToReferenceDefinition (Cons fieldName (Composite tableName) rest) where
+      toReferenceDefinition _ = referencesKeyword <> quote (Proxy ∷ _ tableName) <> openBracket <> DST.joinWith comma (compositeFieldList (Proxy ∷ _ (Cons fieldName (Composite tableName) rest))) <> closeBracket
+
+-- |
+class CompositeFieldList (fields ∷ RowList Type) where
+      compositeFieldList ∷ Proxy fields → Array String
+
+instance CompositeFieldList Nil where
+      compositeFieldList _ = []
+
+instance (CompositeFieldList rest, IsSymbol name) ⇒ CompositeFieldList (Cons name t rest) where
+      compositeFieldList _ = quote (Proxy ∷ _ name) : compositeFieldList (Proxy ∷ _ rest)
+
+-- | ALTER TABLE
+instance
+      ( IsSymbol name
+      , Translate rest
+      ) ⇒
+      Translate (Alter (T (Table name fields) rest)) where
+      translate (Alter (T rest)) = do
+            q ← translate rest
+            pure $ alterKeyword
+                  <> tableKeyword
+                  <> quote (Proxy ∷ _ name)
+                  <> space
+                  <> q
+
+-- | ADD
+instance
+      ( IsSymbol name
+      , SingleColumn name column columnList
+      , TranslateFieldDefinition columnList
+      ) ⇒
+      Translate (Add name column) where
+      translate _ = do
+            pure $ addKeyword <> (DM.fromMaybe "" <<< DA.head $ translateFieldDefinition (Proxy ∷ _ columnList))
+
+class SingleColumn (name ∷ Symbol) (c ∷ Type) (output ∷ RowList Type) | name c → output
+
+instance SingleColumn name (Proxy t) (Cons name t Nil)
+
+instance SingleColumn name (Column t constraints) (Cons name (Column t constraints) Nil)
+
+-- | DROP TABLE
+instance IsSymbol name ⇒ Translate (Drop (Table name fields)) where
+      translate _ = do
+            pure $ dropKeyword
+                  <> tableKeyword
+                  <> quote (Proxy ∷ _ name)
+
 printAggregation ∷ ∀ inp fields rest out. NameList inp ⇒ ArgumentList rest ⇒ Aggregate inp rest fields out → State QueryState String
 printAggregation = case _ of
       Count f → pure $ countFunctionName <> openBracket <> nameList f <> closeBracket
@@ -823,7 +1151,7 @@ printFunction (PgFunction name args) = do
 quote ∷ ∀ alias. IsSymbol alias ⇒ Proxy alias → String
 quote name = quoteSymbol <> DS.reflectSymbol name <> quoteSymbol
 
--- | Columns in the format alias.name must be quoted to avoid problems with ambiguous column names and *
+-- | Columns in the format alias.name must be aliased to avoid problems with ambiguous column names and *
 quotePath ∷ ∀ alias name. IsSymbol alias ⇒ IsSymbol name ⇒ Proxy alias → Proxy name → String
 quotePath alias name = quote alias <> dotSymbol <> quote name
 
@@ -837,16 +1165,16 @@ buildQuery qr = Query plan q parameters
             }
 
 unsafeBuildQuery ∷
-      ∀ projection parameters pra.
-      RowToList parameters pra ⇒
-      ToParameters parameters pra ⇒
+      ∀ projection parameters parameterList.
+      RowToList parameters parameterList ⇒
+      ToParameters parameters parameterList ⇒
       Maybe Plan →
       String →
       Record parameters →
       Query projection
-unsafeBuildQuery plan q p = Query plan dollaredQ parameterValues
+unsafeBuildQuery plan q parameters = Query plan dollaredQ parameterValues
       where
-      parameterPairs = toParameters (Proxy ∷ Proxy pra) p
+      parameterPairs = DLID.toParameters (Proxy ∷ _ parameterList) parameters
       parameterNames = DTP.fst <$> parameterPairs
       parameterValues = DTP.snd <$> parameterPairs
       --HACK

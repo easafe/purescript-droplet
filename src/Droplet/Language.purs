@@ -27,14 +27,22 @@ import Droplet.Language.Internal.Definition
       ( class FromValue
       , class ToParameters
       , class ToValue
-      , Auto(..)
+      , class ToType
+      , Identity
+      , Column(..)
+      , ForeignKey
+      , Default(..)
+      , Composite
+      , PrimaryKey
+      , Constraint
+      , Unique
       , E
       , Path
-      , Default(..)
       , Star(..)
       , Table(..)
-      , star
       , fromValue
+      , star
+      , toType
       , toValue
       , (...)
       ) as Exported
@@ -49,8 +57,9 @@ import Droplet.Language.Internal.Function
       , FunctionSignature'
       , random
       ) as Exported
-import Droplet.Language.Internal.Query (class ToQuery, Query(..))
-import Droplet.Language.Internal.Query as DLIQ
+import Droplet.Language.Internal.Translate (class ToQuery, Query(..))
+
+import Droplet.Language.Internal.Translate as DLIQ
 import Droplet.Language.Internal.Syntax
       ( As
       , Inner
@@ -62,36 +71,47 @@ import Droplet.Language.Internal.Syntax
       , OrderBy
       , Plan
       , Prepare
+      , Alter
       , Select
+      , Drop
       , Set
       , Update
+      , Join
+      , Offset
       , Returning
+      , T
       , Limit
+      , Create
       , Values
+      , On
+      , Distinct
       , Where
+      , DefaultValues
+      , Union
       , as
       , delete
       , from
+      , defaultValues
       , insert
+      , drop
+      , create
       , into
+      , alter
+      , table
       , orderBy
       , join
       , leftJoin
       , groupBy
-      , Join
-      , Offset
       , offset
-      , Union
       , union
       , unionAll
-      , On
-      , Distinct
       , distinct
       , exists
       , prepare
       , select
       , set
       , asc
+      , add
       , on
       , desc
       , update

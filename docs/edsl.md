@@ -9,34 +9,35 @@ Before looking at the eDSL (embedded Domain Specific Language) syntax, let's tal
 
 * Database types
 
-In order to write queries, we have to define types for database objects. As an example, the schema defined in [getting started](/index) could be represented as
+In order to write queries, we have to define types for database objects. As an example, the schema from [getting started](/index) could be represented as
 
 ```haskell
 -- `users` table
 type Users = (
-    id :: Auto Int,
+    id :: Column Int (PrimaryKey /\ Identity),
     name :: String,
     birthday :: Maybe Date
 )
+type UsersTable = Table "users" Users
 
-users :: Table "users" Users
+users :: UsersTable
 users = Table
 
 -- `messages` table
 type Messages = (
-    id :: Auto Int,
-    sender :: Int,
-    recipient :: Int,
-    date :: Default DateTime
+    id :: Column Int (PrimaryKey /\ Identity),
+    sender :: Column Int (ForeignKey "id" UsersTable),
+    recipient :: Column Int (ForeignKey "id" UsersTable),
+    date :: Column DateTime Default
 )
 
 messages :: Table "messages" Messages
 messages = Table
 ```
 
-`Users` refers to the table columns, whereas `users` ties the columns with the table name. `Auto` and `Default` refer to identity and default columns. Expectedly, `Maybe` represent nullable columns.
+`Users` refers to the table columns, whereas `users` ties the columns to the table name. You can read the [migration guide](/migrations) to learn more about defining SQL type representations.
 
-Since the columns are at type level, we need `Proxy`s to represent their names
+Since the columns are at the type level, we need `Proxy`s to represent their names
 
 ```haskell
 id :: Proxy "id"
@@ -77,7 +78,7 @@ The eDSL is designed to be composable, and resemble SQL syntax as much as possib
 
 ```haskell
 -- select :: forall s projection. ToSelect s => s -> Select s projection E
--- from :: forall f q fields sql. ToFrom f q fields => Resume q (From f fields E) sql => f -> q -> sql
+-- from :: forall f q columns sql. ToFrom f q columns => Resume q (From f columns E) sql => f -> q -> sql
 -- wher :: forall c q sql. ToWhere c q => Resume q (Where c E) sql => c -> q -> sql
 
 exampleQuery :: Select (Proxy "name") (name :: String) (From (Table "users" Users) Users (Where (Op (Proxy "id") Int) E))
@@ -86,20 +87,19 @@ exampleQuery = select name # from users # wher (id .=. 9)
 
 It is not important to immediately understand all the types. The main draws are:
 
-1. Left association
+* Left association
 
 To aid composition, functions are designed to be take the current query as their last parameter. While it is possible to write `wher (id .=. 9) (from users (select name))`, we will stick with `#` in this guide
 
-2. `To` type classes
+* `To` type classes
 
-Type classes in the form `ToFrom`, `ToWhere` etc, are used to tell which statements are allowed in sequence (e.g., FROM can only follow after SELECT or DELETE, etc). These type classes have no function members
+Type classes like `ToFrom`, `ToWhere` etc., serve to tell which statements are allowed in sequence (e.g., FROM can only follow after SELECT or DELETE, etc). These type classes have no function members
 
-3. `Resume` type class
+* `Resume` type class
 
-eDSL functions mark the end of a statement with the `E` data type. The type class `Resume` replaces it with a further statement, for example, `Select s projection E` => `Select s projection (From f fields E)`
+The end of a statement is marked by the `E` data type. The type class `Resume` can replace it with a further statement, for example, `Select s projection E` => `Select s projection (From f columns E)`
 
 Lastly, tuples (via `/\`) stand in for commas, e.g., `select (column /\ column2 /\ columnN) ... groupBy (column /\ column2 /\ columnN) ... orderBy (column /\ column2 /\ columnN)` == `SELECT column, column2, columnN ... GROUP BY column, column2, columnN ... ORDER BY column, column2, columnN`
-
 
 ## SELECT
 
@@ -111,7 +111,7 @@ select :: forall s projection. ToSelect s => s -> Select s projection E
 
 ### Projections
 
-`select` can project columns, literals, subqueries and functions and star.
+`select` can project columns, literals, subqueries, functions and ```*```.
 
 ```haskell
 selectColumn :: forall projection. Select (Proxy "id") projection E
@@ -129,7 +129,7 @@ selectQualifiedColumn :: forall projection. Select (Path "u" "id") projection E
 selectQualifiedColumn = select (u ... id)
 
 -- functions must be aliased
-selectCount :: forall projection fields. Select (As "u" (Aggregate Star E fields BigInt)) projection E
+selectCount :: forall projection columns. Select (As "u" (Aggregate Star E columns BigInt)) projection E
 selectCount = select (count star # as u)
 
 selectSubQuery :: _
@@ -139,7 +139,7 @@ selectManyColumns :: forall projection. Select (Tuple (Proxy "id") (Tuple (Proxy
 selectManyColumns = select (id /\ name /\ (5 # as u) /\ m ... id)
 ```
 
-In the case of fully formed SELECT statements, `projection` becomes a `Row Type` of the output
+In the case of fully formed SELECT statements, `projection` becomes a `Row Type` of the output. Note that columns constraints and other type wrappers are removed. For example, selecting id from `Users` yields ```(id :: Int)``` and not ```(id :: Column Int (PrimaryKey /\ Identity))```
 
 ```haskell
 exampleProjection :: Select (Tuple (Proxy "id") (Proxy "name")) (id :: Int, name :: String) _
@@ -150,7 +150,7 @@ Note that `select` on its own accepts any column name. Queries are checked only 
 
 ### Subqueries
 
-Subqueries must return a single column. Columns from outer scopes can be referenced with `(alias ... column)`.
+Subqueries must return a single column. Columns from outer scope can be referenced with `(alias ... column)`.
 
 ```haskell
 subQueryExample :: _
@@ -169,7 +169,7 @@ Droplet offers a few functions built-in:
 
 * `random`
 
-As per SQL standard, aggregations must either be the only column projected or be in a GROUP BY query. User defined (or missing) functions can be declared using `function` (or `function'`)
+User defined (or missing) functions can be declared using `function` (or `function'`)
 
 ```haskell
 -- represents a function that takes arguments
@@ -206,13 +206,12 @@ selectDistinctColumns :: Select (Distinct (Tuple (Proxy "id") (Tuple (Proxy "nam
 selectDistinctColumns = select (distinct $ id /\ name /\ birthday) # from users
 ```
 
-
 ### FROM
 
 FROM statement keeps track of columns in scope. For this reason, its type is a bit more complex than SELECT
 
 ```haskell
-from :: forall f q fields sql. ToFrom f q fields => Resume q (From f fields E) sql => f -> q -> sql
+from :: forall f q columns sql. ToFrom f q columns => Resume q (From f columns E) sql => f -> q -> sql
 ```
 
 The type parameter `f`, indicating the source of columns, can be a
@@ -249,7 +248,7 @@ fromSubQuery = select name # from (select star # from users # as u) -- SELECT na
 
 To be parsed correctly, joins must be bracketed into FROM. Joined expressions can any valid FROM expression, that is, tables, sub queries, other joins, etc. Currently, a following ON clause is mandatory.
 
-In the case of overlapping fields in joined sources, an alias is required for disambiguation. For example, if the two following tables are joined
+In the case of overlapping columns in joined sources, an alias is required for disambiguation. For example, if the two following tables are joined
 
 ```haskell
 type T1 = (
@@ -290,7 +289,11 @@ queryOuterJoin = select (name /\ m ... sender) # from ((messages # as m) `leftJo
 
 ### GROUP BY
 
-Expectedly, GROUP BY queries limit SELECT projection to grouped columns or aggregations
+```haskell
+groupBy:: forall f s q sql grouped columns. ToGroupBy q s columns => GroupByFields f columns grouped => ValidGroupByProjection s grouped => Resume q (GroupBy f E) sql => f -> q -> sql
+```
+
+Expectedly, GROUP BY queries limit SELECT projections to grouped columns or aggregations
 
 ```haskell
 selectGroupBy :: _
@@ -299,25 +302,232 @@ selectGroupBy = select ((count id # as b) /\ name) # from users # groupBy (id /\
 
 ### ORDER BY
 
+```haskell
+orderBy :: forall f q sql. ToOrderBy f q => Resume q (OrderBy f E) sql => f -> q -> sql
+```
+
+Currently, ORDER BY statements can sort queries only by columns. Note that in DISTINCT queries only the projected columns can be used for sorting.
+
+```haskell
+selectOrderBy :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") E))
+selectOrderBy = select name # from users # orderBy id
+```
+
 ### LIMIT
+
+```haskell
+limit :: forall q sql. ToLimit q => Resume q (Limit E) sql => Int -> q -> sql
+```
+
+LIMIT must always follow ORDER BY (or OFFSET), as otherwise query order is unspecified.
+
+```haskell
+selectLimit :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") (Limit E)))
+selectLimit = select name # from users # orderBy id # limit 1
+```
+
+Only number literals are currently supported.
 
 ### OFFSET
 
+```haskell
+offset :: forall q sql. ToOffset q => Resume q (Offset E) sql => Int -> q -> sql
+```
+
+OFFSET must always follow ORDER BY (or LIMIT), as otherwise query order is unspecified.
+
+```haskell
+selectOffset :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") (Offset E)))
+selectOffset = select name # from users # orderBy id # offset 5
+```
+
+Only number literal are currently supported.
+
 ### UNION
+
+```haskell
+union :: forall q r. ToUnion q r => q -> r -> Union q r
+
+unionAll :: forall q r. ToUnion q r => q -> r -> Union q r
+```
+
+UNION removes duplicates; UNION ALL keeps results as it is. Right and left hand side projections types and column count must match.
+
+```haskell
+selectUnion :: _
+selectUnion = (select id # from users # wher (name .=. "mary")) `union` (select id # from users # wher (name .=. "john"))
+```
 
 ## WHERE
 
+```haskell
+wher :: forall c q sql. ToWhere c q => Resume q (Where c E) sql => c -> q -> sql
+```
+
+The usual operators (e.g., equals, not equals, greater/lesser than, etc.) are surrounded by dots (e.g., `.=.`, `.<>.`, `.>.`, `.<.`). In addition, `NOT`, `EXISTS`, `IN` and `IS NOT NULL` are currently supported. `AND` and `OR` are represented by the operators `.&&.` and `.||.` to help avoiding brackets.
+
+Literal values are replaced with Postgres parameters.
+
+```haskell
+selectWhereEquals :: _
+selectWhereEquals = select recipient # from messages # wher (sender .=. 1) -- SELECT recipient FROM messages WHERE sender = $1
+
+selectWhereAnd :: _
+selectWhereAnd = select id # from users # wher (name .=. "josh" .&&. name .<>. surname) -- SELECT id FROM users WHERE name = $1 AND name <> surname
+
+selectWhereOr :: _
+selectWhereOr = select id # from users # wher (name .=. "mary" .||. name .=. surname) -- SELECT id FROM users WHERE name = $1 OR name = surname
+
+selectWhereIn :: _
+selectWhereIn = select id # from users # wher (id `in_` [ 3, 4, 5 ]) -- SELECT id FROM users WHERE id IN $1
+
+selectWhereExists :: _
+selectWhereExists = select id # from users # wher (exists $ select id # from users)
+```
+
 ## INSERT
+
+INSERT can be single or multiple values; any number of columns can be specified as long mandatory columns are included.
+
+```haskell
+insertSingle :: _
+insertSingle = insert # into users (name) # values ("mary")
+
+insertDefault :: _
+insertDefault = insert # into messages (sender /\ recipient /\ date) # values (5 /\ 9 /\ Default)
+
+insertMultiple :: _
+insertMultiple = insert # into users (name /\ birthday) # values ["mary" /\ Just date, "josh" /\ Nothing]
+```
 
 ## UPDATE
 
+UPDATE queries can be as it is or with a WHERE clause.
+
+```haskell
+updateQuery :: _
+updateQuery = update users # set ((name .=. "Mary") /\ (birthday .=. Nothing))
+
+updateWhere :: _
+updateWhere = update users # set ((name .=. "Mary") /\ (birthday .=. Nothing)) # where (id .=. 4)
+```
+
 ## DELETE
+
+DELETE queries can be as it is or with a WHERE clause.
+
+```haskell
+deleteQuery :: Delete (From (Table "users" Users) Users E)
+deleteQuery = delete # from users
+
+deleteWhere :: _
+deleteWhere = delete # from users # where (id .=. 4)
+```
 
 ## RETURNING
 
+RETURNING can output columns from INSERT, UPDATE and DELETE
+
+```haskell
+insertReturning :: _
+insertReturning = insert # into users (name) # values ("mary") # returning id
+
+updateReturning :: _
+updateReturning = update users # set ((name .=. "Mary") /\ (birthday .=. Nothing)) # where (id .=. 4) # returning (id /\ name)
+
+deleteReturning :: _
+deleteReturning = delete # from users # returning birthday
+```
+
 ## AS
 
+AS can be used to alias columns, tables and queries.
+
+```haskell
+asColumn :: _
+asColumn = select (id # as m) # from users
+
+asTable :: _
+asTable = select id # from (users # as m)
+
+asQuery :: _
+asQuery = select id # from (select star # from users # as m)
+```
+
+Be aware of bracketing, `select id # from (select star # from users # as m)` is parsed as `SELECT id FROM (SELECT * FROM users) AS m` whereas `select id # from (select star # from users) # as m` results in a type error.
+
 ## PREPARE
+
+Prepared statements can be done with `prepare`.
+
+```haskell
+prepare :: forall q. ToPrepare q => Plan -> q -> Prepare q
+```
+Only the plan name is required. Parameters will be automatically parsed from the query
+
+## CREATE
+
+### TABLE
+
+Tables can be created using the same table type used for queries
+
+```haskell
+myTable :: Table "my_table" (id :: Column Int PrimaryKey, name :: Maybe String)
+myTable = Table
+
+createTableExample = create # table myTable -- CREATE TABLE "my_table" (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
+```
+
+See the [migrations](/migrations) page for info on the column and constraint types
+
+## ALTER
+
+### TABLE
+
+#### ADD
+
+To add a new column to a table, we can use
+
+```haskell
+add ::
+      forall q name object columns extended.
+      ToAdd q =>
+      Cons object q columns extended =>
+      TableChecks (Table name extended) =>
+      Proxy object ->
+      q ->
+      Alter (Table name columns) ->
+      Alter (T (Table name columns) (Add object q))
+```
+
+The object being added, `q`, can be either a ```Proxy``` type for columns without constraints
+
+```haskell
+myColumn :: Proxy "my_column"
+myColumn = Proxy
+
+addColumn = alter # table users # add myColumn (Proxy :: _ Int) --ALTER TABLE users ADD COLUMN my_column INTEGER NOT NULL
+```
+
+or ```Column```, if constraints are required
+
+```haskell
+addColumnConstraint = alter # table users # add myColumn (Column :: Column Int Unique) --ALTER TABLE users ADD COLUMN my_column INTEGER NOT NULL UNIQUE
+
+addColumnNamedConstraint = alter # table users # add myColumn (Column :: Column Int (Constraint "my_constraint" Unique)) --ALTER TABLE users ADD COLUMN my_column INTEGER NOT NULL CONSTRAINT my_constraint UNIQUE
+```
+
+Adding standalone constraints (without a new column) is not yet supported.
+
+## DROP
+
+### TABLE
+
+We can use the same table type in order to drop it.
+
+```haskell
+dropTableExample = drop # table users
+```
 
 
 <a href="/index" class="direction previous">Previous: Getting started</a>
