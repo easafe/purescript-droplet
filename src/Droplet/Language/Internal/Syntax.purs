@@ -41,6 +41,7 @@ module Droplet.Language.Internal.Syntax
       , class ValidColumnNames
       , class IncludeColumn
       , class ColumnCannotBeSet
+      , class LimitedResults
       , class ToAdd
       , class ColumnNames
       , class UnwrapAll
@@ -275,7 +276,7 @@ OFFSET
 -- | SELECT representation. `projection` refers to the final output of this statement
 data Select s (projection ∷ Row Type) rest = Select s rest
 
--- | Acceptable column type for SELECT statements
+-- | Acceptable column types for SELECT statements
 class ToSelect (s ∷ Type)
 
 instance ToSelect (Proxy name)
@@ -298,28 +299,44 @@ else instance ToSelect Star
 
 else instance ToSelect (Distinct s)
 
-else instance ToSubExpression q ⇒ ToSelect q
+else instance (ToSubExpression f, LimitedResults rest) ⇒ ToSelect (Select f projection rest)
 
 -- | Only single columns can be projected by subqueries
--- |
--- | Note: column subqueries may not return a value, thus their projection will be `Maybe` unless the original column type is already `Maybe`
-class ToSubExpression (s ∷ Type)
+class ToSubExpression (f ∷ Type)
 
-instance ToSubExpression (Select (Proxy name) projection rest)
+instance ToSubExpression (Proxy name)
 
-instance ToSubExpression (Select (Path table name) projection rest)
+instance ToSubExpression (Path table name)
 
-instance ToSubExpression (Select (As alias Int) projection rest)
+instance ToSubExpression (As alias Int)
 
-instance ToSubExpression (Select (As alias (Proxy name)) projection rest)
+instance ToSubExpression (As alias (Proxy name))
 
-instance ToSubExpression (Select (As alias (Path table name)) projection rest)
+instance ToSubExpression (As alias (Path table name))
 
-instance ToSubExpression (Select (As alias (PgFunction inp arg fields out)) projection rest)
+instance ToSubExpression (As alias (PgFunction inp arg fields out))
 
-instance ToSubExpression (Select (As alias (Aggregate inp r fields out)) projection rest)
+instance ToSubExpression (As alias (Aggregate inp r fields out))
 
-instance Fail (Text "Subquery must return a single column") ⇒ ToSubExpression (Select (a /\ b) projection rest)
+instance Fail (Text "Subqueries must return a single column") ⇒ ToSubExpression (a /\ b)
+
+-- | Subqueries must return a single result
+class LimitedResults (q :: Type)
+
+instance LimitedResults rest => LimitedResults (From f fields rest)
+
+instance LimitedResults rest => LimitedResults (Where c rest)
+
+instance LimitedResults rest => LimitedResults (GroupBy f rest)
+
+instance LimitedResults rest => LimitedResults (OrderBy f rest)
+
+instance LimitedResults rest => LimitedResults (Offset rest)
+
+-- when purescript actually supports type level nats we can improve this
+instance LimitedResults (Limit rest)
+
+instance Fail (Text "Subqueries must return zero or one rows. Are you missing ORDER BY ... LIMIT 1?") => LimitedResults E
 
 -- | SELECT can project literals, columns and subqueries with the following considerations:
 -- |

@@ -1,6 +1,6 @@
 module Test.As where
 
-import Droplet.Language (as, from, select, wher, (...), (.=.), (.||.))
+import Droplet.Language
 import Prelude
 import Test.Types (b, id, messages, n, name, t, u, users)
 
@@ -11,7 +11,6 @@ import Test.Model as TM
 import Test.Spec (Spec)
 import Test.Spec as TS
 import Type.Proxy (Proxy(..))
-
 
 tests ∷ Spec Unit
 tests =
@@ -32,8 +31,8 @@ tests =
                         TM.result q [ { id: 1 }, { id: 2 } ]
             TS.describe "named queries" do
                   TS.it "subquery column" do
-                        let q = select (select id # from users # wher (name .=. "mary") # as b) # from users # wher (id .=. 1 .||. id .=. 2)
-                        TM.parameterized """SELECT (SELECT "id" FROM "users" WHERE "name" = $1) AS "b" FROM "users" WHERE ("id" = $2 OR "id" = $3)""" $ DLIQ.buildQuery q
+                        let q = select (select id # from users # wher (name .=. "mary") # orderBy id # limit 1 # as b) # from users # wher (id .=. 1 .||. id .=. 2)
+                        TM.parameterized """SELECT (SELECT "id" FROM "users" WHERE "name" = $1 ORDER BY "id" LIMIT 1) AS "b" FROM "users" WHERE ("id" = $2 OR "id" = $3)""" $ DLIQ.buildQuery q
                         TM.result q [ { b: Just 2 }, { b: Just 2 } ]
                   TS.it "scalar" do
                         let q = select (4 # as n) # from (select (4 # as n) # from users # wher (id .=. id) # as u)

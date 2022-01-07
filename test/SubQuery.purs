@@ -16,12 +16,12 @@ tests ∷ Spec Unit
 tests = do
       TS.describe "subquery" do
             TS.it "null" do
-                  let q = select (select id # from users # wher (id .=. 1)) # from messages # orderBy id # limit 1
-                  TM.parameterized """SELECT (SELECT "id" FROM "users" WHERE "id" = $1) FROM "messages" ORDER BY "id" LIMIT 1""" $ DLIQ.buildQuery q
-                  TM.result q [ { id: Just 1 } ]
+                  let q = select (select id # from users # wher (id .=. 9999) # orderBy id # limit 1) # from messages # orderBy id # limit 1
+                  TM.parameterized """SELECT (SELECT "id" FROM "users" WHERE "id" = $1 ORDER BY "id" LIMIT 1) FROM "messages" ORDER BY "id" LIMIT 1""" $ DLIQ.buildQuery q
+                  TM.result q [ { id: Nothing } ]
             TS.it "nested null" do
-                  let q = select (select created # from tags) # from messages # orderBy id # limit 1
-                  TM.notParameterized """SELECT (SELECT "created" FROM "tags") FROM "messages" ORDER BY "id" LIMIT 1""" $ DLIQ.buildQuery q
+                  let q = select (select created # from tags # orderBy id # limit 1) # from messages # orderBy id # limit 1
+                  TM.notParameterized """SELECT (SELECT "created" FROM "tags" ORDER BY "id" LIMIT 1) FROM "messages" ORDER BY "id" LIMIT 1""" $ DLIQ.buildQuery q
                   --avoid (Maybe (Maybe t))
                   TM.result q [ { created: Nothing } ]
             TS.it "function" do
