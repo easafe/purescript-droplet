@@ -216,9 +216,7 @@ else instance
 -- | Are all columns not aggregated?
 class NoAggregations (q ∷ Type) (is ∷ Boolean) | q → is
 
-instance NoAggregations (Aggregate i rest fields o) False
-
-else instance NoAggregations (As n (Aggregate i rest f o)) False
+instance NoAggregations (As n (Aggregate i rest f o)) False
 
 else instance
       ( NoAggregations a isa
@@ -232,9 +230,7 @@ else instance NoAggregations s True
 -- | Are all columns aggregated?
 class OnlyAggregations (q ∷ Type) (is ∷ Boolean) | q → is
 
-instance OnlyAggregations (Aggregate i rest f o) True
-
-else instance OnlyAggregations (As n (Aggregate i rest f o)) True
+instance OnlyAggregations (As n (Aggregate i rest f o)) True
 
 else instance
       ( OnlyAggregations a isa
