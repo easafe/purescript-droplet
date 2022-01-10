@@ -13,7 +13,6 @@ module Droplet.Language.Internal.Translate
       , class TranslateConditions
       , class TranslateColumn
       , class NoAggregations
-      , class OnlyAggregations
       , class AggregatedQuery
       , class ToReferenceDefinition
       , class IsValidAggregation
@@ -63,9 +62,6 @@ import Control.Monad.State (State)
 import Control.Monad.State as CMS
 import Data.Array ((..), (:))
 import Data.Array as DA
-import Data.BigInt (BigInt)
-import Data.Date (Date)
-import Data.DateTime (DateTime)
 import Data.Maybe (Maybe(..))
 import Data.Maybe as DM
 import Data.String as DST
@@ -76,15 +72,14 @@ import Data.Symbol (class IsSymbol)
 import Data.Symbol as DS
 import Data.Traversable as DF
 import Data.Traversable as DT
-import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
-import Droplet.Language.Internal.Definition (class AppendPath, class ToType, class IsNullable, class ToParameters, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, E(..), ForeignKey, Identity, Path, PrimaryKey, Star, Table(..), Unique)
+import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, E(..), ForeignKey, Identity, Path, PrimaryKey, Star, Table, Unique)
 import Droplet.Language.Internal.Definition as DLID
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
-import Droplet.Language.Internal.Syntax (class ConstraintsToRowList, class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, Add, Alter(..), As(..), Create, DefaultValues(..), Delete(..), Distinct(..), Drop, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), T(..), Union(..), Update(..), Values(..), Where(..))
-import Droplet.Language.Internal.Token (addKeyword, allKeyword, alterKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, bigIntegerType, booleanType, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, dateTimeType, dateType, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, integerType, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, numberType, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, stringType, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Syntax (class ConstraintsToRowList, class OnlyAggregations, class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, Add, Alter(..), As(..), Create, DefaultValues(..), Delete(..), Distinct(..), Drop, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), T(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Token (addKeyword, allKeyword, alterKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<<<), (<>), (==), (||))
 import Prim.Boolean (False, True)
@@ -223,23 +218,10 @@ else instance
       , NoAggregations b isb
       , And isa isb is
       ) ⇒
-      NoAggregations (Tuple a b) is
+      NoAggregations (a /\ b) is
 
 else instance NoAggregations s True
 
--- | Are all columns aggregated?
-class OnlyAggregations (q ∷ Type) (is ∷ Boolean) | q → is
-
-instance OnlyAggregations (As n (Aggregate i rest f o)) True
-
-else instance
-      ( OnlyAggregations a isa
-      , OnlyAggregations b isb
-      , And isa isb is
-      ) ⇒
-      OnlyAggregations (Tuple a b) is
-
-else instance OnlyAggregations s False
 
 -- | Check aggregation results
 -- |
@@ -480,8 +462,8 @@ instance (IsSymbol name, ArgumentList args) ⇒ TranslateNakedColumn (As name (P
             q ← printFunction func
             pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
 
-instance (TranslateNakedColumn s, TranslateNakedColumn t) ⇒ TranslateNakedColumn (Tuple s t) where
-      translateNakedColumn (Tuple s t) = do
+instance (TranslateNakedColumn s, TranslateNakedColumn t) ⇒ TranslateNakedColumn (s /\ t) where
+      translateNakedColumn (s /\ t) = do
             q ← translateNakedColumn s
             otherQ ← translateNakedColumn t
             pure $ q <> comma <> otherQ
@@ -561,7 +543,7 @@ else instance
       TranslateColumn (As alias (Path table name)) where
       translateColumn _ = pure $ quotePath (Proxy ∷ _ table) (Proxy ∷ _ name) <> asKeyword <> quote (Proxy ∷ _ alias)
 
-else instance (TranslateColumn s, TranslateColumn t) ⇒ TranslateColumn (Tuple s t) where
+else instance (TranslateColumn s, TranslateColumn t) ⇒ TranslateColumn (s /\ t) where
       translateColumn (s /\ t) = do
             sQ ← translateColumn s
             tQ ← translateColumn t
@@ -786,7 +768,7 @@ instance NameList Star where
       nameList _ = starSymbol
 
 instance (NameList f, NameList rest) ⇒ NameList (f /\ rest) where
-      nameList (Tuple f rest) = nameList f <> comma <> nameList rest
+      nameList (f /\ rest) = nameList f <> comma <> nameList rest
 
 -- | Name list for functions, or when fields and parameters can be mixed
 class ArgumentList v where
@@ -1154,7 +1136,7 @@ quotePath alias name = quote alias <> dotSymbol <> quote name
 buildQuery ∷ ∀ q projection. ToQuery q projection ⇒ q → Query projection
 buildQuery qr = Query plan q parameters
       where
-      Tuple q { plan, parameters } = CMS.runState (toQuery qr)
+      q /\ { plan, parameters } = CMS.runState (toQuery qr)
             { plan: Nothing
             , parameters: []
             , bracketed: false
@@ -1175,5 +1157,5 @@ unsafeBuildQuery plan q parameters = Query plan dollaredQ parameterValues
       parameterValues = DTP.snd <$> parameterPairs
       --HACK
       parameterIndexes = map (\i → parameterSymbol <> show i) (1 .. DA.length parameterNames)
-      replace sql (Tuple name p) = DSR.replace (DSRU.unsafeRegex (atSymbol <> "\\b" <> name <> "\\b") global) p sql
+      replace sql (name /\ p) = DSR.replace (DSRU.unsafeRegex (atSymbol <> "\\b" <> name <> "\\b") global) p sql
       dollaredQ = DA.foldl replace q $ DA.zip parameterNames parameterIndexes

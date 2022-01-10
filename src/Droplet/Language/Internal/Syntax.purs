@@ -41,6 +41,7 @@ module Droplet.Language.Internal.Syntax
       , class ValidColumnNames
       , class IncludeColumn
       , class ColumnCannotBeSet
+      , class OnlyAggregations
       , class LimitedResults
       , class ToAdd
       , class ColumnNames
@@ -152,8 +153,7 @@ import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Beside, Quote, QuoteLabel, Text)
-import Type.Data.Boolean (class And, class If, class Or)
-import Type.Equality (class TypeEquals)
+import Type.Data.Boolean (class And, class If)
 import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
 
@@ -281,25 +281,25 @@ class ToSelect (s ∷ Type)
 
 instance ToSelect (Proxy name)
 
-else instance ToSelect (Path table name)
+instance ToSelect (Path table name)
 
-else instance ToSelect (As alias Int)
+instance ToSelect (As alias Int)
 
-else instance ToSelect (As alias (Proxy name))
+instance ToSelect (As alias (Proxy name))
 
-else instance ToSelect (As alias (Path table name))
+instance ToSelect (As alias (Path table name))
 
-else instance ToSelect (As alias (Aggregate inp rest fields out))
+instance ToSelect (As alias (Aggregate inp rest fields out))
 
-else instance ToSelect (As alias (PgFunction inp arg fields out))
+instance ToSelect (As alias (PgFunction inp arg fields out))
 
-else instance (ToSelect r, ToSelect t) ⇒ ToSelect (r /\ t)
+instance (ToSelect r, ToSelect t) ⇒ ToSelect (r /\ t)
 
-else instance ToSelect Star
+instance ToSelect Star
 
-else instance ToSelect (Distinct s)
+instance ToSelect (Distinct s)
 
-else instance (ToSubExpression f, LimitedResults rest) ⇒ ToSelect (Select f projection rest)
+instance (ToSubExpression f, LimitedResults rest) ⇒ ToSelect (Select f projection rest)
 
 -- | Only single columns can be projected by subqueries
 class ToSubExpression (f ∷ Type)
@@ -624,13 +624,29 @@ class ValidGroupByProjection (s ∷ Type) (grouped ∷ Row Type) | s → grouped
 
 instance Cons name t e grouped ⇒ ValidGroupByProjection (Proxy name) grouped
 
-else instance Cons name t e grouped ⇒ ValidGroupByProjection (As alias (Proxy name)) grouped
+instance Cons name t e grouped ⇒ ValidGroupByProjection (As alias (Proxy name)) grouped
 
-else instance (ValidGroupByProjection a grouped, ValidGroupByProjection b grouped) ⇒ ValidGroupByProjection (a /\ b) grouped
+instance (AppendPath table column name, Cons name t e grouped) ⇒ ValidGroupByProjection (Path table column) grouped
 
-else instance ValidGroupByProjection s grouped ⇒ ValidGroupByProjection (Distinct s) grouped
+instance Cons name t e grouped ⇒ ValidGroupByProjection (As alias (Aggregate (Proxy name) rest fields out)) grouped
 
-else instance ValidGroupByProjection q grouped
+instance (ValidGroupByProjection a grouped, ValidGroupByProjection b grouped) ⇒ ValidGroupByProjection (a /\ b) grouped
+
+instance ValidGroupByProjection s grouped ⇒ ValidGroupByProjection (Distinct s) grouped
+
+-- | Are all columns aggregated?
+class OnlyAggregations (q ∷ Type) (is ∷ Boolean) | q → is
+
+instance OnlyAggregations (As n (Aggregate i rest f o)) True
+
+else instance
+      ( OnlyAggregations a isa
+      , OnlyAggregations b isb
+      , And isa isb is
+      ) ⇒
+      OnlyAggregations (a /\ b) is
+
+else instance OnlyAggregations s False
 
 -- | GROUP BY statement
 groupBy ∷
@@ -705,7 +721,7 @@ instance ToOrderBy (Proxy name) String
 instance ToOrderBy (Path alias name) String
 
 --this error might not be clear for the user
--- | Fields available for sorting this query
+-- | Columns available for sorting this query
 -- |
 -- | N.B: SELECT DISTINCT queries can only be sorted by columns in the projection
 class SortColumnsSource (s ∷ Type) (projection ∷ Row Type) (f ∷ Type) (columns ∷ Row Type) (available ∷ Row Type) | s → available
