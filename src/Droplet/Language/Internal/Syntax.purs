@@ -734,8 +734,10 @@ else instance
       , QualifiedColumns list alias qual
       , Union projection columns pf
       , Union qual pf all
+      , OnlyAggregations s only
+      , If only projection all available
       ) ⇒
-      SortColumnsSource s projection f columns all
+      SortColumnsSource s projection f columns available
 
 -- |
 class SortColumns (f ∷ Type) (columns ∷ Row Type) | f → columns
