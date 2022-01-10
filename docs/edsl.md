@@ -150,7 +150,7 @@ Note that `select` on its own accepts any column name. Queries are checked only 
 
 ### Subqueries
 
-Subqueries must return a single column. Columns from outer scope can be referenced with `(alias ... column)`.
+Subqueries must return a single column and zero or one results (by including a LIMIT clause). Columns from outer scope can be referenced with `(alias ... column)`.
 
 ```haskell
 subQueryExample :: _

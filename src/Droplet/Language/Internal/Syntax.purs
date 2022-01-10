@@ -41,6 +41,8 @@ module Droplet.Language.Internal.Syntax
       , class ValidColumnNames
       , class IncludeColumn
       , class ColumnCannotBeSet
+      , class OnlyAggregations
+      , class LimitedResults
       , class ToAdd
       , class ColumnNames
       , class UnwrapAll
@@ -79,7 +81,7 @@ module Droplet.Language.Internal.Syntax
       , class QualifiedColumn
       , class OnComparision
       , class ValidGroupByProjection
-      , class GroupByColumns
+      , class GroupedColumns
       , class ToGroupBy
       , class ToOuterColumns
       , class ToWhere
@@ -151,8 +153,7 @@ import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Beside, Quote, QuoteLabel, Text)
-import Type.Data.Boolean (class And, class If, class Or)
-import Type.Equality (class TypeEquals)
+import Type.Data.Boolean (class And, class If)
 import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
 
@@ -275,51 +276,67 @@ OFFSET
 -- | SELECT representation. `projection` refers to the final output of this statement
 data Select s (projection ∷ Row Type) rest = Select s rest
 
--- | Acceptable column type for SELECT statements
+-- | Acceptable column types for SELECT statements
 class ToSelect (s ∷ Type)
 
 instance ToSelect (Proxy name)
 
-else instance ToSelect (Path table name)
+instance ToSelect (Path table name)
 
-else instance ToSelect (As alias Int)
+instance ToSelect (As alias Int)
 
-else instance ToSelect (As alias (Proxy name))
+instance ToSelect (As alias (Proxy name))
 
-else instance ToSelect (As alias (Path table name))
+instance ToSelect (As alias (Path table name))
 
-else instance ToSelect (As alias (Aggregate inp rest fields out))
+instance ToSelect (As alias (Aggregate inp rest fields out))
 
-else instance ToSelect (As alias (PgFunction inp arg fields out))
+instance ToSelect (As alias (PgFunction inp arg fields out))
 
-else instance (ToSelect r, ToSelect t) ⇒ ToSelect (r /\ t)
+instance (ToSelect r, ToSelect t) ⇒ ToSelect (r /\ t)
 
-else instance ToSelect Star
+instance ToSelect Star
 
-else instance ToSelect (Distinct s)
+instance ToSelect (Distinct s)
 
-else instance ToSubExpression q ⇒ ToSelect q
+instance (ToSubExpression f, LimitedResults rest) ⇒ ToSelect (Select f projection rest)
 
 -- | Only single columns can be projected by subqueries
--- |
--- | Note: column subqueries may not return a value, thus their projection will be `Maybe` unless the original column type is already `Maybe`
-class ToSubExpression (s ∷ Type)
+class ToSubExpression (f ∷ Type)
 
-instance ToSubExpression (Select (Proxy name) projection rest)
+instance ToSubExpression (Proxy name)
 
-instance ToSubExpression (Select (Path table name) projection rest)
+instance ToSubExpression (Path table name)
 
-instance ToSubExpression (Select (As alias Int) projection rest)
+instance ToSubExpression (As alias Int)
 
-instance ToSubExpression (Select (As alias (Proxy name)) projection rest)
+instance ToSubExpression (As alias (Proxy name))
 
-instance ToSubExpression (Select (As alias (Path table name)) projection rest)
+instance ToSubExpression (As alias (Path table name))
 
-instance ToSubExpression (Select (As alias (PgFunction inp arg fields out)) projection rest)
+instance ToSubExpression (As alias (PgFunction inp arg fields out))
 
-instance ToSubExpression (Select (As alias (Aggregate inp r fields out)) projection rest)
+instance ToSubExpression (As alias (Aggregate inp r fields out))
 
-instance Fail (Text "Subquery must return a single column") ⇒ ToSubExpression (Select (a /\ b) projection rest)
+instance Fail (Text "Subqueries must return a single column") ⇒ ToSubExpression (a /\ b)
+
+-- | Subqueries must return a single result
+class LimitedResults (q ∷ Type)
+
+instance LimitedResults rest ⇒ LimitedResults (From f fields rest)
+
+instance LimitedResults rest ⇒ LimitedResults (Where c rest)
+
+instance LimitedResults rest ⇒ LimitedResults (GroupBy f rest)
+
+instance LimitedResults rest ⇒ LimitedResults (OrderBy f rest)
+
+instance LimitedResults rest ⇒ LimitedResults (Offset rest)
+
+-- when purescript actually supports type level nats we can improve this
+instance LimitedResults (Limit rest)
+
+instance Fail (Text "Subqueries must return zero or one rows. Are you missing ORDER BY ... LIMIT 1?") ⇒ LimitedResults E
 
 -- | SELECT can project literals, columns and subqueries with the following considerations:
 -- |
@@ -553,25 +570,26 @@ exists q = Op Nothing Exists q
 data GroupBy f rest = GroupBy f rest
 
 -- | GROUP BY can only follow FROM or WHERE
-class ToGroupBy (q ∷ Type) (s ∷ Type) (fields ∷ Row Type) | q → s fields
+class ToGroupBy (q ∷ Type) (s ∷ Type) (columns ∷ Row Type) | q → s columns
 
-instance GroupBySource f fields ⇒ ToGroupBy (Select s p (From f fd E)) s fields
+instance GroupBySource f columns ⇒ ToGroupBy (Select s p (From f fd E)) s columns
 
-instance GroupBySource f fields ⇒ ToGroupBy (Select s p (From f fd (Where cond E))) s fields
+instance GroupBySource f columns ⇒ ToGroupBy (Select s p (From f fd (Where cond E))) s columns
 
-class GroupBySource (f ∷ Type) (fields ∷ Row Type) | f → fields
+-- |
+class GroupBySource (f ∷ Type) (columns ∷ Row Type) | f → columns
 
 --refactor: could be the same as tojoin if joins accepted non aliased tables
-instance GroupBySource (Table name fields) fields
+instance GroupBySource (Table name columns) columns
 
 instance
-      ( RowToList fields list
+      ( RowToList columns list
       , QualifiedColumns list alias aliased
-      , Union aliased fields all
+      , Union aliased columns all
       ) ⇒
-      GroupBySource (As alias (Table name fields)) all
+      GroupBySource (As alias (Table name columns)) all
 
-instance GroupBySource (Join k fields q r a rest) fields
+instance GroupBySource (Join k columns q r a rest) columns
 
 instance
       ( QueryMustBeAliased rest alias
@@ -581,43 +599,60 @@ instance
       ) ⇒
       GroupBySource (Select s projection (From f fd rest)) all
 
-class GroupByColumns (f ∷ Type) (fields ∷ Row Type) (grouped ∷ Row Type) | f → fields grouped
+-- |
+class GroupedColumns (f ∷ Type) (columns ∷ Row Type) (grouped ∷ Row Type) | f → columns grouped
 
-instance (Cons name t e fields, Cons name t () grouped) ⇒ GroupByColumns (Proxy name) fields grouped
+instance (Cons name t e columns, Cons name t () grouped) ⇒ GroupedColumns (Proxy name) columns grouped
 
 instance
       ( AppendPath alias name fullPath
-      , Cons fullPath t e fields
+      , Cons fullPath t e columns
       , Cons fullPath t () g
       , Cons name t g grouped
       ) ⇒
-      GroupByColumns (Path alias name) fields grouped
+      GroupedColumns (Path alias name) columns grouped
 
 instance
-      ( GroupByColumns a fields some
-      , GroupByColumns b fields more
+      ( GroupedColumns a columns some
+      , GroupedColumns b columns more
       , Union some more grouped
       ) ⇒
-      GroupByColumns (a /\ b) fields grouped
+      GroupedColumns (a /\ b) columns grouped
 
 -- | Asserts that a SELECT ... GROUP BY projection contains only grouped columns or aggregate functions
 class ValidGroupByProjection (s ∷ Type) (grouped ∷ Row Type) | s → grouped
 
 instance Cons name t e grouped ⇒ ValidGroupByProjection (Proxy name) grouped
 
-else instance Cons name t e grouped ⇒ ValidGroupByProjection (As alias (Proxy name)) grouped
+instance Cons name t e grouped ⇒ ValidGroupByProjection (As alias (Proxy name)) grouped
 
-else instance (ValidGroupByProjection a grouped, ValidGroupByProjection b grouped) ⇒ ValidGroupByProjection (a /\ b) grouped
+instance (AppendPath table column name, Cons name t e grouped) ⇒ ValidGroupByProjection (Path table column) grouped
 
-else instance ValidGroupByProjection s grouped ⇒ ValidGroupByProjection (Distinct s) grouped
+instance Cons name t e grouped ⇒ ValidGroupByProjection (As alias (Aggregate (Proxy name) rest fields out)) grouped
 
-else instance ValidGroupByProjection q grouped
+instance (ValidGroupByProjection a grouped, ValidGroupByProjection b grouped) ⇒ ValidGroupByProjection (a /\ b) grouped
+
+instance ValidGroupByProjection s grouped ⇒ ValidGroupByProjection (Distinct s) grouped
+
+-- | Are all columns aggregated?
+class OnlyAggregations (q ∷ Type) (is ∷ Boolean) | q → is
+
+instance OnlyAggregations (As n (Aggregate i rest f o)) True
+
+else instance
+      ( OnlyAggregations a isa
+      , OnlyAggregations b isb
+      , And isa isb is
+      ) ⇒
+      OnlyAggregations (a /\ b) is
+
+else instance OnlyAggregations s False
 
 -- | GROUP BY statement
 groupBy ∷
-      ∀ f s q sql grouped fields.
-      ToGroupBy q s fields ⇒
-      GroupByColumns f fields grouped ⇒
+      ∀ f s q sql grouped columns.
+      ToGroupBy q s columns ⇒
+      GroupedColumns f columns grouped ⇒
       ValidGroupByProjection s grouped ⇒
       Resume q (GroupBy f E) sql ⇒
       f →
@@ -659,13 +694,26 @@ data Sort (f ∷ Type) = Asc | Desc
 -- | ORDER BY must be last statement
 class ToOrderBy (f ∷ Type) (q ∷ Type)
 
-instance (SortColumnsSource s projection f fields available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f fields E))
+instance (SortColumnsSource s projection f columns available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f columns E))
 
-instance (SortColumnsSource s projection f fields available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f fields (GroupBy g E)))
+--only grouped columns are allowed here
+instance
+      ( GroupedColumns g columns grouped
+      , Union projection grouped pg
+      , Nub pg available
+      , SortColumns st available
+      ) ⇒
+      ToOrderBy st (Select s projection (From f columns (GroupBy g E)))
 
-instance (SortColumnsSource s projection f fields available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f fields (Where cd E)))
+instance (SortColumnsSource s projection f columns available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f columns (Where cd E)))
 
-instance (SortColumnsSource s projection f fields available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f fields (Where cd (GroupBy g E))))
+instance
+      ( GroupedColumns g columns grouped
+      , Union projection grouped pg
+      , Nub pg available
+      , SortColumns st available
+      ) ⇒
+      ToOrderBy st (Select s projection (From f columns (Where cd (GroupBy g E))))
 
 -- for aggregate/window functions
 instance ToOrderBy (Proxy name) String
@@ -673,38 +721,41 @@ instance ToOrderBy (Proxy name) String
 instance ToOrderBy (Path alias name) String
 
 --this error might not be clear for the user
--- | Fields available for sorting this query
+-- | Columns available for sorting this query
 -- |
--- | N.B: SELECT DISTINCT queries can only be sorted by fields in the projection
-class SortColumnsSource (s ∷ Type) (projection ∷ Row Type) (f ∷ Type) (fields ∷ Row Type) (available ∷ Row Type) | s → available
+-- | N.B: SELECT DISTINCT queries can only be sorted by columns in the projection
+class SortColumnsSource (s ∷ Type) (projection ∷ Row Type) (f ∷ Type) (columns ∷ Row Type) (available ∷ Row Type) | s → available
 
-instance SortColumnsSource (Distinct s) projection f fields projection
+instance SortColumnsSource (Distinct s) projection f columns projection
 
 else instance
       ( SourceAlias f alias
-      , RowToList fields list
+      , RowToList columns list
       , QualifiedColumns list alias qual
-      , Union projection fields pf
+      , Union projection columns pf
       , Union qual pf all
+      , OnlyAggregations s only
+      , If only projection all available
       ) ⇒
-      SortColumnsSource s projection f fields all
+      SortColumnsSource s projection f columns available
 
-class SortColumns (f ∷ Type) (fields ∷ Row Type) | f → fields
+-- |
+class SortColumns (f ∷ Type) (columns ∷ Row Type) | f → columns
 
-instance Cons name t e fields ⇒ SortColumns (Proxy name) fields
+instance Cons name t e columns ⇒ SortColumns (Proxy name) columns
 
---not allowing out of scope qualified fields yet
-instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ SortColumns (Path alias name) fields
+--not allowing out of scope qualified columns yet
+instance (AppendPath alias name fullPath, Cons fullPath t e columns) ⇒ SortColumns (Path alias name) columns
 
-instance Cons name t e fields ⇒ SortColumns (Sort (Proxy name)) fields
+instance Cons name t e columns ⇒ SortColumns (Sort (Proxy name)) columns
 
-instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ SortColumns (Sort (Path alias name)) fields
+instance (AppendPath alias name fullPath, Cons fullPath t e columns) ⇒ SortColumns (Sort (Path alias name)) columns
 
-instance Fail (Text "Cannot sort by void function") ⇒ SortColumns (PgFunction input args fields Unit) fields
+instance Fail (Text "Cannot sort by void function") ⇒ SortColumns (PgFunction input args columns Unit) columns
 
-else instance SortColumns (PgFunction input args fields output) fields
+else instance SortColumns (PgFunction input args columns output) columns
 
-instance (SortColumns a fields, SortColumns b fields) ⇒ SortColumns (a /\ b) fields
+instance (SortColumns a columns, SortColumns b columns) ⇒ SortColumns (a /\ b) columns
 
 -- | ASC
 asc ∷ ∀ name. name → Sort name
@@ -718,13 +769,13 @@ desc _ = Desc
 orderBy ∷ ∀ f q sql. ToOrderBy f q ⇒ Resume q (OrderBy f E) sql ⇒ f → q → sql
 orderBy f q = resume q $ OrderBy f E
 
-instance (Cons name t e fields, Cons fd g h fields) ⇒ ToStringAgg (Proxy name) (OrderBy (Proxy fd) String) fields
+instance (Cons name t e columns, Cons fd g h columns) ⇒ ToStringAgg (Proxy name) (OrderBy (Proxy fd) String) columns
 
-instance Cons name t e fields ⇒ ToStringAgg (Path table fd) (OrderBy (Proxy name) String) fields
+instance Cons name t e columns ⇒ ToStringAgg (Path table fd) (OrderBy (Proxy name) String) columns
 
-instance Cons name t e fields ⇒ ToStringAgg (Proxy name) (OrderBy (Path alias fd) String) fields
+instance Cons name t e columns ⇒ ToStringAgg (Proxy name) (OrderBy (Path alias fd) String) columns
 
-instance ToStringAgg (Path table name) (OrderBy (Path alias fd) String) fields
+instance ToStringAgg (Path table name) (OrderBy (Path alias fd) String) columns
 
 ------------------------LIMIT---------------------------
 

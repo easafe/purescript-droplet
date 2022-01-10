@@ -31,12 +31,12 @@ tests = do
                         TM.notParameterized """SELECT (SELECT "u"."id" "u.id" FROM "users" ORDER BY "id" LIMIT 1) FROM "users" AS "u" INNER JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
                         TM.result q [ { "u.id": Just 1 }, { "u.id": Just 2 } ]
                   TS.it "subquery with where path column" do
-                        let q = select (select id # from users # wher (id .=. u ... id)) # from ((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id))
-                        TM.notParameterized """SELECT (SELECT "id" FROM "users" WHERE "id" = "u"."id") FROM "users" AS "u" INNER JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
+                        let q = select (select id # from users # wher (id .=. u ... id) # orderBy id # limit 1) # from ((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id))
+                        TM.notParameterized """SELECT (SELECT "id" FROM "users" WHERE "id" = "u"."id" ORDER BY "id" LIMIT 1) FROM "users" AS "u" INNER JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
                         TM.result q [ { id: Just 1 }, { id: Just 2 } ]
                   TS.it "aliased subquery with where path column" do
-                        let q = select (select id # from (users # as b) # wher (b ... id .=. u ... id)) # from ((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id))
-                        TM.notParameterized """SELECT (SELECT "id" FROM "users" AS "b" WHERE "b"."id" = "u"."id") FROM "users" AS "u" INNER JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
+                        let q = select (select id # from (users # as b) # wher (b ... id .=. u ... id) # orderBy id # limit 1) # from ((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id))
+                        TM.notParameterized """SELECT (SELECT "id" FROM "users" AS "b" WHERE "b"."id" = "u"."id" ORDER BY "id" LIMIT 1) FROM "users" AS "u" INNER JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
                         TM.result q [ { id: Just 1 }, { id: Just 2 } ]
                   TS.it "three joins" do
                         let q = select (u ... id /\ t ... id /\ b ... id) # from (((users # as u) `join` (messages # as t) # on (u ... id .=. t ... id)) `join` (tags # as b) # on (b ... id .=. u ... id))
@@ -69,12 +69,12 @@ tests = do
                         TM.notParameterized """SELECT (SELECT "u"."id" "u.id" FROM "users" ORDER BY "id" LIMIT 1) FROM "users" AS "u" LEFT JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
                         TM.result q [ { "u.id": Just 1 }, { "u.id": Just 2 } ]
                   TS.it "subquery with where path column" do
-                        let q = select (select id # from users # wher (id .=. u ... id)) # from ((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id))
-                        TM.notParameterized """SELECT (SELECT "id" FROM "users" WHERE "id" = "u"."id") FROM "users" AS "u" LEFT JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
+                        let q = select (select id # from users # wher (id .=. u ... id) # orderBy id # limit 1) # from ((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id))
+                        TM.notParameterized """SELECT (SELECT "id" FROM "users" WHERE "id" = "u"."id" ORDER BY "id" LIMIT 1) FROM "users" AS "u" LEFT JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
                         TM.result q [ { id: Just 1 }, { id: Just 2 } ]
                   TS.it "aliased subquery with where path column" do
-                        let q = select (select id # from (users # as b) # wher (b ... id .=. u ... id)) # from ((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id))
-                        TM.notParameterized """SELECT (SELECT "id" FROM "users" AS "b" WHERE "b"."id" = "u"."id") FROM "users" AS "u" LEFT JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
+                        let q = select (select id # from (users # as b) # wher (b ... id .=. u ... id) # orderBy id # limit 1) # from ((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id))
+                        TM.notParameterized """SELECT (SELECT "id" FROM "users" AS "b" WHERE "b"."id" = "u"."id" ORDER BY "id" LIMIT 1) FROM "users" AS "u" LEFT JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
                         TM.result q [ { id: Just 1 }, { id: Just 2 } ]
                   TS.it "three leftjoins" do
                         let q = select (u ... id /\ t ... id /\ b ... id) # from (((users # as u) `leftJoin` (messages # as t) # on (u ... id .=. t ... id)) `leftJoin` (tags # as b) # on (b ... id .=. u ... id))

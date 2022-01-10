@@ -132,11 +132,11 @@ selectMessages =
 selectUserMessages :: Int -> _
 selectUserMessages userId =
       selectMessages #
-      wher (id .=. userId) -- SQL operators are surrounded by dots; we can compare `id` to `userId` as type wrappers such as `Auto` are automatically stripped
+      wher (id .=. userId) -- SQL operators are surrounded by dots; we can compare `id` to `userId` as `Column` type wrappers are automatically stripped
 
 joinUserMessages :: _
 joinUserMessages =
-      select (u ... name /\ -- `...` is equivalent to table.column
+      select (u ... name /\ -- `alias ... column` is equivalent to SQL alias.column
               (t ... name # as recipient) /\ -- `name` is displayed as recipient
               date) #
       from (((messages # as m)
