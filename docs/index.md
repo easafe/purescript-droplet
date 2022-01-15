@@ -7,7 +7,7 @@ title: Getting started
 
 Droplet is a bit different from other PureScript (or Haskell) SQL libraries. There is no monads, functions to yield columns, or a higher level API abstracting away from the generated SQL query. Instead, the eDSL is made out exclusively of combinators (nearly) identical to their SQL statement counterparts. Likewise, the output of a query is automatically inferred from its projection with almost no need for type annotations or boilerplate mapping type class instances.
 
-This guide first covers the syntax used by the eDSL, how to run queries using a query mapper and finally migrations. The eDSL aims to make the keywords you already know (SELECT, WHERE, ORDER BY, JOIN, etc) composable. Likewise, the query mapper is independent from the eDSL -- it can be also used for unsafe queries. Migrations are accomplished by API or using the CLI.
+This guide first covers the syntax used by the eDSL, how to run queries using a query mapper, and finally migrations. The eDSL aims to make the keywords you already know (SELECT, WHERE, ORDER BY, JOIN, etc) composable. Likewise, the query mapper is independent from the eDSL -- it can be also used for unsafe queries too. Migrations are accomplished by API or CLI.
 
 Installation:
 
