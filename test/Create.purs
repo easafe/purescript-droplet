@@ -18,6 +18,7 @@ import Test.Spec as TS
 tests ∷ Spec Unit
 tests =
       TS.describe "create" do
+            pure unit
             TS.describe "table" do
                   TS.it "plain types" do
                         let q = create # table (Table ∷ Table "test" (id ∷ Int, name ∷ String, set ∷ Boolean, n ∷ Number, bigId ∷ BigInt, date ∷ Date, dateTime ∷ DateTime))

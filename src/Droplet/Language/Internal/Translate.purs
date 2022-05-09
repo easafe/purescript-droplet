@@ -73,6 +73,7 @@ import Data.Symbol as DS
 import Data.Traversable as DF
 import Data.Traversable as DT
 import Data.Tuple as DTP
+import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
 import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, E(..), ForeignKey, Identity, Path, PrimaryKey, Star, Table, Unique)
@@ -300,7 +301,7 @@ else instance
       , QualifiedProjection t outer more
       , Union some more projection
       ) ⇒
-      QualifiedProjection (s /\ t) outer projection
+      QualifiedProjection (Tuple s t) outer projection
 
 else instance
       ( Union outer fields all
@@ -420,7 +421,7 @@ instance
       , ToNakedProjection t more
       , Union some more projection
       ) ⇒
-      ToNakedProjection (s /\ t) projection
+      ToNakedProjection (Tuple s t) projection
 
 else instance
       ( --let ToProjection figure out alias and outer since this is necessarily a subquery
@@ -462,8 +463,8 @@ instance (IsSymbol name, ArgumentList args) ⇒ TranslateNakedColumn (As name (P
             q ← printFunction func
             pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
 
-instance (TranslateNakedColumn s, TranslateNakedColumn t) ⇒ TranslateNakedColumn (s /\ t) where
-      translateNakedColumn (s /\ t) = do
+instance (TranslateNakedColumn s, TranslateNakedColumn t) ⇒ TranslateNakedColumn (Tuple s t) where
+      translateNakedColumn (Tuple s t) = do
             q ← translateNakedColumn s
             otherQ ← translateNakedColumn t
             pure $ q <> comma <> otherQ
@@ -543,8 +544,8 @@ else instance
       TranslateColumn (As alias (Path table name)) where
       translateColumn _ = pure $ quotePath (Proxy ∷ _ table) (Proxy ∷ _ name) <> asKeyword <> quote (Proxy ∷ _ alias)
 
-else instance (TranslateColumn s, TranslateColumn t) ⇒ TranslateColumn (s /\ t) where
-      translateColumn (s /\ t) = do
+else instance (TranslateColumn s, TranslateColumn t) ⇒ TranslateColumn (Tuple s t) where
+      translateColumn (Tuple s t) = do
             sQ ← translateColumn s
             tQ ← translateColumn t
             pure $ sQ <> comma <> tQ
@@ -767,8 +768,8 @@ instance (IsSymbol alias, IsSymbol name) ⇒ NameList (Path alias name) where
 instance NameList Star where
       nameList _ = starSymbol
 
-instance (NameList f, NameList rest) ⇒ NameList (f /\ rest) where
-      nameList (f /\ rest) = nameList f <> comma <> nameList rest
+instance (NameList f, NameList rest) ⇒ NameList (Tuple f rest) where
+      nameList (Tuple f rest) = nameList f <> comma <> nameList rest
 
 -- | Name list for functions, or when fields and parameters can be mixed
 class ArgumentList v where
@@ -806,8 +807,8 @@ else instance ArgumentList Unit where
 else instance ArgumentList E where
       argumentList _ = pure ""
 
-else instance (ArgumentList f, ArgumentList rest) ⇒ ArgumentList (f /\ rest) where
-      argumentList (f /\ rest) = do
+else instance (ArgumentList f, ArgumentList rest) ⇒ ArgumentList (Tuple f rest) where
+      argumentList (Tuple f rest) = do
             af ← argumentList f
             ar ← argumentList rest
             pure $ af <> comma <> ar
@@ -818,8 +819,8 @@ else instance ValueList v ⇒ ArgumentList v where
 class ValueList fieldValues where
       valueList ∷ fieldValues → State QueryState String
 
-instance (ValueList p, ValueList rest) ⇒ ValueList (p /\ rest) where
-      valueList (p /\ rest) = do
+instance (ValueList p, ValueList rest) ⇒ ValueList (Tuple p rest) where
+      valueList (Tuple p rest) = do
             q ← valueList p
             otherQ ← valueList rest
             pure $ q <> comma <> otherQ
@@ -861,8 +862,8 @@ else instance (IsSymbol name, ToValue p) ⇒ NameValuePairs (Op (Proxy name) p) 
             { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ DLID.toValue p }
             pure $ DS.reflectSymbol name <> equalsSymbol <> "$" <> show (DA.length parameters)
 
-instance (NameValuePairs p, NameValuePairs rest) ⇒ NameValuePairs (p /\ rest) where
-      nameValuePairs (p /\ rest) = do
+instance (NameValuePairs p, NameValuePairs rest) ⇒ NameValuePairs (Tuple p rest) where
+      nameValuePairs (Tuple p rest) = do
             q ← nameValuePairs p
             otherQ ← nameValuePairs rest
             pure $ q <> comma <> otherQ
@@ -979,7 +980,7 @@ instance ToConstraintDefinition (Constraint (Composite n) t) where
 else instance (IsSymbol name, ToConstraintDefinition t) => ToConstraintDefinition (Constraint name t) where
       toConstraintDefinition _ = space <> constraintKeyword <> quote (Proxy :: _ name) <> toConstraintDefinition (Proxy :: _ t)
 
-instance (ToConstraintDefinition some, ToConstraintDefinition more) ⇒ ToConstraintDefinition (some /\ more) where
+instance (ToConstraintDefinition some, ToConstraintDefinition more) ⇒ ToConstraintDefinition (Tuple some more) where
       toConstraintDefinition _ = toConstraintDefinition (Proxy ∷ _ some) <> toConstraintDefinition (Proxy ∷ _ more)
 
 -- | Flatten constraints into a list

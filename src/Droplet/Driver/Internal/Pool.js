@@ -1,9 +1,9 @@
-'use sctrict';
+'use strict';
 
-var pg = require('pg');
+import pg from 'pg';
 
-exports.newPool_ = function(config) {
+export function newPool_(config) {
     return function() {
         return new pg.Pool(config);
     };
-};
+}

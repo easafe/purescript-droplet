@@ -1,4 +1,4 @@
-exports.readInt = function (value) {
+export function readInt(value) {
       var n = parseInt(value, 10);
 
       if (typeof n === 'number' &&
@@ -10,6 +10,6 @@ exports.readInt = function (value) {
             return n;
 }
 
-exports.showForeigner = function(f) {
+export function showForeigner(f) {
       return f +'';
 }

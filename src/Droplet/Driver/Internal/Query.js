@@ -1,6 +1,6 @@
 'use strict';
 
-var pg = require('pg');
+import pg from 'pg';
 
 function id(x) { return x; }
 
@@ -8,7 +8,7 @@ pg.types.setTypeParser(1082 /* DATE_OID */, id);
 pg.types.setTypeParser(1114 /* TIMESTAMP_OID */, id);
 pg.types.setTypeParser(1184 /* TIMESTAMPTZ_OID */, id);
 
-exports.connect_ = function (config) {
+export function connect_(config) {
     return function (pool) {
         return function (onError, onSuccess) {
             var p = pool.connect().then(function (client) {
@@ -33,9 +33,9 @@ exports.connect_ = function (config) {
             };
         };
     };
-};
+}
 
-exports.rawQuery_ = function (config) {
+export function rawQuery_(config) {
     return function (dbHandle) {
         return function (rq) {
             return function (onError, onSuccess) {
@@ -61,13 +61,13 @@ exports.rawQuery_ = function (config) {
             };
         };
     };
-};
+}
 
-exports.sqlState_ = function (error) {
+export function sqlState_(error) {
     return error.code || null;
-};
+}
 
-exports.errorDetail_ = function (error) {
+export function errorDetail_(error) {
     return {
         error: error,
         severity: error.severity || '',
@@ -88,4 +88,4 @@ exports.errorDetail_ = function (error) {
         line: error.line || '',
         routine: error.routine || ''
     };
-};
+}
