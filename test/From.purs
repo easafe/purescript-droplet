@@ -44,7 +44,7 @@ tests = do
                         TM.notParameterized """SELECT * FROM (SELECT "B"."birthday" "B.birthday" FROM "users" AS "B") AS "t"""" $ DLIQ.buildQuery q
                         TM.result q [ { "B.birthday": TM.makeDate 1990 1 1 }, { "B.birthday": TM.makeDate 1900 11 11 } ]
                   TS.it "star bracket" do
-                        let q = select star # from (select (select id # from users # orderBy id # limit 1) # from users # as n)
+                        let q = select star # from (select (select id # from users # orderBy id # limit (Proxy :: _ 1)) # from users # as n)
                         TM.notParameterized """SELECT * FROM (SELECT (SELECT "id" FROM "users" ORDER BY "id" LIMIT 1) FROM "users") AS "n"""" $ DLIQ.buildQuery q
                         TM.result q [ { id: Just 1 }, { id: Just 1 } ]
                   TS.it "field" do

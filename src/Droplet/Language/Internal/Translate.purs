@@ -64,17 +64,16 @@ import Data.Array ((..), (:))
 import Data.Array as DA
 import Data.Maybe (Maybe(..))
 import Data.Maybe as DM
+import Data.Reflectable (class Reflectable)
+import Data.Reflectable as DR
 import Data.String as DST
 import Data.String.Regex as DSR
 import Data.String.Regex.Flags (global)
 import Data.String.Regex.Unsafe as DSRU
-
-import Data.Reflectable as DR
-import Data.Reflectable (class Reflectable)
 import Data.Traversable as DF
 import Data.Traversable as DT
-import Data.Tuple as DTP
 import Data.Tuple (Tuple(..))
+import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
 import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
 import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, E(..), ForeignKey, Identity, Path, PrimaryKey, Star, Table, Unique)
@@ -243,7 +242,7 @@ instance QueryMustNotBeAliased rest ⇒ QueryMustNotBeAliased (GroupBy f rest)
 
 instance QueryMustNotBeAliased rest ⇒ QueryMustNotBeAliased (OrderBy f rest)
 
-instance QueryMustNotBeAliased rest ⇒ QueryMustNotBeAliased (Limit rest)
+instance QueryMustNotBeAliased rest ⇒ QueryMustNotBeAliased (Limit n rest)
 
 instance QueryMustNotBeAliased rest ⇒ QueryMustNotBeAliased (Offset rest)
 
@@ -887,10 +886,10 @@ instance (ArgumentList f, Translate rest) ⇒ Translate (OrderBy f rest) where
             pure $ orderKeyword <> byKeyword <> nf <> q
 
 -- | LIMIT
-instance Translate rest ⇒ Translate (Limit rest) where
-      translate (Limit n rest) = do
+instance (Reflectable n Int, Translate rest) ⇒ Translate (Limit n rest) where
+      translate (Limit rest) = do
             q ← translate rest
-            pure $ limitKeyword <> show n <> q
+            pure $ limitKeyword <> show (DR.reflectType (Proxy :: _ n)) <> q
 
 -- | OFFSET
 instance Translate rest ⇒ Translate (Offset rest) where

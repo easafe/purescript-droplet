@@ -144,6 +144,8 @@ import Prelude
 import Prim hiding (Constraint)
 
 import Data.Maybe (Maybe(..))
+import Data.Reflectable (class Reflectable, class Reifiable)
+import Data.Reflectable as DR
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
 import Droplet.Language.Internal.Definition (class AppendPath, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, PrimaryKey, Star, Table(..), Unique)
@@ -154,7 +156,7 @@ import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Beside, Quote, QuoteLabel, Text)
 import Type.Data.Boolean (class And, class If)
-import Type.Proxy (Proxy)
+import Type.Proxy (Proxy(..))
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
 
 ----------------------PREPARE----------------------------
@@ -333,8 +335,7 @@ instance LimitedResults rest ⇒ LimitedResults (OrderBy f rest)
 
 instance LimitedResults rest ⇒ LimitedResults (Offset rest)
 
--- when purescript actually supports type level nats we can improve this
-instance LimitedResults (Limit rest)
+instance LimitedResults (Limit 1 rest)
 
 instance Fail (Text "Subqueries must return zero or one rows. Are you missing ORDER BY ... LIMIT 1?") ⇒ LimitedResults E
 
@@ -779,7 +780,7 @@ instance ToStringAgg (Path table name) (OrderBy (Path alias fd) String) columns
 
 ------------------------LIMIT---------------------------
 
-data Limit rest = Limit Int rest
+data Limit (n :: Int) rest = Limit rest
 
 class ToLimit (q ∷ Type)
 
@@ -802,8 +803,9 @@ instance ToLimit (Select s projection (From fr fields (Where cd (GroupBy fg (Ord
 -- | LIMIT statement
 -- |
 -- | Note: LIMIT must always follow after ORDER BY
-limit ∷ ∀ q sql. ToLimit q ⇒ Resume q (Limit E) sql ⇒ Int → q → sql
-limit n q = resume q $ Limit n E
+limit ∷ ∀ n q sql. ToLimit q ⇒ Resume q (Limit n E) sql ⇒ Proxy n → q → sql
+limit _ q = resume q $ Limit E
+
 
 ------------------------OFFSET---------------------------
 
@@ -813,19 +815,19 @@ class ToOffset (q ∷ Type)
 
 instance ToOffset (Select s projection (From fr fields (OrderBy f E)))
 
-instance ToOffset (Select s projection (From fr fields (OrderBy f (Limit E))))
+instance ToOffset (Select s projection (From fr fields (OrderBy f (Limit n E))))
 
 instance ToOffset (Select s projection (From fr fields (GroupBy fg (OrderBy f E))))
 
-instance ToOffset (Select s projection (From fr fields (GroupBy fg (OrderBy f (Limit E)))))
+instance ToOffset (Select s projection (From fr fields (GroupBy fg (OrderBy f (Limit n E)))))
 
 instance ToOffset (Select s projection (From fr fields (Where cd (OrderBy f E))))
 
-instance ToOffset (Select s projection (From fr fields (Where cd (OrderBy f (Limit E)))))
+instance ToOffset (Select s projection (From fr fields (Where cd (OrderBy f (Limit n E)))))
 
 instance ToOffset (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f E)))))
 
-instance ToOffset (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f (Limit E))))))
+instance ToOffset (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f (Limit n E))))))
 
 -- | OFFSET statement
 -- |
@@ -1331,7 +1333,7 @@ instance QueryMustBeAliased rest alias ⇒ QueryMustBeAliased (GroupBy f rest) a
 
 instance QueryMustBeAliased rest alias ⇒ QueryMustBeAliased (OrderBy f rest) alias
 
-instance QueryMustBeAliased rest alias ⇒ QueryMustBeAliased (Limit rest) alias
+instance QueryMustBeAliased rest alias ⇒ QueryMustBeAliased (Limit n rest) alias
 
 instance QueryMustBeAliased rest alias ⇒ QueryMustBeAliased (Offset rest) alias
 
@@ -1348,7 +1350,7 @@ instance QueryOptionallyAliased rest name alias ⇒ QueryOptionallyAliased (Grou
 
 instance QueryOptionallyAliased rest name alias ⇒ QueryOptionallyAliased (OrderBy f rest) name alias
 
-instance QueryOptionallyAliased rest name alias ⇒ QueryOptionallyAliased (Limit rest) name alias
+instance QueryOptionallyAliased rest name alias ⇒ QueryOptionallyAliased (Limit n rest) name alias
 
 instance QueryOptionallyAliased rest name alias ⇒ QueryOptionallyAliased (Offset rest) name alias
 
@@ -1494,8 +1496,8 @@ else instance Resume rest b c ⇒ Resume (GroupBy f rest) b (GroupBy f c) where
 else instance Resume rest b c ⇒ Resume (OrderBy f rest) b (OrderBy f c) where
       resume (OrderBy f rest) b = OrderBy f $ resume rest b
 
-else instance Resume rest b c ⇒ Resume (Limit rest) b (Limit c) where
-      resume (Limit n rest) b = Limit n $ resume rest b
+else instance Resume rest b c ⇒ Resume (Limit n rest) b (Limit n c) where
+      resume (Limit rest) b = Limit $ resume rest b
 
 else instance Resume rest b c ⇒ Resume (Offset rest) b (Offset c) where
       resume (Offset n rest) b = Offset n $ resume rest b

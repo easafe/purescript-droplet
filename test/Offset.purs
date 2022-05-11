@@ -10,7 +10,7 @@ import Test.Model as TM
 
 import Test.Spec (Spec)
 import Test.Spec as TS
-
+import Type.Proxy(Proxy(..))
 
 tests ∷ Spec Unit
 tests =
@@ -24,6 +24,6 @@ tests =
                   TM.parameterized """SELECT "id" FROM "users" WHERE "id" <> $1 ORDER BY "id", "name" OFFSET 2""" $ DLIQ.buildQuery q
                   TM.result q []
             TS.it "limit" do
-                  let q = select (4 # as n) # from users # orderBy n # limit 5 # offset 4
+                  let q = select (4 # as n) # from users # orderBy n # limit (Proxy :: _ 5) # offset 4
                   TM.notParameterized """SELECT 4 AS "n" FROM "users" ORDER BY "n" LIMIT 5 OFFSET 4""" $ DLIQ.buildQuery q
                   TM.result q []

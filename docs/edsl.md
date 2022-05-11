@@ -133,7 +133,7 @@ selectCount :: forall projection columns. Select (As "u" (Aggregate Star E colum
 selectCount = select (count star # as u)
 
 selectSubQuery :: _
-selectSubQuery = select (select name # from users # wher (u ... id .=. id) # orderBy id # limit 1) # from (messages # as u)
+selectSubQuery = select (select name # from users # wher (u ... id .=. id) # orderBy id # limit (Proxy :: _ 1)) # from (messages # as u)
 
 selectManyColumns :: forall projection. Select (Tuple (Proxy "id") (Tuple (Proxy "name") (Tuple (As "u" Int) (Path "m" "id")))) projection E
 selectManyColumns = select (id /\ name /\ (5 # as u) /\ m ... id)
@@ -154,7 +154,7 @@ Subqueries must return a single column and zero or one results (by including a L
 
 ```haskell
 subQueryExample :: _
-subQueryExample = select (select name # from users # wher (u ... id .=. id) # orderBy id # limit 1) # from (messages # as u)
+subQueryExample = select (select name # from users # wher (u ... id .=. id) # orderBy id # limit (Proxy :: _ 1)) # from (messages # as u)
 ```
 
 ### Functions
@@ -316,14 +316,14 @@ selectOrderBy = select name # from users # orderBy id
 ### LIMIT
 
 ```haskell
-limit :: forall q sql. ToLimit q => Resume q (Limit E) sql => Int -> q -> sql
+limit :: forall q sql. ToLimit q => Resume q (Limit n E) sql => Proxy n -> q -> sql
 ```
 
 LIMIT must always follow ORDER BY (or OFFSET), as otherwise query order is unspecified.
 
 ```haskell
-selectLimit :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") (Limit E)))
-selectLimit = select name # from users # orderBy id # limit 1
+selectLimit :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") (Limit 1 E)))
+selectLimit = select name # from users # orderBy id # limit (Proxy :: _ 1)
 ```
 
 Only number literals are currently supported.
