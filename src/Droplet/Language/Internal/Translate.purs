@@ -68,8 +68,9 @@ import Data.String as DST
 import Data.String.Regex as DSR
 import Data.String.Regex.Flags (global)
 import Data.String.Regex.Unsafe as DSRU
-import Data.Symbol (class IsSymbol)
-import Data.Symbol as DS
+
+import Data.Reflectable as DR
+import Data.Reflectable (class Reflectable)
 import Data.Traversable as DF
 import Data.Traversable as DT
 import Data.Tuple as DTP
@@ -455,10 +456,10 @@ instance Translate s ⇒ Translate (Prepare s) where
 class TranslateNakedColumn q where
       translateNakedColumn ∷ q → State QueryState String
 
-instance IsSymbol name ⇒ TranslateNakedColumn (As name Int) where
+instance Reflectable name String ⇒ TranslateNakedColumn (As name Int) where
       translateNakedColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
 
-instance (IsSymbol name, ArgumentList args) ⇒ TranslateNakedColumn (As name (PgFunction inp args fields out)) where
+instance (Reflectable name String, ArgumentList args) ⇒ TranslateNakedColumn (As name (PgFunction inp args fields out)) where
       translateNakedColumn (As func) = do
             q ← printFunction func
             pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
@@ -503,13 +504,13 @@ else instance (TranslateColumn s, Translate rest) ⇒ Translate (Select s projec
 class TranslateColumn q where
       translateColumn ∷ q → State QueryState String
 
-instance IsSymbol name ⇒ TranslateColumn (Proxy name) where
+instance Reflectable name String ⇒ TranslateColumn (Proxy name) where
       translateColumn name = pure $ quote name
 
 else instance
-      ( IsSymbol fullPath
-      , IsSymbol name
-      , IsSymbol alias
+      ( Reflectable fullPath String
+      , Reflectable name String
+      , Reflectable alias String
       , AppendPath alias name fullPath
       ) ⇒
       TranslateColumn (Path alias name) where
@@ -518,27 +519,27 @@ else instance
 else instance TranslateColumn Star where
       translateColumn _ = pure starSymbol
 
-else instance IsSymbol name ⇒ TranslateColumn (As name Int) where
+else instance Reflectable name String ⇒ TranslateColumn (As name Int) where
       translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
 
-else instance (IsSymbol name, NameList inp, ArgumentList rest) ⇒ TranslateColumn (As name (Aggregate inp rest fields out)) where
+else instance (Reflectable name String, NameList inp, ArgumentList rest) ⇒ TranslateColumn (As name (Aggregate inp rest fields out)) where
       translateColumn (As agg) = do
             q ← printAggregation agg
             pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
 
-else instance (IsSymbol name, ArgumentList args) ⇒ TranslateColumn (As name (PgFunction inp args fields out)) where
+else instance (Reflectable name String, ArgumentList args) ⇒ TranslateColumn (As name (PgFunction inp args fields out)) where
       translateColumn (As func) = do
             q ← printFunction func
             pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
 
-else instance (IsSymbol name, IsSymbol alias) ⇒ TranslateColumn (As alias (Proxy name)) where
+else instance (Reflectable name String, Reflectable alias String) ⇒ TranslateColumn (As alias (Proxy name)) where
       translateColumn _ = pure $ quote (Proxy ∷ _ name) <> asKeyword <> quote (Proxy ∷ _ alias)
 
 else instance
-      ( IsSymbol fullPath
-      , IsSymbol alias
-      , IsSymbol name
-      , IsSymbol table
+      ( Reflectable fullPath String
+      , Reflectable alias String
+      , Reflectable name String
+      , Reflectable table String
       , AppendPath table name fullPath
       ) ⇒
       TranslateColumn (As alias (Path table name)) where
@@ -561,7 +562,7 @@ else instance Translate q ⇒ TranslateColumn q where
             translate s
 
 -- | FROM
-instance (IsSymbol name, Translate rest) ⇒ Translate (From (Table name fields) fields rest) where
+instance (Reflectable name String, Translate rest) ⇒ Translate (From (Table name fields) fields rest) where
       translate (From _ rest) = do
             q ← translate rest
             pure $ fromKeyword <> quote (Proxy ∷ _ name) <> q
@@ -587,10 +588,10 @@ instance Translate (Select s ppp more) ⇒ TranslateSource (Select s ppp more) w
             CMS.modify_ (_ { bracketed = true })
             translate s
 
-instance (IsSymbol name, IsSymbol alias) ⇒ TranslateSource (As alias (Table name fd)) where
+instance (Reflectable name String, Reflectable alias String) ⇒ TranslateSource (As alias (Table name fd)) where
       translateSource _ = pure $ quote (Proxy ∷ _ name) <> asKeyword <> quote (Proxy ∷ _ alias)
 
-instance IsSymbol name ⇒ TranslateSource (Table name fd) where
+instance Reflectable name String ⇒ TranslateSource (Table name fd) where
       translateSource _ = pure $ quote (Proxy ∷ _ name)
 
 instance (ToJoinType k, Translate (Join k fields l r a rest)) ⇒ TranslateSource (Join k fields l r a rest) where
@@ -628,7 +629,7 @@ instance (TranslateConditions c, Translate rest) ⇒ Translate (On c rest) where
             pure $ onKeyword <> q <> otherQ
 
 -- | (SELECT ... FROM ...) AS
-instance IsSymbol name ⇒ Translate (As name E) where
+instance Reflectable name String ⇒ Translate (As name E) where
       translate _ = do
             CMS.modify_ (_ { bracketed = false })
             pure $ closeBracket <> asKeyword <> quote (Proxy ∷ _ name)
@@ -675,10 +676,10 @@ else instance (TranslateConditions a, TranslateConditions b) ⇒ TranslateCondit
                   else
                         q <> printOperator operator <> otherQ
 
-else instance IsSymbol name ⇒ TranslateConditions (Proxy name) where
+else instance Reflectable name String ⇒ TranslateConditions (Proxy name) where
       translateConditions name = pure $ quote name
 
-else instance (IsSymbol alias, IsSymbol name) ⇒ TranslateConditions (Path alias name) where
+else instance (Reflectable alias String, Reflectable name String) ⇒ TranslateConditions (Path alias name) where
       translateConditions _ = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name)
 
 else instance ToValue v ⇒ TranslateConditions v where
@@ -717,7 +718,7 @@ printInclusion = case _ of
 
 -- | INSERT DEFAULT VALUES
 instance
-      ( IsSymbol name
+      ( Reflectable name String
       , Translate rest
       ) ⇒
       Translate (Insert (Into name fields DefaultValues rest)) where
@@ -732,7 +733,7 @@ instance
 
 -- | INSERT
 else instance
-      ( IsSymbol name
+      ( Reflectable name String
       , NameList fieldNames
       , ValueList v
       , Translate rest
@@ -759,10 +760,10 @@ else instance
 class NameList fieldNames where
       nameList ∷ fieldNames → String
 
-instance IsSymbol name ⇒ NameList (Proxy name) where
+instance Reflectable name String ⇒ NameList (Proxy name) where
       nameList name = quote name
 
-instance (IsSymbol alias, IsSymbol name) ⇒ NameList (Path alias name) where
+instance (Reflectable alias String, Reflectable name String) ⇒ NameList (Path alias name) where
       nameList _ = quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name)
 
 instance NameList Star where
@@ -775,10 +776,10 @@ instance (NameList f, NameList rest) ⇒ NameList (Tuple f rest) where
 class ArgumentList v where
       argumentList ∷ v → State QueryState String
 
-instance IsSymbol name ⇒ ArgumentList (Proxy name) where
+instance Reflectable name String ⇒ ArgumentList (Proxy name) where
       argumentList name = pure $ quote name
 
-else instance (IsSymbol alias, IsSymbol name) ⇒ ArgumentList (Path alias name) where
+else instance (Reflectable alias String, Reflectable name String) ⇒ ArgumentList (Path alias name) where
       argumentList _ = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name)
 
 else instance (ArgumentList s, Translate (OrderBy f E)) ⇒ ArgumentList (OrderBy f s) where
@@ -787,12 +788,12 @@ else instance (ArgumentList s, Translate (OrderBy f E)) ⇒ ArgumentList (OrderB
             ns ← argumentList s
             pure $ ns <> q
 
-else instance IsSymbol name ⇒ ArgumentList (Sort (Proxy name)) where
+else instance Reflectable name String ⇒ ArgumentList (Sort (Proxy name)) where
       argumentList s = pure $ quote (Proxy ∷ _ name) <> case s of
             Desc → descKeyword
             Asc → ascKeyword
 
-else instance (IsSymbol alias, IsSymbol name) ⇒ ArgumentList (Sort (Path alias name)) where
+else instance (Reflectable alias String, Reflectable name String) ⇒ ArgumentList (Sort (Path alias name)) where
       argumentList s = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name) <> case s of
             Desc → descKeyword
             Asc → ascKeyword
@@ -840,7 +841,7 @@ else instance ToValue p ⇒ ValueList p where
             pure $ "$" <> show (DA.length parameters)
 
 -- | UPDATE
-instance (IsSymbol name, NameValuePairs pairs, Translate rest) ⇒ Translate (Update name fields (Set pairs rest)) where
+instance (Reflectable name String, NameValuePairs pairs, Translate rest) ⇒ Translate (Update name fields (Set pairs rest)) where
       translate (Update (Set pairs rest)) = do
             q ← nameValuePairs pairs
             otherQ ← translate rest
@@ -854,13 +855,13 @@ instance (IsSymbol name, NameValuePairs pairs, Translate rest) ⇒ Translate (Up
 class NameValuePairs pairs where
       nameValuePairs ∷ pairs → State QueryState String
 
-instance IsSymbol name ⇒ NameValuePairs (Op (Proxy name) Default) where
-      nameValuePairs (Op _ name _) = pure $ DS.reflectSymbol name <> equalsSymbol <> defaultKeyword
+instance Reflectable name String ⇒ NameValuePairs (Op (Proxy name) Default) where
+      nameValuePairs (Op _ name _) = pure $ DR.reflectType name <> equalsSymbol <> defaultKeyword
 
-else instance (IsSymbol name, ToValue p) ⇒ NameValuePairs (Op (Proxy name) p) where
+else instance (Reflectable name String, ToValue p) ⇒ NameValuePairs (Op (Proxy name) p) where
       nameValuePairs (Op _ name p) = do
             { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ DLID.toValue p }
-            pure $ DS.reflectSymbol name <> equalsSymbol <> "$" <> show (DA.length parameters)
+            pure $ DR.reflectType name <> equalsSymbol <> "$" <> show (DA.length parameters)
 
 instance (NameValuePairs p, NameValuePairs rest) ⇒ NameValuePairs (Tuple p rest) where
       nameValuePairs (Tuple p rest) = do
@@ -904,7 +905,7 @@ instance
       , ConstraintsToRowList columnList list
       , CompositeConstraints list composites
       , TranslateCompositeConstraint composites
-      , IsSymbol name
+      , Reflectable name String
       ) ⇒
       Translate (Create (Table name columns)) where
       translate _ = do
@@ -924,7 +925,7 @@ instance TranslateFieldDefinition Nil where
       translateFieldDefinition _ = []
 
 instance
-      ( IsSymbol name
+      ( Reflectable name String
       , ToType t
       , ToNullableDefinition t
       , ToConstraintDefinition c
@@ -942,7 +943,7 @@ instance
             where
             _t = Proxy ∷ _ t
 
-else instance (ToType t, ToNullableDefinition t, TranslateFieldDefinition rest, IsSymbol name) ⇒ TranslateFieldDefinition (Cons name t rest) where
+else instance (ToType t, ToNullableDefinition t, TranslateFieldDefinition rest, Reflectable name String) ⇒ TranslateFieldDefinition (Cons name t rest) where
       translateFieldDefinition _ = (quote (Proxy ∷ _ name) <> space <> DLID.toType _t <> toNullableDefinition _t) : translateFieldDefinition (Proxy ∷ _ rest)
             where
             _t = Proxy ∷ _ t
@@ -970,14 +971,14 @@ instance ToConstraintDefinition Unique where
 instance ToConstraintDefinition PrimaryKey where
       toConstraintDefinition _ = primaryKeyKeyword
 
-instance (IsSymbol tableName, IsSymbol fieldName) ⇒ ToConstraintDefinition (ForeignKey fieldName (Table tableName f)) where
+instance (Reflectable tableName String, Reflectable fieldName String) ⇒ ToConstraintDefinition (ForeignKey fieldName (Table tableName f)) where
       toConstraintDefinition _ = referencesKeyword <> quote (Proxy ∷ _ tableName) <> openBracket <> quote (Proxy ∷ _ fieldName) <> closeBracket
 
 --ignore composites as they are special babies
 instance ToConstraintDefinition (Constraint (Composite n) t) where
       toConstraintDefinition _ = ""
 
-else instance (IsSymbol name, ToConstraintDefinition t) => ToConstraintDefinition (Constraint name t) where
+else instance (Reflectable name String, ToConstraintDefinition t) => ToConstraintDefinition (Constraint name t) where
       toConstraintDefinition _ = space <> constraintKeyword <> quote (Proxy :: _ name) <> toConstraintDefinition (Proxy :: _ t)
 
 instance (ToConstraintDefinition some, ToConstraintDefinition more) ⇒ ToConstraintDefinition (Tuple some more) where
@@ -1019,7 +1020,7 @@ instance TranslateCompositeConstraint Nil where
       translateCompositeConstraint _ = []
 
 instance
-      ( IsSymbol name
+      ( Reflectable name String
       , CompositeFieldList fields
       , ToCompositeConstraintDefinition t
       , TranslateCompositeConstraint rest
@@ -1065,7 +1066,7 @@ class ToReferenceDefinition (source ∷ RowList Type) where
 instance ToReferenceDefinition Nil where
       toReferenceDefinition _ = ""
 
-else instance (IsSymbol tableName, CompositeFieldList (Cons fieldName (Composite tableName) rest)) ⇒ ToReferenceDefinition (Cons fieldName (Composite tableName) rest) where
+else instance (Reflectable tableName String, CompositeFieldList (Cons fieldName (Composite tableName) rest)) ⇒ ToReferenceDefinition (Cons fieldName (Composite tableName) rest) where
       toReferenceDefinition _ = referencesKeyword <> quote (Proxy ∷ _ tableName) <> openBracket <> DST.joinWith comma (compositeFieldList (Proxy ∷ _ (Cons fieldName (Composite tableName) rest))) <> closeBracket
 
 -- |
@@ -1075,12 +1076,12 @@ class CompositeFieldList (fields ∷ RowList Type) where
 instance CompositeFieldList Nil where
       compositeFieldList _ = []
 
-instance (CompositeFieldList rest, IsSymbol name) ⇒ CompositeFieldList (Cons name t rest) where
+instance (CompositeFieldList rest, Reflectable name String) ⇒ CompositeFieldList (Cons name t rest) where
       compositeFieldList _ = quote (Proxy ∷ _ name) : compositeFieldList (Proxy ∷ _ rest)
 
 -- | ALTER TABLE
 instance
-      ( IsSymbol name
+      ( Reflectable name String
       , Translate rest
       ) ⇒
       Translate (Alter (T (Table name fields) rest)) where
@@ -1094,7 +1095,7 @@ instance
 
 -- | ADD
 instance
-      ( IsSymbol name
+      ( Reflectable name String
       , SingleColumn name column columnList
       , TranslateFieldDefinition columnList
       ) ⇒
@@ -1109,7 +1110,7 @@ instance SingleColumn name (Proxy t) (Cons name t Nil)
 instance SingleColumn name (Column t constraints) (Cons name (Column t constraints) Nil)
 
 -- | DROP TABLE
-instance IsSymbol name ⇒ Translate (Drop (Table name fields)) where
+instance Reflectable name String ⇒ Translate (Drop (Table name fields)) where
       translate _ = do
             pure $ dropKeyword
                   <> tableKeyword
@@ -1127,11 +1128,11 @@ printFunction (PgFunction name args) = do
       nf ← argumentList args
       pure $ name <> openBracket <> nf <> closeBracket
 
-quote ∷ ∀ alias. IsSymbol alias ⇒ Proxy alias → String
-quote name = quoteSymbol <> DS.reflectSymbol name <> quoteSymbol
+quote ∷ ∀ alias. Reflectable alias String ⇒ Proxy alias → String
+quote name = quoteSymbol <> DR.reflectType name <> quoteSymbol
 
 -- | Columns in the format alias.name must be aliased to avoid problems with ambiguous column names and *
-quotePath ∷ ∀ alias name. IsSymbol alias ⇒ IsSymbol name ⇒ Proxy alias → Proxy name → String
+quotePath ∷ ∀ alias name. Reflectable alias String ⇒ Reflectable name String ⇒ Proxy alias → Proxy name → String
 quotePath alias name = quote alias <> dotSymbol <> quote name
 
 buildQuery ∷ ∀ q projection. ToQuery q projection ⇒ q → Query projection

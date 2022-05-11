@@ -10,11 +10,12 @@ import Data.Newtype (class Newtype)
 import Data.Nullable (Nullable, null, toMaybe, toNullable)
 import Data.Nullable as DN
 import Data.Profunctor (lcmap)
+import Data.Reflectable (class Reflectable)
+import Data.Reflectable as DR
 import Data.Show.Generic as DSG
 import Data.String (Pattern(..))
-import Data.String as String
+import Data.String as DST
 import Data.Symbol (class IsSymbol)
-import Data.Symbol as DS
 import Data.Traversable as DT
 import Droplet.Driver.Internal.Pool (Pool)
 import Droplet.Language.Internal.Definition (class FromValue, class ToParameters)
@@ -127,6 +128,7 @@ instance consFromResult ∷
       ( FromValue t
       , FromResult rest (Record restProjection)
       , IsSymbol name
+      , Reflectable name String
       , Lacks name restProjection
       , Cons name t restProjection projection
       ) ⇒
@@ -138,7 +140,7 @@ instance consFromResult ∷
                   Right converted → map (R.insert name converted) $ toResult (Proxy ∷ Proxy rest) raw
             where
             name = Proxy ∷ Proxy name
-            field = DS.reflectSymbol name
+            field = DR.reflectType name
 
 foreign import connect_ ∷
       ∀ a.
@@ -366,4 +368,4 @@ convertError err = case toMaybe $ sqlState_ err of
                   const $ ClientError err s
 
       prefix ∷ String → String → Boolean
-      prefix p = maybe false (_ == 0) <<< String.indexOf (Pattern p)
+      prefix p = maybe false (_ == 0) <<< DST.indexOf (Pattern p)

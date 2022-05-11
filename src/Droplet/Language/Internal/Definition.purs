@@ -54,10 +54,11 @@ import Data.Int as DI
 import Data.Maybe (Maybe(..))
 import Data.Nullable (Nullable)
 import Data.Nullable as DN
+import Data.Reflectable (class Reflectable)
+import Data.Reflectable as DR
 import Data.String (Pattern(..))
 import Data.String as DST
 import Data.Symbol (class IsSymbol)
-import Data.Symbol as DS
 import Data.Traversable as DT
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
@@ -268,12 +269,13 @@ instance ToParameters record Nil where
 
 instance
       ( IsSymbol name
+      , Reflectable name String
       , ToValue t
       , Cons name t e record
       , ToParameters record rest
       ) ⇒
       ToParameters record (Cons name t rest) where
-      toParameters _ record = (DS.reflectSymbol name /\ toValue (R.get name record)) : toParameters (Proxy ∷ Proxy rest) record
+      toParameters _ record = (DR.reflectType name /\ toValue (R.get name record)) : toParameters (Proxy ∷ Proxy rest) record
             where
             name = Proxy ∷ Proxy name
 
