@@ -101,6 +101,12 @@ lesserThanSymbol = " < "
 greaterThanSymbol ∷ String
 greaterThanSymbol = " > "
 
+lesserEqualsThanSymbol ∷ String
+lesserEqualsThanSymbol = " <= "
+
+greaterEqualsThanSymbol ∷ String
+greaterEqualsThanSymbol = " >= "
+
 parameterSymbol ∷ String
 parameterSymbol = "$"
 

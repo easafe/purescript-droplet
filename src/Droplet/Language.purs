@@ -9,6 +9,8 @@ import Droplet.Language.Internal.Condition
       , notEquals
       , greaterThan
       , lesserThan
+      , greaterEqualsThan
+      , lesserEqualsThan
       , or
       , not
       , in_
@@ -21,6 +23,8 @@ import Droplet.Language.Internal.Condition
       , (.=.)
       , (.>.)
       , (.<.)
+      , (.>=.)
+      , (.<=.)
       , (.||.)
       ) as Exported
 import Droplet.Language.Internal.Definition

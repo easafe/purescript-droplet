@@ -1,7 +1,7 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, OuterScope, In, class Comparison, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, OuterScope, In, class Comparison, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, greaterEqualsThan, lesserEqualsThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.), (.<=.), (.>=.)) where
 
 import Prelude
 
@@ -16,6 +16,8 @@ data BinaryOperator
       | NotEquals
       | GreaterThan
       | LesserThan
+      | GreaterEqualsThan
+      | LesserEqualsThan
       | And
       | Or
 
@@ -103,6 +105,12 @@ greaterThan field compared = Op (Just GreaterThan) field compared
 lesserThan ∷ ∀ compared field. field → compared → Op field compared
 lesserThan field compared = Op (Just LesserThan) field compared
 
+greaterEqualsThan ∷ ∀ compared field. field → compared → Op field compared
+greaterEqualsThan field compared = Op (Just GreaterEqualsThan) field compared
+
+lesserEqualsThan ∷ ∀ compared field. field → compared → Op field compared
+lesserEqualsThan field compared = Op (Just LesserEqualsThan) field compared
+
 and ∷ ∀ a b c d. Op a b → Op c d → Op (Op a b) (Op c d)
 and first second = Op (Just And) first second
 
@@ -122,5 +130,7 @@ infix 4 notEquals as .<>.
 infix 4 equals as .=.
 infix 4 greaterThan as .>.
 infix 4 lesserThan as .<.
+infix 4 greaterEqualsThan as .>=.
+infix 4 lesserEqualsThan as .<=.
 infixl 3 and as .&&.
 infixl 2 or as .||.

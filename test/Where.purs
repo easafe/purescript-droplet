@@ -29,6 +29,10 @@ tests = do
                         let q = select sender # from messages # wher (recipient .<. 2)
                         TM.parameterized """SELECT "sender" FROM "messages" WHERE "recipient" < $1""" $ DLIQ.buildQuery q
                         TM.result q [ { sender: 2 } ]
+                  TS.it "lesser equals than" do
+                        let q = select sender # from messages # wher (recipient .<=. 2)
+                        TM.parameterized """SELECT "sender" FROM "messages" WHERE "recipient" <= $1""" $ DLIQ.buildQuery q
+                        TM.result q [ { sender: 1}, { sender: 2 } ]
 
             TS.describe "compared to field" do
                   TS.it "equals" do
@@ -43,6 +47,10 @@ tests = do
                         let q = select sender # from messages # wher (recipient .>. 2)
                         TM.parameterized """SELECT "sender" FROM "messages" WHERE "recipient" > $1""" $ DLIQ.buildQuery q
                         TM.result q []
+                  TS.it "greater equals than" do
+                        let q = select sender # from messages # wher (recipient .>=. 2)
+                        TM.parameterized """SELECT "sender" FROM "messages" WHERE "recipient" >= $1""" $ DLIQ.buildQuery q
+                        TM.result q [{sender: 1}]
 
             TS.describe "logical operands" do
                   TS.describe "and" do
