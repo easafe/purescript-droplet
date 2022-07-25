@@ -8,6 +8,9 @@ selectKeyword = "SELECT "
 distinctKeyword ∷ String
 distinctKeyword = "DISTINCT "
 
+isNullKeyword ∷ String
+isNullKeyword = " IS NULL"
+
 isNotNullKeyword ∷ String
 isNotNullKeyword = " IS NOT NULL"
 

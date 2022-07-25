@@ -5,6 +5,7 @@ import Data.Maybe (Maybe)
 import Droplet.Language.Internal.Condition
       ( and
       , equals
+      , isNull
       , isNotNull
       , notEquals
       , greaterThan

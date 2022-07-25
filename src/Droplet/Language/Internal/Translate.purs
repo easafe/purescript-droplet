@@ -75,12 +75,12 @@ import Data.Traversable as DT
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
-import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNotNull, Not, Op(..))
+import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNull, IsNotNull, Not, Op(..))
 import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, E(..), ForeignKey, Identity, Path, PrimaryKey, Star, Table, Unique)
 import Droplet.Language.Internal.Definition as DLID
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
 import Droplet.Language.Internal.Syntax (class ConstraintsToRowList, class OnlyAggregations, class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, Add, Alter(..), As(..), Create, DefaultValues(..), Delete(..), Distinct(..), Drop, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), T(..), Union(..), Update(..), Values(..), Where(..))
-import Droplet.Language.Internal.Token (addKeyword, allKeyword, alterKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, lesserEqualsThanSymbol, greaterEqualsThanSymbol, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Token (addKeyword, allKeyword, alterKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, lesserEqualsThanSymbol, greaterEqualsThanSymbol, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, isNullKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<<<), (<>), (==), (||))
 import Prim.Boolean (False, True)
@@ -340,6 +340,8 @@ else instance (FilteredQuery (Op a b) outer, FilteredQuery (Op c d) outer) ⇒ F
 else instance FilteredQuery (Op a b) outer ⇒ FilteredQuery (Op Not (Op a b)) outer
 
 else instance (AppendPath alias name fullPath, Cons fullPath t e outer, IsNullable t) ⇒ FilteredQuery (Op IsNotNull (Path alias name)) outer
+
+else instance (AppendPath alias name fullPath, Cons fullPath t e outer, IsNullable t) ⇒ FilteredQuery (Op IsNull (Path alias name)) outer
 
 else instance
       (
@@ -653,6 +655,11 @@ else instance TranslateConditions a ⇒ TranslateConditions (Op IsNotNull a) whe
       translateConditions (Op _ _ s) = do
             q ← translateConditions s
             pure $ q <> isNotNullKeyword
+
+else instance TranslateConditions a ⇒ TranslateConditions (Op IsNull a) where
+      translateConditions (Op _ _ s) = do
+            q ← translateConditions s
+            pure $ q <> isNullKeyword
 
 else instance TranslateConditions a ⇒ TranslateConditions (Op Not a) where
       translateConditions (Op _ _ s) = do

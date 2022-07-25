@@ -1,7 +1,7 @@
 -- | Logical operators for filtering records
 -- |
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Language` instead
-module Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, OuterScope, In, class Comparison, Op(..), IsNotNull(..), isNotNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, greaterEqualsThan, lesserEqualsThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.), (.<=.), (.>=.)) where
+module Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, OuterScope, In, class Comparison, Op(..), IsNotNull(..), isNotNull, IsNull(..), isNull, in_, and, Exists(..), Not(..), not, BinaryOperator(..), equals, notEquals, greaterThan, lesserThan, greaterEqualsThan, lesserEqualsThan, or, (.&&.), (.<>.), (.=.), (.||.), (.<.), (.>.), (.<=.), (.>=.)) where
 
 import Prelude
 
@@ -29,6 +29,8 @@ data Not = Not
 
 data IsNotNull = IsNotNull
 
+data IsNull = IsNull
+
 derive instance Eq BinaryOperator
 
 -- | Wrapper for comparisons
@@ -44,6 +46,13 @@ instance (ToCondition (Op a b) fields alias, ToCondition (Op c d) fields alias) 
 
 -- | EXISTS
 else instance ToCondition (Op Exists b) fields alias
+
+-- | IS NULL
+else instance (Cons name t d fields, IsNullable t) ⇒ ToCondition (Op IsNull (Proxy name)) fields alias
+
+else instance (Cons name t d fields, IsNullable t) ⇒ ToCondition (Op IsNull (Path alias name)) fields alias
+
+else instance ToCondition (Op IsNull (Path table name)) fields alias
 
 -- | IS NOT NULL
 else instance (Cons name t d fields, IsNullable t) ⇒ ToCondition (Op IsNotNull (Proxy name)) fields alias
@@ -122,6 +131,9 @@ in_ field compared = Op Nothing In (Op Nothing field compared)
 
 not ∷ ∀ compared field. Op field compared → Op Not (Op field compared)
 not a = Op Nothing Not a
+
+isNull ∷ ∀ field. field → Op IsNull field
+isNull field = Op Nothing IsNull field
 
 isNotNull ∷ ∀ field. field → Op IsNotNull field
 isNotNull field = Op Nothing IsNotNull field
