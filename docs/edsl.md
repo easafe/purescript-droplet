@@ -378,8 +378,10 @@ selectWhereAnd = select id # from users # wher (name .=. "josh" .&&. name .<>. s
 selectWhereOr :: _
 selectWhereOr = select id # from users # wher (name .=. "mary" .||. name .=. surname) -- SELECT id FROM users WHERE name = $1 OR name = surname
 
+-- IN cannot be used with an empty array
 selectWhereIn :: _
-selectWhereIn = select id # from users # wher (id `in_` [ 3, 4, 5 ]) -- SELECT id FROM users WHERE id IN $1
+selectWhereIn = select id # from users # wher (id `in_` validIds) -- SELECT id FROM users WHERE id IN ($1, $2, $3)
+    where validIds = NonEmptyArray.fromNonEmpty $ NonEmpty 3 [ 4, 5 ]
 
 selectWhereExists :: _
 selectWhereExists = select id # from users # wher (exists $ select id # from users)

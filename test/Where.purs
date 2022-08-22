@@ -4,11 +4,12 @@ import Droplet.Language
 import Prelude hiding (not, join)
 import Test.Types
 
+import Data.Array.NonEmpty as DAN
 import Data.Maybe (Maybe(..))
+import Data.NonEmpty (NonEmpty(..))
 import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
-
 import Test.Spec (Spec)
 import Test.Spec as TS
 import Type.Proxy (Proxy(..))
@@ -74,7 +75,7 @@ tests = do
                               TM.result q [ { id: 1 }, { id: 2 } ]
 
                   TS.it "in" do
-                        let q = select id # from users # wher (id `in_` [ 3, 4, 5 ])
+                        let q = select id # from users # wher (id `in_` DAN.fromNonEmpty (NonEmpty 3 [4, 5]))
                         TM.parameterized """SELECT "id" FROM "users" WHERE "id" IN ($1, $2, $3)""" $ DLIQ.buildQuery q
                         TM.result q []
 

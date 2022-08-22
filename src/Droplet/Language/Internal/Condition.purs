@@ -5,6 +5,7 @@ module Droplet.Language.Internal.Condition (class ToCondition, class ValidCompar
 
 import Prelude
 
+import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Maybe (Maybe(..))
 import Droplet.Language.Internal.Definition (class IsNullable, class ToValue, class UnwrapDefinition, class UnwrapNullable, Path)
 import Prim.Row (class Cons)
@@ -21,7 +22,7 @@ data BinaryOperator
       | And
       | Or
 
-data In = In -- only for arrays
+data In = In -- only for non empty arrays
 
 data Exists = Exists
 
@@ -65,7 +66,7 @@ else instance ToCondition (Op IsNotNull (Path table name)) fields alias
 else instance ToCondition a fields alias ⇒ ToCondition (Op Not a) fields alias
 
 -- | IN values
-else instance ToCondition (Op a b) fields alias ⇒ ToCondition (Op In (Op a (Array b))) fields alias
+else instance ToCondition (Op a b) fields alias ⇒ ToCondition (Op In (Op a (NonEmptyArray b))) fields alias
 
 -- | Comparisons
 else instance

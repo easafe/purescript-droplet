@@ -22,6 +22,7 @@ You can edit this file as you like.
   , "integers"
   , "maybe"
   , "newtype"
+  , "nonempty"
   , "nullable"
   , "ordered-collections"
   , "partial"

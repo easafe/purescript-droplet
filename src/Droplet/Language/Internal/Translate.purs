@@ -62,6 +62,8 @@ import Control.Monad.State (State)
 import Control.Monad.State as CMS
 import Data.Array ((..), (:))
 import Data.Array as DA
+import Data.Array.NonEmpty (NonEmptyArray)
+import Data.Array.NonEmpty as DAN
 import Data.Maybe (Maybe(..))
 import Data.Maybe as DM
 import Data.Reflectable (class Reflectable)
@@ -361,7 +363,7 @@ else instance
       , UnwrapDefinition t u
       , UnwrapNullable u v
       ) ⇒
-      FilteredQuery (Op In (Op (Path alias name) (Array v))) outer
+      FilteredQuery (Op In (Op (Path alias name) (NonEmptyArray v))) outer
 
 else instance
       ( AppendPath alias name fullPath
@@ -666,11 +668,11 @@ else instance TranslateConditions a ⇒ TranslateConditions (Op Not a) where
             q ← translateConditions s
             pure $ notKeyword <> q
 
-else instance (TranslateConditions a, TranslateConditions b) ⇒ TranslateConditions (Op In (Op a (Array b))) where
+else instance (TranslateConditions a, TranslateConditions b) ⇒ TranslateConditions (Op In (Op a (NonEmptyArray b))) where
       translateConditions (Op _ _ (Op _ fd values)) = do
             q ← translateConditions fd
             parameters ← DT.traverse translateConditions values
-            pure $ q <> inKeyword <> openBracket <> DST.joinWith ", " parameters <> closeBracket
+            pure $ q <> inKeyword <> openBracket <> DST.joinWith ", " (DAN.toArray parameters) <> closeBracket
 
 else instance (TranslateConditions a, TranslateConditions b) ⇒ TranslateConditions (Op a b) where
       translateConditions (Op operator a b) = do
