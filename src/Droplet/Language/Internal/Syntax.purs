@@ -181,7 +181,7 @@ instance ToPrepare (Delete (From f fields rest))
 -- |
 -- | PREPARE statements can be employed to reuse execution plans, and thus optimize performance
 -- |
--- | Note: droplet always creates server-side parameters for literal values in queries. In the case of PREPARE, however, literals will be be parsed as statement parameters
+-- | Note: droplet always creates server-side parameters for literal values in queries. In the case of PREPARE, however, literals will be parsed as statement parameters
 prepare ∷ ∀ q. ToPrepare q ⇒ Plan → q → Prepare q
 prepare plan s = Prepare s plan
 
