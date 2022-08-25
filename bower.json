@@ -30,6 +30,7 @@
         "purescript-integers": "^v6.0.0",
         "purescript-maybe": "^v6.0.0",
         "purescript-newtype": "^v5.0.0",
+        "purescript-nonempty": "^v7.0.0",
         "purescript-nullable": "^v6.0.0",
         "purescript-ordered-collections": "^v3.0.0",
         "purescript-partial": "^v4.0.0",
