@@ -41,7 +41,10 @@ module Droplet.Language.Internal.Syntax
       , class ValidColumnNames
       , class IncludeColumn
       , class ColumnCannotBeSet
+      , class MultipleInsert
+      , class SingleInsert
       , class OnlyAggregations
+      , class ConsistentArity
       , class LimitedResults
       , class ToAdd
       , class ColumnNames
@@ -780,7 +783,7 @@ instance ToStringAgg (Path table name) (OrderBy (Path alias fd) String) columns
 
 ------------------------LIMIT---------------------------
 
-data Limit (n :: Int) rest = Limit rest
+data Limit (n ∷ Int) rest = Limit rest
 
 class ToLimit (q ∷ Type)
 
@@ -805,7 +808,6 @@ instance ToLimit (Select s projection (From fr fields (Where cd (GroupBy fg (Ord
 -- | Note: LIMIT must always follow after ORDER BY
 limit ∷ ∀ n q sql. ToLimit q ⇒ Resume q (Limit n E) sql ⇒ Proxy n → q → sql
 limit _ q = resume q $ Limit E
-
 
 ------------------------OFFSET---------------------------
 
@@ -1007,7 +1009,7 @@ data Values fieldValues rest = Values fieldValues rest
 
 data DefaultValues = DefaultValues
 
-class InsertValues (fields ∷ Row Type) (fieldNames ∷ Type) (t ∷ Type)
+class InsertValues (fields ∷ Row Type) (names ∷ Type) (t ∷ Type)
 
 -- | Multiple values, single column
 instance InsertValues fields (Proxy name) u ⇒ InsertValues fields (Proxy name) (Array u)
@@ -1045,8 +1047,45 @@ else instance
       ) ⇒
       IsDefault t name
 
-values ∷ ∀ tableName fields fieldNames fieldValues. InsertValues fields fieldNames fieldValues ⇒ fieldValues → Insert (Into tableName fields fieldNames E) → Insert (Into tableName fields fieldNames (Values fieldValues E))
-values fieldValues (Insert (Into fieldNames _)) = Insert <<< Into fieldNames $ Values fieldValues E
+-- | Makes sure single and multiple insert syntax is not mixed
+class ConsistentArity (values ∷ Type)
+
+-- | Multiple values, single column
+instance ConsistentArity (Array t)
+
+-- | Multiple values, many columns
+else instance MultipleInsert u ⇒ ConsistentArity (Array t /\ u)
+
+-- | Column list
+else instance SingleInsert u ⇒ ConsistentArity (t /\ u)
+
+-- | Single value
+else instance ConsistentArity t
+
+class MultipleInsert (t ∷ Type)
+
+instance MultipleInsert (Array t)
+
+else instance MultipleInsert t ⇒ MultipleInsert (Array t /\ u)
+
+else instance Fail (Text "Multiple INSERT value list must be array") ⇒ MultipleInsert u
+
+class SingleInsert (t ∷ Type)
+
+instance SingleInsert t ⇒ SingleInsert (t /\ u)
+
+else instance Fail (Text "Single INSERT value list must not be array") ⇒ SingleInsert (Array t)
+
+else instance SingleInsert t
+
+values ∷
+      ∀ tableName fields names fieldValues.
+      ConsistentArity fieldValues ⇒
+      InsertValues fields names fieldValues ⇒
+      fieldValues →
+      Insert (Into tableName fields names E) →
+      Insert (Into tableName fields names (Values fieldValues E))
+values fieldValues (Insert (Into names _)) = Insert <<< Into names $ Values fieldValues E
 
 defaultValues ∷ DefaultValues
 defaultValues = DefaultValues
