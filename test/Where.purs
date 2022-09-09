@@ -34,6 +34,10 @@ tests = do
                         let q = select sender # from messages # wher (recipient .<=. 2)
                         TM.parameterized """SELECT "sender" FROM "messages" WHERE "recipient" <= $1""" $ DLIQ.buildQuery q
                         TM.result q [ { sender: 1}, { sender: 2 } ]
+                  TS.it "nullable" do
+                        let q = select _by # from tags # wher (_by .=. 2)
+                        TM.parameterized """SELECT "by" FROM "tags" WHERE "by" = $1""" $ DLIQ.buildQuery q
+                        TM.result q [  ]
 
             TS.describe "compared to field" do
                   TS.it "equals" do

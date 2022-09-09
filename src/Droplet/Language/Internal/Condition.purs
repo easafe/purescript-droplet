@@ -79,7 +79,12 @@ else instance
 -- | Whether expression can be compared
 class Comparison (c ∷ Type) (fields ∷ Row Type) (alias ∷ Symbol) (t ∷ Type) | c → fields t
 
-instance (Cons name t d fields, UnwrapDefinition t u) ⇒ Comparison (Proxy name) fields alias u
+instance
+      ( Cons name t d fields
+      , UnwrapDefinition t u
+      , UnwrapNullable u v
+      ) ⇒
+      Comparison (Proxy name) fields alias v
 
 else instance
       ( Cons name t d fields
