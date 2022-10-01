@@ -68,7 +68,12 @@ class ToArrayAgg (f ∷ Type) (fields ∷ Row Type) (t ∷ Type) | f → fields 
 
 instance (Cons name t e fields, UnwrapDefinition t u) ⇒ ToArrayAgg (Proxy name) fields u
 
-instance (Cons name t e fields, UnwrapDefinition t u) ⇒ ToArrayAgg (Path alias name) fields u
+instance
+      ( AppendPath alias name fullPath
+      , Cons fullPath t e fields
+      , UnwrapDefinition t u
+      ) ⇒
+      ToArrayAgg (Path alias name) fields u
 
 -- | Function arguments must match input type
 class MatchArgumentList (input ∷ Type) (args ∷ Type) (fields ∷ Row Type)

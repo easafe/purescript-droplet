@@ -1,6 +1,6 @@
 module Test.Function where
 
-import Prelude
+import Prelude hiding (join)
 
 import Data.BigInt as DB
 import Data.Maybe (Maybe(..))
@@ -88,6 +88,10 @@ tests = TS.describe "functions" do
             TS.it "path" do
                   let q = select (array_agg (u ... id) # as u) # from (users # as u)
                   TM.notParameterized """SELECT array_agg("u"."id") AS "u" FROM "users" AS "u"""" $ DLIQ.buildQuery q
+                  TM.result q [ { u: Just [1, 2] } ]
+            TS.it "joined source" do
+                  let q = select (array_agg (u ... id) # as u) # from (join (users # as u) (messages # as t) # on (u ... id .=. t ... id))
+                  TM.notParameterized """SELECT array_agg("u"."id") AS "u" FROM "users" AS "u" INNER JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
                   TM.result q [ { u: Just [1, 2] } ]
             TS.describe "order by" do
                   TS.it "field" do

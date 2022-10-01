@@ -737,8 +737,10 @@ instance
       ToArrayAgg (OrderBy (Proxy name) (Proxy otherName)) fields w
 
 instance
-      ( Cons name t e fields
-      , Cons otherName v r fields
+      ( AppendPath alias name fullPath
+      , Cons fullPath t e fields
+      , AppendPath otherAlias otherName otherFullPath
+      , Cons otherFullPath v r fields
       , UnwrapDefinition v w
       ) ⇒
       ToArrayAgg (OrderBy (Path alias name) (Path otherAlias otherName)) fields w
