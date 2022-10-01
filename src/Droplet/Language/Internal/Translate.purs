@@ -81,8 +81,8 @@ import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNu
 import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, E(..), ForeignKey, Identity, Path, PrimaryKey, Star, Table, Unique)
 import Droplet.Language.Internal.Definition as DLID
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
-import Droplet.Language.Internal.Syntax (class ConstraintsToRowList, class OnlyAggregations, class JoinedToMaybe, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, Add, Alter(..), As(..), Create, DefaultValues(..), Delete(..), Distinct(..), Drop, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), T(..), Union(..), Update(..), Values(..), Where(..))
-import Droplet.Language.Internal.Token (addKeyword, allKeyword, alterKeyword, andKeyword, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, lesserEqualsThanSymbol, greaterEqualsThanSymbol, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, isNullKeyword, isNotNullKeyword, joinKeyword, leftKeyword, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Syntax (class ConstraintsToRowList, class JoinedToMaybe, class OnlyAggregations, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, Add, Alter(..), As(..), Create, DefaultValues(..), Delete(..), Distinct(..), Drop, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), T(..), Union(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Token (addKeyword, allKeyword, alterKeyword, andKeyword, array_aggFunctionName, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterEqualsThanSymbol, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, isNullKeyword, joinKeyword, leftKeyword, lesserEqualsThanSymbol, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<<<), (<>), (==), (||))
 import Prim.Boolean (False, True)
@@ -779,6 +779,10 @@ instance (Reflectable alias String, Reflectable name String) ⇒ NameList (Path 
 instance NameList Star where
       nameList _ = starSymbol
 
+--e.g. array_agg (field order by field)
+instance (NameList f, NameList g) ⇒ NameList (OrderBy f g) where
+      nameList (OrderBy f g) = nameList g <> orderKeyword <> byKeyword <> nameList f
+
 instance (NameList f, NameList rest) ⇒ NameList (Tuple f rest) where
       nameList (Tuple f rest) = nameList f <> comma <> nameList rest
 
@@ -1132,6 +1136,7 @@ printAggregation = case _ of
       StringAgg f rest → do
             nrest ← argumentList rest
             pure $ string_aggFunctionName <> openBracket <> nameList f <> comma <> nrest <> closeBracket
+      ArrayAgg f → pure $ array_aggFunctionName <> openBracket <> nameList f <> closeBracket
 
 printFunction ∷ ∀ inp fields args out. ArgumentList args ⇒ PgFunction inp args fields out → State QueryState String
 printFunction (PgFunction name args) = do

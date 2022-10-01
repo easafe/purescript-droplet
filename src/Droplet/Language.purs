@@ -55,6 +55,7 @@ import Droplet.Language.Internal.Function
       ( count
       , coalesce
       , string_agg
+      , array_agg
       , function
       , function'
       , Aggregate

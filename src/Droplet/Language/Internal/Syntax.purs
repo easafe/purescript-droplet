@@ -152,7 +152,7 @@ import Data.Reflectable as DR
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
 import Droplet.Language.Internal.Definition (class AppendPath, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, PrimaryKey, Star, Table(..), Unique)
-import Droplet.Language.Internal.Function (class ToStringAgg, Aggregate, PgFunction)
+import Droplet.Language.Internal.Function (class ToArrayAgg, class ToStringAgg, Aggregate, PgFunction)
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
@@ -695,7 +695,7 @@ data OrderBy f rest = OrderBy f rest
 
 data Sort (f ∷ Type) = Asc | Desc
 
--- | ORDER BY must be last statement
+-- | ORDER BY
 class ToOrderBy (f ∷ Type) (q ∷ Type)
 
 instance (SortColumnsSource s projection f columns available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f columns E))
@@ -723,6 +723,25 @@ instance
 instance ToOrderBy (Proxy name) String
 
 instance ToOrderBy (Path alias name) String
+
+instance ToOrderBy (Proxy name) (Proxy otherName)
+
+instance ToOrderBy (Path alias name) (Path otherAlias otherName)
+
+--must be typed here
+instance
+      ( Cons name t e fields
+      , Cons otherName v r fields
+      , UnwrapDefinition v w
+      ) ⇒
+      ToArrayAgg (OrderBy (Proxy name) (Proxy otherName)) fields w
+
+instance
+      ( Cons name t e fields
+      , Cons otherName v r fields
+      , UnwrapDefinition v w
+      ) ⇒
+      ToArrayAgg (OrderBy (Path alias name) (Path otherAlias otherName)) fields w
 
 --this error might not be clear for the user
 -- | Columns available for sorting this query

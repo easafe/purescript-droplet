@@ -165,6 +165,8 @@ Droplet offers a few functions built-in:
 
 * `string_agg`
 
+* `array_agg`
+
 * `coalesce`
 
 * `random`
@@ -178,9 +180,9 @@ function :: forall input output. String -> FunctionSignature input output
 -- represents a function that takes no arguments
 function' :: forall output. String -> FunctionSignature' output
 
--- example of defining array_agg for integer inputs
-int_array_agg :: FunctionSignature Int (Maybe (Array Int))
-int_array_agg = function "array_agg"
+-- example of defining func from integer to nullable integer
+func :: FunctionSignature Int (Maybe Int)
+func = function "func"
 ```
 
 Be aware that functions must be aliased

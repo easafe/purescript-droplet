@@ -5,14 +5,13 @@ import Prelude
 import Data.BigInt as DB
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
-import Droplet.Language (as, coalesce, count, from, orderBy, random, select, star, string_agg, (...))
+import Droplet.Language
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
 import Test.Types
 
 import Test.Spec (Spec)
 import Test.Spec as TS
-
 
 tests ∷ Spec Unit
 tests = TS.describe "functions" do
@@ -81,3 +80,21 @@ tests = TS.describe "functions" do
                         let q = select (string_agg (u ... name) (", " # orderBy (u ... id)) # as u) # from (users # as u)
                         TM.parameterized """SELECT string_agg("u"."name", $1 ORDER BY "u"."id") AS "u" FROM "users" AS "u"""" $ DLIQ.buildQuery q
                         TM.result q [ { u: Just "josh, mary" } ]
+      TS.describe "int_agg" do
+            TS.it "field" do
+                  let q = select (array_agg name # as u) # from users
+                  TM.notParameterized """SELECT array_agg("name") AS "u" FROM "users"""" $ DLIQ.buildQuery q
+                  TM.result q [ { u: Just [ "josh", "mary" ] } ]
+            TS.it "path" do
+                  let q = select (array_agg (u ... id) # as u) # from (users # as u)
+                  TM.notParameterized """SELECT array_agg("u"."id") AS "u" FROM "users" AS "u"""" $ DLIQ.buildQuery q
+                  TM.result q [ { u: Just [1, 2] } ]
+            TS.describe "order by" do
+                  TS.it "field" do
+                        let q = select (array_agg (id # orderBy id) # as u) # from users
+                        TM.notParameterized """SELECT array_agg("id" ORDER BY "id") AS "u" FROM "users"""" $ DLIQ.buildQuery q
+                        TM.result q [ { u: Just [1, 2]} ]
+                  TS.it "path" do
+                        let q = select (array_agg (u ... name # orderBy (u ... id)) # as u) # from (users # as u)
+                        TM.notParameterized """SELECT array_agg("u"."name" ORDER BY "u"."id") AS "u" FROM "users" AS "u"""" $ DLIQ.buildQuery q
+                        TM.result q [ { u: Just ["josh", "mary"] } ]

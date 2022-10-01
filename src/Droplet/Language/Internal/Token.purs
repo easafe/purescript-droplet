@@ -164,6 +164,9 @@ dotSymbol = "."
 string_aggFunctionName ∷ String
 string_aggFunctionName = "string_agg"
 
+array_aggFunctionName ∷ String
+array_aggFunctionName = "array_agg"
+
 simpleQuoteSymbol ∷ String
 simpleQuoteSymbol = "'"
 

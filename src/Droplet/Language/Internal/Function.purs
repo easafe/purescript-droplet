@@ -7,8 +7,10 @@ module Droplet.Language.Internal.Function
       , function'
       , string_agg
       , class ToStringAgg
+      , class ToArrayAgg
       , class ToCoalesce
       , PgFunction(..)
+      , array_agg
       , class MatchArgument
       , function
       , class MatchArgumentList
@@ -22,7 +24,7 @@ import Prelude
 import Data.BigInt (BigInt)
 import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
-import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, Default, E, Path, Star)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, E, Path, Star)
 import Prim.Row (class Cons)
 import Type.Equality (class TypeEquals)
 import Type.Proxy (Proxy)
@@ -32,6 +34,7 @@ import Type.Proxy (Proxy)
 data Aggregate input rest (fields ∷ Row Type) (output ∷ Type)
       = Count input
       | StringAgg input rest
+      | ArrayAgg input
 
 -- | Declares a functions
 data PgFunction (input ∷ Type) args (fields ∷ Row Type) (output ∷ Type) = PgFunction String args
@@ -60,6 +63,12 @@ class TextColumn (t ∷ Type)
 instance TextColumn String
 
 instance TextColumn (Maybe String)
+
+class ToArrayAgg (f ∷ Type) (fields ∷ Row Type) (t ∷ Type) | f → fields t
+
+instance (Cons name t e fields, UnwrapDefinition t u) ⇒ ToArrayAgg (Proxy name) fields u
+
+instance (Cons name t e fields, UnwrapDefinition t u) ⇒ ToArrayAgg (Path alias name) fields u
 
 -- | Function arguments must match input type
 class MatchArgumentList (input ∷ Type) (args ∷ Type) (fields ∷ Row Type)
@@ -102,6 +111,10 @@ count = Count
 --Maybe String because null
 string_agg ∷ ∀ f rest fields. ToStringAgg f rest fields ⇒ f → rest → Aggregate f rest fields (Maybe String)
 string_agg f rest = StringAgg f rest
+
+--Maybe t because null
+array_agg ∷ ∀ f t fields. ToArrayAgg f fields t ⇒ f → Aggregate f E fields (Maybe (Array t))
+array_agg f = ArrayAgg f
 
 random ∷ FunctionSignature' Number
 random = function' "random"
