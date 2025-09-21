@@ -530,7 +530,7 @@ else instance Reflectable name String ⇒ TranslateColumn (As name Boolean) wher
 else instance (Reflectable name String, TranslateConditions (Op one another)) ⇒ TranslateColumn (As name (Op one another)) where
       translateColumn (As conditions) = do
             n ← translateConditions conditions
-            pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
+            pure $ n <> asKeyword <> quote (Proxy ∷ _ name)
 
 else instance (Reflectable name String, NameList inp, ArgumentList rest) ⇒ TranslateColumn (As name (Aggregate inp rest fields out)) where
       translateColumn (As agg) = do

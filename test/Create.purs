@@ -2,10 +2,10 @@ module Test.Create where
 
 import Droplet.Language
 import Prelude
+import Prim hiding (Constraint)
 import Test.Types
 
 import Data.BigInt (BigInt)
-import Prim hiding (Constraint)
 import Data.Date (Date)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
@@ -18,7 +18,6 @@ import Test.Spec as TS
 tests ∷ Spec Unit
 tests =
       TS.describe "create" do
-            pure unit
             TS.describe "table" do
                   TS.it "plain types" do
                         let q = create # table (Table ∷ Table "test" (id ∷ Int, name ∷ String, set ∷ Boolean, n ∷ Number, bigId ∷ BigInt, date ∷ Date, dateTime ∷ DateTime))
