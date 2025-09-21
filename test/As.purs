@@ -38,6 +38,10 @@ tests =
                         let q = select (4 # as n) # from (select (4 # as n) # from users # wher (id .=. id) # as u)
                         TM.notParameterized """SELECT 4 AS "n" FROM (SELECT 4 AS "n" FROM "users" WHERE "id" = "id") AS "u"""" $ DLIQ.buildQuery q
                         TM.result q [ { n: 4 }, { n: 4 } ]
+                  TS.it "boolean" do
+                        let q = select (false # as n) # from (select (true # as n) # from users # wher (id .=. id) # as u)
+                        TM.notParameterized """SELECT false AS "n" FROM (SELECT true AS "n" FROM "users" WHERE "id" = "id") AS "u"""" $ DLIQ.buildQuery q
+                        TM.result q [ { n: false }, { n: false } ]
                   TS.it "field" do
                         let q = select id # from (select id # from messages # wher (id .=. id) # as t)
                         TM.notParameterized """SELECT "id" FROM (SELECT "id" FROM "messages" WHERE "id" = "id") AS "t"""" $ DLIQ.buildQuery q

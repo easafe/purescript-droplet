@@ -147,8 +147,7 @@ import Prelude
 import Prim hiding (Constraint)
 
 import Data.Maybe (Maybe(..))
-import Data.Reflectable (class Reflectable, class Reifiable)
-import Data.Reflectable as DR
+import Data.Reflectable (class Reifiable)
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
 import Droplet.Language.Internal.Definition (class AppendPath, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, PrimaryKey, Star, Table(..), Unique)
@@ -159,7 +158,7 @@ import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Beside, Quote, QuoteLabel, Text)
 import Type.Data.Boolean (class And, class If)
-import Type.Proxy (Proxy(..))
+import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
 
 ----------------------PREPARE----------------------------
@@ -290,6 +289,8 @@ instance ToSelect (Path table name)
 
 instance ToSelect (As alias Int)
 
+instance ToSelect (As alias Boolean)
+
 instance ToSelect (As alias (Proxy name))
 
 instance ToSelect (As alias (Path table name))
@@ -314,6 +315,8 @@ instance ToSubExpression (Proxy name)
 instance ToSubExpression (Path table name)
 
 instance ToSubExpression (As alias Int)
+
+instance ToSubExpression (As alias Boolean)
 
 instance ToSubExpression (As alias (Proxy name))
 
@@ -672,6 +675,8 @@ newtype As (alias ∷ Symbol) rest = As rest
 class ToAs (q ∷ Type) (alias ∷ Symbol) | q → alias
 
 instance ToAs Int alias
+
+instance ToAs Boolean alias
 
 instance ToAs (Table name fields) alias
 
@@ -1261,8 +1266,11 @@ else instance
       ) ⇒
       ToProjection (Path alias name) fields aliases projection
 
--- | Aliased literal
+-- | Aliased int literal
 else instance Cons alias Int () projection ⇒ ToProjection (As alias Int) fields aliases projection
+
+-- | Aliased boolean literal
+else instance Cons alias Boolean () projection ⇒ ToProjection (As alias Boolean) fields aliases projection
 
 -- | Aliased aggregation
 else instance Cons alias t () projection ⇒ ToProjection (As alias (Aggregate inp rest fields t)) fields aliases projection

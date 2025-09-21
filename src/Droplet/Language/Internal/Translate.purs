@@ -525,6 +525,9 @@ else instance TranslateColumn Star where
 else instance Reflectable name String ⇒ TranslateColumn (As name Int) where
       translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
 
+else instance Reflectable name String ⇒ TranslateColumn (As name Boolean) where
+      translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
+
 else instance (Reflectable name String, NameList inp, ArgumentList rest) ⇒ TranslateColumn (As name (Aggregate inp rest fields out)) where
       translateColumn (As agg) = do
             q ← printAggregation agg
