@@ -34,9 +34,9 @@ type Migration =
 -- | All migrations run in a single transaction. Migrations that have already been run are skipped
 migrate ∷ Pool → Array Migration → Aff Unit
 migrate pool migrations = do
-      output <- DDIQ.withTransaction pool $ \connection -> do
+      output ← DDIQ.withTransaction pool $ \connection → do
             DDIM.createMigrationTable connection
-            identifiers <- DDIM.fetchAlreadyRun connection
+            identifiers ← DDIM.fetchAlreadyRun connection
             DF.traverse_ (runMigration connection) $ skipAlreadyRun identifiers migrations
       case output of
             Left err → DDIM.throw err
@@ -49,4 +49,5 @@ runMigration connection migration = do
 
 skipAlreadyRun ∷ Set String → Array Migration → Array Migration
 skipAlreadyRun identifiers = DA.filter skip
-      where skip migration = not $ DS.member migration.identifier identifiers
+      where
+      skip migration = not $ DS.member migration.identifier identifiers

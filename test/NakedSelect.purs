@@ -12,7 +12,6 @@ import Type.Proxy(Proxy(..))
 import Test.Spec (Spec)
 import Test.Spec as TS
 
-
 tests ∷ Spec Unit
 tests =
       TS.describe "naked select" do

@@ -225,7 +225,6 @@ else instance
 
 else instance NoAggregations s True
 
-
 -- | Check aggregation results
 -- |
 -- | Having a separated type class leads to better error messages
@@ -527,6 +526,11 @@ else instance Reflectable name String ⇒ TranslateColumn (As name Int) where
 
 else instance Reflectable name String ⇒ TranslateColumn (As name Boolean) where
       translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
+
+else instance (Reflectable name String, TranslateConditions (Op one another)) ⇒ TranslateColumn (As name (Op one another)) where
+      translateColumn (As conditions) = do
+            n ← translateConditions conditions
+            pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
 
 else instance (Reflectable name String, NameList inp, ArgumentList rest) ⇒ TranslateColumn (As name (Aggregate inp rest fields out)) where
       translateColumn (As agg) = do
@@ -907,7 +911,7 @@ instance (ArgumentList f, Translate rest) ⇒ Translate (OrderBy f rest) where
 instance (Reflectable n Int, Translate rest) ⇒ Translate (Limit n rest) where
       translate (Limit rest) = do
             q ← translate rest
-            pure $ limitKeyword <> show (DR.reflectType (Proxy :: _ n)) <> q
+            pure $ limitKeyword <> show (DR.reflectType (Proxy ∷ _ n)) <> q
 
 -- | OFFSET
 instance Translate rest ⇒ Translate (Offset rest) where
@@ -995,8 +999,8 @@ instance (Reflectable tableName String, Reflectable fieldName String) ⇒ ToCons
 instance ToConstraintDefinition (Constraint (Composite n) t) where
       toConstraintDefinition _ = ""
 
-else instance (Reflectable name String, ToConstraintDefinition t) => ToConstraintDefinition (Constraint name t) where
-      toConstraintDefinition _ = space <> constraintKeyword <> quote (Proxy :: _ name) <> toConstraintDefinition (Proxy :: _ t)
+else instance (Reflectable name String, ToConstraintDefinition t) ⇒ ToConstraintDefinition (Constraint name t) where
+      toConstraintDefinition _ = space <> constraintKeyword <> quote (Proxy ∷ _ name) <> toConstraintDefinition (Proxy ∷ _ t)
 
 instance (ToConstraintDefinition some, ToConstraintDefinition more) ⇒ ToConstraintDefinition (Tuple some more) where
       toConstraintDefinition _ = toConstraintDefinition (Proxy ∷ _ some) <> toConstraintDefinition (Proxy ∷ _ more)

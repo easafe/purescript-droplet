@@ -291,6 +291,8 @@ instance ToSelect (As alias Int)
 
 instance ToSelect (As alias Boolean)
 
+instance ToSelect (As alias (Op one another))
+
 instance ToSelect (As alias (Proxy name))
 
 instance ToSelect (As alias (Path table name))
@@ -683,6 +685,8 @@ instance ToAs (Table name fields) alias
 instance ToAs (Proxy name) alias
 
 instance ToAs (Path table name) alias
+
+instance ToAs (Op one another) alias
 
 instance ToAs (Aggregate inp rest fields out) alias
 
@@ -1271,6 +1275,9 @@ else instance Cons alias Int () projection ⇒ ToProjection (As alias Int) field
 
 -- | Aliased boolean literal
 else instance Cons alias Boolean () projection ⇒ ToProjection (As alias Boolean) fields aliases projection
+
+-- | Aliased boolean literal
+else instance Cons alias Boolean () projection ⇒ ToProjection (As alias (Op one another)) fields aliases projection
 
 -- | Aliased aggregation
 else instance Cons alias t () projection ⇒ ToProjection (As alias (Aggregate inp rest fields t)) fields aliases projection

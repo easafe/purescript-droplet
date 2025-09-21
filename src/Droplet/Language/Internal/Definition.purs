@@ -77,14 +77,14 @@ foreign import showForeigner ∷ Foreign → String
 -- | Marks the query end
 data E = E
 
-data C :: forall k. k -> Type -> Type
+data C ∷ ∀ k. k → Type → Type
 data C n t
 
 type Empty = ""
 
 type Dot = "."
 
-data Composite (name :: Symbol)
+data Composite (name ∷ Symbol)
 
 -- | A trick to mark left joined columns as nullable
 data Joined (t ∷ Type)
@@ -103,12 +103,12 @@ data PrimaryKey
 
 data Unique
 
-data ForeignKey (field :: Symbol) (table :: Type)
+data ForeignKey (field ∷ Symbol) (table ∷ Type)
 
 data Constraint ∷ ∀ n. n → Type → Type
 data Constraint name t
 
-data Column (t :: Type) (constraint :: Type) = Column
+data Column (t ∷ Type) (constraint ∷ Type) = Column
 
 data Table (name ∷ Symbol) (fields ∷ Row Type) = Table
 
@@ -289,7 +289,6 @@ instance (Append alias Dot path, Append path name fullPath) ⇒ AppendPath alias
 -- | Required only if using migrations; other cases are handled by `ToValue`
 class ToConstraintValue (t ∷ Type) where
       toConstraintValue ∷ Proxy t → Foreign
-
 
 -- | String representation of field types
 class ToType (t ∷ Type) where

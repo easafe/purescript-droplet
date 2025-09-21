@@ -2,14 +2,13 @@ module Test.As where
 
 import Droplet.Language
 import Prelude
-import Test.Types (b, id, messages, n, name, t, u, users)
 
 import Data.Maybe (Maybe(..))
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
-
 import Test.Spec (Spec)
 import Test.Spec as TS
+import Test.Types (b, created, id, messages, n, name, t, tags, u, users)
 import Type.Proxy (Proxy(..))
 
 tests ∷ Spec Unit
@@ -20,6 +19,10 @@ tests =
                         let q = select (id # as (Proxy ∷ Proxy "AbCd")) # from users
                         TM.notParameterized """SELECT "id" AS "AbCd" FROM "users"""" $ DLIQ.buildQuery q
                         TM.result q [ { "AbCd": 1 }, { "AbCd": 2 } ]
+                  TS.it "comparision" do
+                        let q = select (isNotNull created # as n) # from tags
+                        TM.notParameterized """SELECT "created" IS NOT NULL AS "n" FROM "tags"""" $ DLIQ.buildQuery q
+                        TM.result q [ { "n": true }, { "n": true } ]
             TS.describe "named table" do
                   TS.it "field" do
                         let q = select id # from (users # as u)

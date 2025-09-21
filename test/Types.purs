@@ -1,4 +1,49 @@
-module Test.Types where
+module Test.Types
+  ( CompositeT
+  , DefaultColumns
+  , DoublePrimaryKey
+  , DoublePrimaryKeyTable
+  , MaybeKeys
+  , Messages
+  , Migrated
+  , RecipientColumn(..)
+  , SenderColumn(..)
+  , UniqueValues
+  , Users
+  , UsersTable
+  , _by
+  , b
+  , bigB
+  , birthday
+  , composite
+  , created
+  , date
+  , date_part_age
+  , date_part_age'
+  , defaultColumns
+  , doublePrimaryKey
+  , fire_missiles
+  , id
+  , joined
+  , maybeKeys
+  , messages
+  , migrated
+  , n
+  , name
+  , recipient
+  , secondDate
+  , secondId
+  , sender
+  , sent
+  , surname
+  , t
+  , tags
+  , u
+  , uniqueValues
+  , users
+  , utc_now
+  )
+  where
 
 import Prelude
 
