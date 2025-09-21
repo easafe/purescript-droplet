@@ -22,7 +22,7 @@ tests =
                   TS.it "comparision" do
                         let q = select (isNotNull created # as n) # from tags
                         TM.notParameterized """SELECT "created" IS NOT NULL AS "n" FROM "tags"""" $ DLIQ.buildQuery q
-                        TM.result q [ { "n": true }, { "n": true } ]
+                        TM.result q [ { "n": false }]
             TS.describe "named table" do
                   TS.it "field" do
                         let q = select id # from (users # as u)
