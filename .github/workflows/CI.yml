@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '24'
           cache: 'npm'
 
       - uses: purescript-contrib/setup-purescript@main
@@ -42,11 +42,11 @@ jobs:
         # have changed. If you do not want to cache compiled output, remove
         # the `output` path.
         with:
-          key: ${{ runner.os }}-spago-${{ hashFiles('**/*.dhall') }}
+          key: ${{ runner.os }}-spago-${{ hashFiles('**/*.yaml') }}
           path: |
             .spago
             output
       - run: psql -f test/sql/index.sql postgresql://droplet:droplet@localhost:5432/droplet
       - run: npm install
       - run: spago build
-      - run: spago test --no-install
+      - run: spago test
