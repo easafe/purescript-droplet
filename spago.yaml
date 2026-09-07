@@ -1,0 +1,37 @@
+package:
+  dependencies:
+    - aff
+    - arrays
+    - bifunctors
+    - bigints
+    - datetime
+    - debug
+    - effect
+    - either
+    - enums
+    - exceptions
+    - foldable-traversable
+    - foreign
+    - foreign-object
+    - integers
+    - maybe
+    - newtype
+    - nonempty
+    - nullable
+    - ordered-collections
+    - partial
+    - prelude
+    - profunctor
+    - record
+    - spec
+    - strings
+    - transformers
+    - tuples
+    - type-equality
+    - typelevel-prelude
+    - unsafe-coerce
+  name: droplet
+workspace:
+  extraPackages: {}
+  packageSet:
+    url: https://raw.githubusercontent.com/purescript/package-sets/psc-0.15.0-20220504/packages.json
