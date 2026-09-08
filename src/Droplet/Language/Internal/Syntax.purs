@@ -147,7 +147,6 @@ import Prelude
 import Prim hiding (Constraint)
 
 import Data.Maybe (Maybe(..))
-import Data.Reflectable (class Reifiable)
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
 import Droplet.Language.Internal.Definition (class AppendPath, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, PrimaryKey, Star, Table(..), Unique)
@@ -1222,22 +1221,22 @@ full RETURNING syntax supported by droplet
       field | [, ...]
 -}
 
-newtype Returning f = Returning f
+newtype Returning fieldNames = Returning fieldNames
 
-class ToReturning (f ∷ Type) (q ∷ Type) | q → f
+class ToReturning (f ∷ Type) (q ∷ Type) (r ∷ Type) | q → f, q → r where
+      returning ∷ f → q → r
 
-instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields fn (Values fv E)))
+instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields fn (Values fv E))) (Insert (Into tn fields fn (Values fv (Returning f)))) where
+      returning fieldNames (Insert (Into fields (Values fv E)))  = Insert (Into fields (Values fv (Returning fieldNames)))
 
-instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields DefaultValues E))
+instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields DefaultValues E)) (Insert (Into tn fields DefaultValues (Returning f))) where
+      returning fieldNames (Insert (Into fields E)) = Insert (Into fields (Returning fieldNames))
 
 class ReturningColumns (f ∷ Type) (fields ∷ Row Type) | f → fields
 
 instance Cons name t e fields ⇒ ReturningColumns (Proxy name) fields
 
 instance (ReturningColumns a fields, ReturningColumns b fields) ⇒ ReturningColumns (a /\ b) fields
-
-returning ∷ ∀ f q sql. ToReturning f q ⇒ Resume q (Returning f) sql ⇒ f → q → sql
-returning f q = resume q $ Returning f
 
 ------------------------Projection machinery---------------------------
 
@@ -1579,15 +1578,6 @@ else instance Resume rest b c ⇒ Resume (Offset rest) b (Offset c) where
 
 else instance Resume rest b c ⇒ Resume (Update n f rest) b (Update n f c) where
       resume (Update rest) b = Update $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Insert rest) b (Insert c) where
-      resume (Insert rest) b = Insert $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Into n f fd rest) b (Into n f fd c) where
-      resume (Into f rest) b = Into f $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Values v rest) b (Values v c) where
-      resume (Values v rest) b = Values v $ resume rest b
 
 else instance Resume rest b c ⇒ Resume (Set p rest) b (Set p c) where
       resume (Set p rest) b = Set p $ resume rest b

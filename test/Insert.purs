@@ -33,11 +33,6 @@ tests = do
                               let q = insert # into doublePrimaryKey defaultValues
                               TM.notParameterized """INSERT INTO "double_primary_key" DEFAULT VALUES""" $ DLIQ.buildQuery q
                               TM.result' q []
-                        -- need some different design for this
-                        -- TS.it "many" do
-                        --       let q = insert # into users (name /\ surname /\ joined) # values ["josh" /\ "a" /\ TM.makeDate 2000 3 4, "josh" /\ "a" /\ Default]
-                        --       TM.parameterized """INSERT INTO "users"("name", "surname", "joined") VALUES ($1, $2, $3), ($4, $5, DEFAULT)""" $ DLIQ.buildQuery q
-                        --       TM.result' q []
                   TS.describe "multiple" do
                         TS.it "all fields" do
                               let
