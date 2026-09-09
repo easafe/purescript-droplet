@@ -761,6 +761,7 @@ else instance
             otherQ ← translate rest
             pure $ insertKeyword
                   <> quote (Proxy ∷ _ name)
+                  <> space
                   <> openBracket
                   <> nameList fieldNames
                   <> closeBracket
@@ -993,7 +994,7 @@ instance ToConstraintDefinition PrimaryKey where
       toConstraintDefinition _ = primaryKeyKeyword
 
 instance (Reflectable tableName String, Reflectable fieldName String) ⇒ ToConstraintDefinition (ForeignKey fieldName (Table tableName f)) where
-      toConstraintDefinition _ = referencesKeyword <> quote (Proxy ∷ _ tableName) <> openBracket <> quote (Proxy ∷ _ fieldName) <> closeBracket
+      toConstraintDefinition _ = referencesKeyword <> quote (Proxy ∷ _ tableName) <> space <> openBracket <> quote (Proxy ∷ _ fieldName) <> closeBracket
 
 --ignore composites as they are special babies
 instance ToConstraintDefinition (Constraint (Composite n) t) where
@@ -1088,7 +1089,7 @@ instance ToReferenceDefinition Nil where
       toReferenceDefinition _ = ""
 
 else instance (Reflectable tableName String, CompositeFieldList (Cons fieldName (Composite tableName) rest)) ⇒ ToReferenceDefinition (Cons fieldName (Composite tableName) rest) where
-      toReferenceDefinition _ = referencesKeyword <> quote (Proxy ∷ _ tableName) <> openBracket <> DST.joinWith comma (compositeFieldList (Proxy ∷ _ (Cons fieldName (Composite tableName) rest))) <> closeBracket
+      toReferenceDefinition _ = referencesKeyword <> quote (Proxy ∷ _ tableName) <> space <> openBracket <> DST.joinWith comma (compositeFieldList (Proxy ∷ _ (Cons fieldName (Composite tableName) rest))) <> closeBracket
 
 -- |
 class CompositeFieldList (fields ∷ RowList Type) where

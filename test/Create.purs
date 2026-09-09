@@ -42,7 +42,7 @@ tests =
                               void $ TM.resultOnly q
                         TS.it "foreign key" do
                               let q = create # table (Table ∷ Table "test" (id ∷ Maybe Int, fk ∷ Column Int (ForeignKey "id" UsersTable)))
-                              TM.notParameterized """CREATE TABLE "test" ("fk" INTEGER NOT NULL REFERENCES "users"("id"), "id" INTEGER)""" $ DLIQ.buildQuery q
+                              TM.notParameterized """CREATE TABLE "test" ("fk" INTEGER NOT NULL REFERENCES "users" ("id"), "id" INTEGER)""" $ DLIQ.buildQuery q
                               void $ TM.resultOnly q
                         TS.describe "composite" do
                               TS.it "primary key" do
@@ -51,4 +51,4 @@ tests =
                                     void $ TM.resultOnly q
                               TS.it "foreign key" do
                                     let q = create # table (Table ∷ Table "test" (id ∷ Maybe Int, fk1 ∷ Column Int (Constraint (Composite "fk") (ForeignKey "id" DoublePrimaryKeyTable)), fk2 ∷ Column Int (Constraint (Composite "fk") (ForeignKey "second_id" DoublePrimaryKeyTable))))
-                                    TM.notParameterized """CREATE TABLE "test" ("fk1" INTEGER NOT NULL, "fk2" INTEGER NOT NULL, "id" INTEGER, CONSTRAINT "fk" FOREIGN KEY("fk1", "fk2") REFERENCES "double_primary_key"("id", "second_id"))""" $ DLIQ.buildQuery q
+                                    TM.notParameterized """CREATE TABLE "test" ("fk1" INTEGER NOT NULL, "fk2" INTEGER NOT NULL, "id" INTEGER, CONSTRAINT "fk" FOREIGN KEY("fk1", "fk2") REFERENCES "double_primary_key" ("id", "second_id"))""" $ DLIQ.buildQuery q
