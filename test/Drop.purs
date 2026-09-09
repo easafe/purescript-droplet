@@ -14,13 +14,13 @@ import Test.Model (connectionInfo)
 import Test.Model as TM
 import Test.Spec (Spec)
 import Test.Spec as TS
-            
+
 tests ∷ Spec Unit
 tests =
       TS.describe "drop" do
             TS.it "table" do
                   pool ← liftEffect $ DD.newPool connectionInfo
                   void $ DD.withTransaction pool $ \c → DDU.unsafeExecute c Nothing "CREATE TABLE test (id INTEGER)" {}
-                  let q = drop # table (Table :: Table "test" (id :: Int))
+                  let q = drop # table (Table ∷ Table "test" (id ∷ Int))
                   TM.notParameterized """DROP TABLE "test"""" $ DLIQ.buildQuery q
                   void $ TM.resultOnly q

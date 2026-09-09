@@ -22,7 +22,7 @@ tests =
                   TS.it "comparision" do
                         let q = select (isNotNull created # as n) # from tags
                         TM.notParameterized """SELECT "created" IS NOT NULL AS "n" FROM "tags"""" $ DLIQ.buildQuery q
-                        TM.result q [ { "n": false }]
+                        TM.result q [ { "n": false } ]
             TS.describe "named table" do
                   TS.it "field" do
                         let q = select id # from (users # as u)
@@ -34,7 +34,7 @@ tests =
                         TM.result q [ { id: 1 }, { id: 2 } ]
             TS.describe "named queries" do
                   TS.it "subquery column" do
-                        let q = select (select id # from users # wher (name .=. "mary") # orderBy id # limit (Proxy :: _ 1) # as b) # from users # wher (id .=. 1 .||. id .=. 2)
+                        let q = select (select id # from users # wher (name .=. "mary") # orderBy id # limit (Proxy ∷ _ 1) # as b) # from users # wher (id .=. 1 .||. id .=. 2)
                         TM.parameterized """SELECT (SELECT "id" FROM "users" WHERE "name" = $1 ORDER BY "id" LIMIT 1) AS "b" FROM "users" WHERE ("id" = $2 OR "id" = $3)""" $ DLIQ.buildQuery q
                         TM.result q [ { b: Just 2 }, { b: Just 2 } ]
                   TS.it "scalar" do

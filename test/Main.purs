@@ -31,7 +31,7 @@ import Test.Alter as TAL
 import Test.Where as TW
 
 main ∷ Effect Unit
-main = EA.launchAff_ $ TSR.runSpec [consoleReporter] do
+main = EA.launchAff_ $ TSR.runSpec [ consoleReporter ] do
       TUS.tests
       TI.tests
       TU.tests

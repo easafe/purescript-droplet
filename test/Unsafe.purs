@@ -16,8 +16,7 @@ import Test.Model as TM
 
 import Test.Spec (Spec)
 import Test.Spec as TS
-import Test.Spec.Assertions  as TSA
-
+import Test.Spec.Assertions as TSA
 
 tests ∷ Spec Unit
 tests = do

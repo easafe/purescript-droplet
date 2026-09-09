@@ -1,49 +1,48 @@
 module Test.Types
-  ( CompositeT
-  , DefaultColumns
-  , DoublePrimaryKey
-  , DoublePrimaryKeyTable
-  , MaybeKeys
-  , Messages
-  , Migrated
-  , RecipientColumn(..)
-  , SenderColumn(..)
-  , UniqueValues
-  , Users
-  , UsersTable
-  , _by
-  , b
-  , bigB
-  , birthday
-  , composite
-  , created
-  , date
-  , date_part_age
-  , date_part_age'
-  , defaultColumns
-  , doublePrimaryKey
-  , fire_missiles
-  , id
-  , joined
-  , maybeKeys
-  , messages
-  , migrated
-  , n
-  , name
-  , recipient
-  , secondDate
-  , secondId
-  , sender
-  , sent
-  , surname
-  , t
-  , tags
-  , u
-  , uniqueValues
-  , users
-  , utc_now
-  )
-  where
+      ( CompositeT
+      , DefaultColumns
+      , DoublePrimaryKey
+      , DoublePrimaryKeyTable
+      , MaybeKeys
+      , Messages
+      , Migrated
+      , RecipientColumn(..)
+      , SenderColumn(..)
+      , UniqueValues
+      , Users
+      , UsersTable
+      , _by
+      , b
+      , bigB
+      , birthday
+      , composite
+      , created
+      , date
+      , date_part_age
+      , date_part_age'
+      , defaultColumns
+      , doublePrimaryKey
+      , fire_missiles
+      , id
+      , joined
+      , maybeKeys
+      , messages
+      , migrated
+      , n
+      , name
+      , recipient
+      , secondDate
+      , secondId
+      , sender
+      , sent
+      , surname
+      , t
+      , tags
+      , u
+      , uniqueValues
+      , users
+      , utc_now
+      ) where
 
 import Prelude
 
@@ -103,8 +102,7 @@ type DoublePrimaryKey =
 type DoublePrimaryKeyTable = Table "double_primary_key" DoublePrimaryKey
 
 type Migrated =
-      ( id ∷ Column Int PrimaryKey)
-
+      (id ∷ Column Int PrimaryKey)
 
 type CompositeT =
       ( id ∷ Column Int (Identity /\ Constraint (Composite "pk_composite") PrimaryKey)

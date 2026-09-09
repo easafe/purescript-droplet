@@ -1227,7 +1227,7 @@ class ToReturning (f ∷ Type) (q ∷ Type) (r ∷ Type) | q → f, q → r wher
       returning ∷ f → q → r
 
 instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields fn (Values fv E))) (Insert (Into tn fields fn (Values fv (Returning f)))) where
-      returning fieldNames (Insert (Into fields (Values fv E)))  = Insert (Into fields (Values fv (Returning fieldNames)))
+      returning fieldNames (Insert (Into fields (Values fv E))) = Insert (Into fields (Values fv (Returning fieldNames)))
 
 instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields DefaultValues E)) (Insert (Into tn fields DefaultValues (Returning f))) where
       returning fieldNames (Insert (Into fields E)) = Insert (Into fields (Returning fieldNames))

@@ -10,7 +10,6 @@ import Test.Types (date_part_age, id, date, messages, n, name, t, u, users)
 import Test.Spec (Spec)
 import Test.Spec as TS
 
-
 tests ∷ Spec Unit
 tests =
       TS.describe "order by" do

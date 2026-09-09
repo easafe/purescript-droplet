@@ -88,17 +88,17 @@ tests = TS.describe "functions" do
             TS.it "path" do
                   let q = select (array_agg (u ... id) # as u) # from (users # as u)
                   TM.notParameterized """SELECT array_agg("u"."id") AS "u" FROM "users" AS "u"""" $ DLIQ.buildQuery q
-                  TM.result q [ { u: Just [1, 2] } ]
+                  TM.result q [ { u: Just [ 1, 2 ] } ]
             TS.it "joined source" do
                   let q = select (array_agg (u ... id) # as u) # from (join (users # as u) (messages # as t) # on (u ... id .=. t ... id))
                   TM.notParameterized """SELECT array_agg("u"."id") AS "u" FROM "users" AS "u" INNER JOIN "messages" AS "t" ON "u"."id" = "t"."id"""" $ DLIQ.buildQuery q
-                  TM.result q [ { u: Just [1, 2] } ]
+                  TM.result q [ { u: Just [ 1, 2 ] } ]
             TS.describe "order by" do
                   TS.it "field" do
                         let q = select (array_agg (id # orderBy id) # as u) # from users
                         TM.notParameterized """SELECT array_agg("id" ORDER BY "id") AS "u" FROM "users"""" $ DLIQ.buildQuery q
-                        TM.result q [ { u: Just [1, 2]} ]
+                        TM.result q [ { u: Just [ 1, 2 ] } ]
                   TS.it "path" do
                         let q = select (array_agg (u ... name # orderBy (u ... id)) # as u) # from (users # as u)
                         TM.notParameterized """SELECT array_agg("u"."name" ORDER BY "u"."id") AS "u" FROM "users" AS "u"""" $ DLIQ.buildQuery q
-                        TM.result q [ { u: Just ["josh", "mary"] } ]
+                        TM.result q [ { u: Just [ "josh", "mary" ] } ]

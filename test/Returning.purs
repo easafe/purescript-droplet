@@ -11,7 +11,6 @@ import Test.Model as TM
 import Test.Spec (Spec)
 import Test.Spec as TS
 
-
 tests ∷ Spec Unit
 tests = do
       TS.describe "returning" do

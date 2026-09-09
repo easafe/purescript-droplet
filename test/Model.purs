@@ -48,7 +48,7 @@ parameterized s (Query _ q parameters) = case parameters of
 -- | Compares query return to expected result
 -- |
 -- | Default records are inserted before running the query. Use result' if that's not the intended behavior
-result ∷ ∀ t51 t52 t53. Nub t52 t52 => ToQuery t51 t52 ⇒ RowToList t52 t53 ⇒ FromResult t53 (Record t52) ⇒ EqRecord t53 t52 ⇒ ShowRecordFields t53 t52 ⇒ t51 → Array (Record t52) → Aff Unit
+result ∷ ∀ t51 t52 t53. Nub t52 t52 ⇒ ToQuery t51 t52 ⇒ RowToList t52 t53 ⇒ FromResult t53 (Record t52) ⇒ EqRecord t53 t52 ⇒ ShowRecordFields t53 t52 ⇒ t51 → Array (Record t52) → Aff Unit
 result q o = do
       pool ← liftEffect $ DD.newPool connectionInfo
       DD.withConnection pool case _ of
@@ -59,7 +59,7 @@ result q o = do
                   truncateTables connection
                   TSA.shouldEqual (Right o) r
 
-result' ∷ ∀ t51 t52 t53. Nub t52 t52 => ToQuery t51 t52 ⇒ RowToList t52 t53 ⇒ FromResult t53 (Record t52) ⇒ EqRecord t53 t52 ⇒ ShowRecordFields t53 t52 ⇒ t51 → Array (Record t52) → Aff Unit
+result' ∷ ∀ t51 t52 t53. Nub t52 t52 ⇒ ToQuery t51 t52 ⇒ RowToList t52 t53 ⇒ FromResult t53 (Record t52) ⇒ EqRecord t53 t52 ⇒ ShowRecordFields t53 t52 ⇒ t51 → Array (Record t52) → Aff Unit
 result' q o = do
       pool ← liftEffect $ DD.newPool connectionInfo
       DD.withConnection pool case _ of
@@ -86,7 +86,7 @@ resultOnly q = do
                               TSA.fail $ "Error running query: " <> show e
                               pure []
 
-unsafeResult ∷ ∀ re parameters par result. Nub result result => RowToList result re ⇒ RowToList parameters par ⇒ ToParameters parameters par ⇒ FromResult re (Record result) ⇒ EqRecord re result ⇒ ShowRecordFields re result ⇒ Maybe Plan → String → Record parameters → Array (Record result) → Aff Unit
+unsafeResult ∷ ∀ re parameters par result. Nub result result ⇒ RowToList result re ⇒ RowToList parameters par ⇒ ToParameters parameters par ⇒ FromResult re (Record result) ⇒ EqRecord re result ⇒ ShowRecordFields re result ⇒ Maybe Plan → String → Record parameters → Array (Record result) → Aff Unit
 unsafeResult plan q parameters o = do
       pool ← liftEffect $ DD.newPool connectionInfo
       DD.withConnection pool case _ of
@@ -115,7 +115,7 @@ insertDefaultRecords = do
                   void <<< DD.query connection $ insert # into uniqueValues (name /\ _by) # values ("named" /\ Just 1)
                   void <<< DD.query connection $ insert # into defaultColumns (recipient /\ sender) # values (RecipientColumn 3 /\ SenderColumn 1)
                   void <<< DD.query connection $ insert # into doublePrimaryKey defaultValues
-                  void <<< DD.query connection $ insert # into composite (secondId /\ name /\ sender /\ recipient) # values ( 1 /\ "adam" /\ 1 /\ 2)
+                  void <<< DD.query connection $ insert # into composite (secondId /\ name /\ sender /\ recipient) # values (1 /\ "adam" /\ 1 /\ 2)
 
 connectionInfo ∷ Configuration
 connectionInfo = (DD.defaultConfiguration "droplet")

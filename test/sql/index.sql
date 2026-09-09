@@ -51,7 +51,8 @@ create table maybe_keys (
 
 create table unique_values (
     name text not null unique,
-    by integer unique
+    by integer unique,
+    constraint unique_pairs unique(name, by)
 );
 
 create table default_columns (

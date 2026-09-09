@@ -12,7 +12,6 @@ import Test.Model as TM
 import Test.Spec (Spec)
 import Test.Spec as TS
 
-
 tests ∷ Spec Unit
 tests =
       TS.describe "group by" do

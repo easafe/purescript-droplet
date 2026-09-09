@@ -28,7 +28,7 @@ tests = TS.describe "alter" do
                         pool ← liftEffect $ DD.newPool connectionInfo
                         void $ DD.withTransaction pool $ \c → DD.execute c $ create # table test
 
-                        let q = alter # table test # add name (Proxy :: _ String)
+                        let q = alter # table test # add name (Proxy ∷ _ String)
                         TM.notParameterized """ALTER TABLE "test" ADD "name" TEXT NOT NULL""" $ DLIQ.buildQuery q
                         void $ TM.resultOnly q
                   TS.describe "constraint" do
@@ -37,7 +37,7 @@ tests = TS.describe "alter" do
                               pool ← liftEffect $ DD.newPool connectionInfo
                               void $ DD.withTransaction pool $ \c → DD.execute c $ create # table test
 
-                              let q = alter # table test # add name (Column :: Column String Unique)
+                              let q = alter # table test # add name (Column ∷ Column String Unique)
                               TM.notParameterized """ALTER TABLE "test" ADD "name" TEXT NOT NULL UNIQUE""" $ DLIQ.buildQuery q
                               void $ TM.resultOnly q
                         TS.it "named" do
@@ -45,6 +45,6 @@ tests = TS.describe "alter" do
                               pool ← liftEffect $ DD.newPool connectionInfo
                               void $ DD.withTransaction pool $ \c → DD.execute c $ create # table test
 
-                              let q = alter # table test # add name (Column :: Column String (Constraint "named" Unique))
+                              let q = alter # table test # add name (Column ∷ Column String (Constraint "named" Unique))
                               TM.notParameterized """ALTER TABLE "test" ADD "name" TEXT NOT NULL CONSTRAINT "named" UNIQUE""" $ DLIQ.buildQuery q
                               void $ TM.resultOnly q
