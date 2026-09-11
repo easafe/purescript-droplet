@@ -48,5 +48,4 @@ jobs:
             output
       - run: psql -f test/sql/index.sql postgresql://droplet:droplet@localhost:5432/droplet
       - run: npm install
-      - run: spago build
-      - run: spago test
+      - run: spago test -p droplet

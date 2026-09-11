@@ -8,7 +8,7 @@ import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
-
+import Test.RunTestFailure as TR
 import Test.Spec (Spec)
 import Test.Spec as TS
 import Type.Proxy (Proxy(..))
@@ -16,6 +16,9 @@ import Type.Proxy (Proxy(..))
 tests ∷ Spec Unit
 tests = do
       TS.describe "from" do
+            TS.describe "invariants" do
+                  TS.it "column name must be present in projection" do
+                        TR.testFailure "from-test-1" "TypesDoNotUnify" "anniversary"
             TS.it "star" do
                   let q = select star # from messages
                   TM.notParameterized """SELECT * FROM "messages"""" $ DLIQ.buildQuery q

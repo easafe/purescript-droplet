@@ -1,0 +1,5 @@
+package:
+  name: from-test-1
+  dependencies:
+    - droplet: "*"
+    - prelude: ">=6.0.2 <7.0.0"

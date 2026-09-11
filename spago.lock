@@ -106,6 +106,22 @@
         "test": {
           "dependencies": []
         }
+      },
+      "from-test-1": {
+        "path": "failing/From/ColumnDoesNotExist",
+        "core": {
+          "dependencies": [
+            {
+              "droplet": "*"
+            },
+            {
+              "prelude": ">=6.0.2 <7.0.0"
+            }
+          ]
+        },
+        "test": {
+          "dependencies": []
+        }
       }
     },
     "extra_packages": {}
