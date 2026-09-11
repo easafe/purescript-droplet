@@ -108,7 +108,7 @@
         }
       },
       "from-test-1": {
-        "path": "failing/From/ColumnDoesNotExist",
+        "path": "failure/From/ColumnDoesNotExist",
         "core": {
           "dependencies": [
             {

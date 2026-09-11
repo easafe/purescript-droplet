@@ -10,7 +10,7 @@ output
 .purs-repl
 .spago
 Scratch.*
-
+.spec-results
 Invalid.*
 Example.purs
 
