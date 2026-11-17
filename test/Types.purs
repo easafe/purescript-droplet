@@ -30,6 +30,7 @@ module Test.Types
       , migrated
       , n
       , name
+      , nameUnique
       , recipient
       , secondDate
       , secondId
@@ -39,6 +40,7 @@ module Test.Types
       , t
       , tags
       , u
+      , uniquePairs
       , uniqueValues
       , users
       , utc_now
@@ -85,8 +87,8 @@ type MaybeKeys =
       )
 
 type UniqueValues =
-      ( name ∷ Column String Unique
-      , by ∷ Column (Maybe Int) Unique
+      ( name ∷ Column String (Constraint "name_unique" Unique /\ Constraint (Composite "unique_pairs") Unique)
+      , by ∷ Column (Maybe Int) (Constraint (Composite "unique_pairs") Unique)
       )
 
 type DefaultColumns =
@@ -202,6 +204,12 @@ created = Proxy
 
 _by ∷ Proxy "by"
 _by = Proxy
+
+nameUnique ∷ Proxy "name_unique"
+nameUnique = Proxy
+
+uniquePairs ∷ Proxy "unique_pairs"
+uniquePairs = Proxy
 
 b ∷ Proxy "b"
 b = Proxy

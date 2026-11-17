@@ -404,6 +404,44 @@ insertMultiple :: _
 insertMultiple = insert # into users (name /\ birthday) # values ["mary" /\ Just date, "josh" /\ Nothing]
 ```
 
+## ON CONFLICT
+
+INSERT queries can handle unique violations with ON CONFLICT. Every keyword is its own combinator, so clauses read like SQL.
+
+```haskell
+doNothing :: _
+doNothing = insert # into users (name) # values ("mary") # on # conflict # do_ # nothing
+
+doNothingTarget :: _
+doNothingTarget = insert # into users (name) # values ("mary") # on # conflict name # do_ # nothing
+
+doNothingConstraint :: _
+doNothingConstraint = insert # into users (name) # values ("mary") # on # conflict # on # constraint usersNameKey # do_ # nothing
+```
+
+A conflict target is either a list of columns or the name of a constraint, given by `on # constraint` to match SQL's `ON CONFLICT ON CONSTRAINT`. Both are checked against the table definition: the columns must be exactly the columns of a PRIMARY KEY or UNIQUE constraint (in any order), and a named constraint must be declared in the table type.
+
+```haskell
+-- type error: "Table users has no unique index on (surname)"
+wrongTarget = insert # into users (name) # values ("mary") # on # conflict surname # do_ # nothing
+```
+
+DO UPDATE requires a conflict target, and takes the same SET (and optional WHERE) as UPDATE. The row proposed for insertion is available as the `excluded` pseudo table, and the current row as the table itself. Columns in the WHERE clause must be qualified, since unqualified names would be ambiguous.
+
+```haskell
+upsert :: _
+upsert = insert # into users (name /\ birthday) # values ("mary" /\ Just date)
+      # on # conflict name
+      # do_ # update # set (birthday .=. excluded ... birthday)
+      # returning id
+
+upsertWhere :: _
+upsertWhere = insert # into users (name /\ birthday) # values ("mary" /\ Just date)
+      # on # conflict name
+      # do_ # update # set (birthday .=. excluded ... birthday)
+      # wher (users ... birthday .<>. excluded ... birthday)
+```
+
 ## UPDATE
 
 UPDATE queries can be as it is or with a WHERE clause.
@@ -483,6 +521,20 @@ createTableExample = create # table myTable -- CREATE TABLE "my_table" (id INTEG
 ```
 
 See the [migrations](/migrations) page for info on the column and constraint types
+
+### INDEX
+
+Indexes are created on a table and a list of its columns, and can be named or unique
+
+```haskell
+indexExample = create # index # on myTable name -- CREATE INDEX ON "my_table" ("name")
+
+namedIndexExample = create # index myTableName # on myTable (id /\ name) -- CREATE INDEX "my_table_name" ON "my_table" ("id", "name")
+
+uniqueIndexExample = create # unique # index # on myTable name -- CREATE UNIQUE INDEX ON "my_table" ("name")
+```
+
+Note that indexes created this way are not part of the table type, so they cannot be used as ON CONFLICT targets. Declare a constraint in the table type for that.
 
 ## ALTER
 

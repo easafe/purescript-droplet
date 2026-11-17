@@ -33,6 +33,7 @@ import Droplet.Language.Internal.Definition
       , class ToParameters
       , class ToValue
       , class ToType
+      , class ToPathAlias
       , Identity
       , Column(..)
       , ForeignKey
@@ -90,6 +91,12 @@ import Droplet.Language.Internal.Syntax
       , Create
       , Values
       , On
+      , Conflict
+      , OnConstraint
+      , Do
+      , Nothing_
+      , Index
+      , Unique_
       , Distinct
       , Where
       , DefaultValues
@@ -119,6 +126,13 @@ import Droplet.Language.Internal.Syntax
       , asc
       , add
       , on
+      , conflict
+      , constraint
+      , do_
+      , nothing
+      , excluded
+      , index
+      , unique
       , desc
       , update
       , limit

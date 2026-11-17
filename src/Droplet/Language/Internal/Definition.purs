@@ -26,6 +26,7 @@ module Droplet.Language.Internal.Definition
       , class ToValue
       , class UnwrapDefinition
       , class AppendPath
+      , class ToPathAlias
       , star
       , toType
       , toParameters
@@ -115,7 +116,16 @@ data Table (name ∷ Symbol) (fields ∷ Row Type) = Table
 -- | Qualified columns (e.g, table.column)
 data Path (alias ∷ Symbol) (field ∷ Symbol) = Path
 
-path ∷ ∀ alias field path pathField. Append alias Dot path ⇒ Append path field pathField ⇒ Proxy alias → Proxy field → Path alias field
+-- | Sources that can qualify a column name
+-- |
+-- | Besides table aliases, tables themselves (e.g., in ON CONFLICT DO UPDATE) and the EXCLUDED pseudo table may qualify columns
+class ToPathAlias (source ∷ Type) (alias ∷ Symbol) | source → alias
+
+instance ToPathAlias (Proxy alias) alias
+
+instance ToPathAlias (Table alias fields) alias
+
+path ∷ ∀ source alias field path pathField. ToPathAlias source alias ⇒ Append alias Dot path ⇒ Append path field pathField ⇒ source → Proxy field → Path alias field
 path _ _ = Path
 
 infix 7 path as ...

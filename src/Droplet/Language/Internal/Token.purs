@@ -30,7 +30,7 @@ identityKeyword ∷ String
 identityKeyword = " GENERATED ALWAYS AS IDENTITY"
 
 uniqueKeyword ∷ String
-uniqueKeyword = " UNIQUE"
+uniqueKeyword = "UNIQUE"
 
 whereKeyword ∷ String
 whereKeyword = " WHERE "
@@ -120,7 +120,19 @@ valuesKeyword ∷ String
 valuesKeyword = " VALUES"
 
 updateKeyword ∷ String
-updateKeyword = "UPDATE "
+updateKeyword = "UPDATE"
+
+conflictKeyword ∷ String
+conflictKeyword = "CONFLICT"
+
+doKeyword ∷ String
+doKeyword = " DO"
+
+nothingKeyword ∷ String
+nothingKeyword = " NOTHING"
+
+indexKeyword ∷ String
+indexKeyword = "INDEX"
 
 setKeyword ∷ String
 setKeyword = " SET "

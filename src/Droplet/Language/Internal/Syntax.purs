@@ -9,6 +9,50 @@ module Droplet.Language.Internal.Syntax
       , Create(..)
       , Outer
       , On(..)
+      , Conflict(..)
+      , OnConstraint(..)
+      , Do(..)
+      , Nothing_(..)
+      , Index(..)
+      , Unique_(..)
+      , class ToOn
+      , class ToUpdate
+      , class ToSet
+      , class ToConflict
+      , class ConflictOn
+      , class ConflictClause
+      , class TargetedConflict
+      , class FilterableAction
+      , class ConflictActionEnd
+      , class ToIndex
+      , class ToIndexable
+      , class ToIndexOn
+      , class IndexColumns
+      , class CompleteIndex
+      , class InsertRest
+      , class ConflictFields
+      , class ConflictEnd
+      , class ReturnableTail
+      , class ValidConflict
+      , class ValidConflictTarget
+      , class TargetColumns
+      , class UniqueIndexes
+      , class IncludeIndex
+      , class MatchingIndex
+      , class NextMatchingIndex
+      , class IndexColumnNames
+      , class HasIndex
+      , class FoundNamedIndex
+      , class ContainsAll
+      , class ContainsSymbol
+      , class SymbolListText
+      , conflict
+      , constraint
+      , do_
+      , nothing
+      , excluded
+      , index
+      , unique
       , Union(..)
       , As(..)
       , Delete(..)
@@ -156,9 +200,11 @@ import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Append)
 import Prim.TypeError (class Fail, Beside, Quote, QuoteLabel, Text)
-import Type.Data.Boolean (class And, class If)
-import Type.Proxy (Proxy)
+import Type.Data.Boolean (class And, class If, class Or)
+import Type.Data.Symbol (class Equals)
+import Type.Proxy (Proxy(..))
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
+import Unsafe.Coerce as UC
 
 ----------------------PREPARE----------------------------
 
@@ -547,9 +593,31 @@ else instance OnComparision (Path alias name) fields aliases OuterScope
 
 else instance ToValue t ⇒ OnComparision t fields aliases t
 
--- | JOIN ... ON statement
-on ∷ ∀ k l r c fields aliases. OnCondition c fields aliases ⇒ c → Join k fields l r aliases E → Join k fields l r aliases (On c E)
-on c (Join q r _) = Join q r $ On c E
+-- | ON is used by JOIN, INSERT ... ON CONFLICT and CREATE INDEX
+class ToOn (source ∷ Type) (q ∷ Type) | source → q where
+      on ∷ source → q
+
+-- | CREATE INDEX ... ON table (columns)
+instance
+      ( ToIndexOn q
+      , IndexColumns columns fields
+      , Resume q (On (T (Table name fields) columns) E) sql
+      ) ⇒
+      ToOn (Table name fields) (columns → q → sql) where
+      on _ columns q = resume q (On (T columns) E)
+
+-- | INSERT ... ON CONFLICT, and the ON of ON CONSTRAINT
+else instance
+      ( InsertRest fieldNames rest tail
+      , ConflictOn tail
+      , Resume (Insert (Into name fields fieldNames rest)) (On E E) sql
+      ) ⇒
+      ToOn (Insert (Into name fields fieldNames rest)) sql where
+      on q = resume q (On E E)
+
+-- | JOIN ... ON condition
+else instance OnCondition c fields aliases ⇒ ToOn c (Join k fields l r aliases E → Join k fields l r aliases (On c E)) where
+      on c (Join q r _) = Join q r $ On c E
 
 -------------------------------WHERE----------------------------
 
@@ -563,6 +631,16 @@ instance (SourceAlias f alias, ToCondition c fields alias) ⇒ ToWhere c (Select
 instance ToCondition c fields Empty ⇒ ToWhere c (Update name fields (Set v E))
 
 instance ToCondition c fields Empty ⇒ ToWhere c (Delete (From f fields E))
+
+--the target table and the EXCLUDED pseudo table are both in scope for ON CONFLICT DO UPDATE
+instance
+      ( InsertRest fieldNames rest tail
+      , ConflictClause tail target action
+      , FilterableAction action
+      , ConflictFields name fields qualified
+      , OnCondition c qualified (Cons "excluded" "excluded" (Cons name name Nil))
+      ) ⇒
+      ToWhere c (Insert (Into name fields fieldNames rest))
 
 -- | WHERE statement
 wher ∷ ∀ c q sql. ToWhere c q ⇒ Resume q (Where c E) sql ⇒ c → q → sql
@@ -1119,6 +1197,363 @@ values fieldValues (Insert (Into names _)) = Insert <<< Into names $ Values fiel
 defaultValues ∷ DefaultValues
 defaultValues = DefaultValues
 
+---------------------------ON CONFLICT------------------------------------------
+
+{-
+
+full on conflict syntax supported by postgresql (https://www.postgresql.org/docs/current/sql-insert.html)
+
+[ ON CONFLICT [ conflict_target ] conflict_action ]
+
+where conflict_target can be one of:
+
+    ( { index_column_name | ( index_expression ) } [ COLLATE collation ] [ opclass ] [, ...] ) [ WHERE index_predicate ]
+    ON CONSTRAINT constraint_name
+
+and conflict_action is one of:
+
+    DO NOTHING
+    DO UPDATE SET { column_name = { expression | DEFAULT } | ... } [, ...] [ WHERE condition ]
+
+-}
+
+{-
+
+full on conflict syntax supported by droplet
+
+INSERT ...
+      ON CONFLICT [(column name | [, ...]) | ON CONSTRAINT constraint name]
+      DO [NOTHING | UPDATE SET field = value | [, ...] [WHERE condition]]
+
+-}
+
+-- | CONFLICT, optionally qualified by the columns of a unique index
+data Conflict target rest = Conflict target rest
+
+-- | ON CONSTRAINT
+data OnConstraint (name ∷ Symbol) rest = OnConstraint rest
+
+-- | DO
+data Do rest = Do rest
+
+-- | NOTHING
+data Nothing_ rest = Nothing_ rest
+
+-- | The pseudo table holding the row proposed for insertion
+excluded ∷ Proxy "excluded"
+excluded = Proxy
+
+-- | Statements following INSERT ... (DEFAULT) VALUES
+class InsertRest (fieldNames ∷ Type) (rest ∷ Type) (tail ∷ Type) | fieldNames rest → tail
+
+instance InsertRest DefaultValues rest rest
+
+else instance InsertRest fieldNames (Values v rest) rest
+
+-- | ON either starts an ON CONFLICT clause or an ON CONSTRAINT conflict target
+class ConflictOn (tail ∷ Type)
+
+instance ConflictOn E
+
+instance ConflictOn (On E (Conflict E E))
+
+-- | Conflict target and action of an ON CONFLICT clause
+-- |
+-- | Statements are rejected unless the clause they follow has the expected action so far
+class ConflictClause (tail ∷ Type) (target ∷ Type) (action ∷ Type) | tail → target action
+
+instance ConflictClause (On E (Conflict E (On E (OnConstraint name action)))) (OnConstraint name E) action
+
+else instance ConflictClause (On E (Conflict target action)) target action
+
+-- | CONFLICT either stands alone or is qualified by the columns of a unique index
+class ToConflict (target ∷ Type) (q ∷ Type) | target → q where
+      conflict ∷ target → q
+
+-- | ON CONFLICT
+instance
+      ( InsertRest fieldNames rest (On E E)
+      , Resume (Insert (Into name fields fieldNames rest)) (Conflict E E) sql
+      ) ⇒
+      ToConflict (Insert (Into name fields fieldNames rest)) sql where
+      conflict q = resume q (Conflict E E)
+
+-- | ON CONFLICT (columns)
+else instance
+      ( InsertRest fieldNames rest (On E E)
+      , Resume (Insert (Into name fields fieldNames rest)) (Conflict target E) sql
+      ) ⇒
+      ToConflict target (Insert (Into name fields fieldNames rest) → sql) where
+      conflict target q = resume q (Conflict target E)
+
+-- | ON CONSTRAINT statement
+constraint ∷
+      ∀ name tableName fields fieldNames rest sql.
+      InsertRest fieldNames rest (On E (Conflict E (On E E))) ⇒
+      Resume (Insert (Into tableName fields fieldNames rest)) (OnConstraint name E) sql ⇒
+      Proxy name →
+      Insert (Into tableName fields fieldNames rest) →
+      sql
+constraint _ q = resume q (OnConstraint E)
+
+-- | DO statement
+do_ ∷
+      ∀ name fields fieldNames rest tail target sql.
+      InsertRest fieldNames rest tail ⇒
+      ConflictClause tail target E ⇒
+      Resume (Insert (Into name fields fieldNames rest)) (Do E) sql ⇒
+      Insert (Into name fields fieldNames rest) →
+      sql
+do_ q = resume q (Do E)
+
+-- | DO NOTHING statement
+nothing ∷
+      ∀ name fields fieldNames rest tail target sql.
+      InsertRest fieldNames rest tail ⇒
+      ConflictClause tail target (Do E) ⇒
+      Resume (Insert (Into name fields fieldNames rest)) (Nothing_ E) sql ⇒
+      Insert (Into name fields fieldNames rest) →
+      sql
+nothing q = resume q (Nothing_ E)
+
+-- | DO UPDATE requires a conflict target
+class TargetedConflict (target ∷ Type)
+
+instance Fail (Text "ON CONFLICT DO UPDATE requires a conflict target") ⇒ TargetedConflict E
+
+else instance TargetedConflict target
+
+-- | WHERE can only follow DO UPDATE SET
+class FilterableAction (action ∷ Type)
+
+instance Fail (Text "DO NOTHING does not take a WHERE statement") ⇒ FilterableAction (Do (Nothing_ rest))
+
+else instance FilterableAction (Do (Update name fields (Set pairs E)))
+
+-- | Columns visible to DO UPDATE, qualified by the target table name and by the EXCLUDED pseudo table
+-- |
+-- | Unqualified columns are ambiguous in DO UPDATE, as the inserted row is always in scope
+class ConflictFields (name ∷ Symbol) (fields ∷ Row Type) (qualified ∷ Row Type) | name fields → qualified
+
+instance
+      ( RowToList fields list
+      , QualifiedColumns list "excluded" excludedFields
+      , QualifiedColumns list name tableFields
+      , Union excludedFields tableFields qualified
+      ) ⇒
+      ConflictFields name fields qualified
+
+-- | ON CONFLICT clauses must be finished with an action
+-- |
+-- | Computes the last statement of the clause, so RETURNING is not repeated
+class ConflictActionEnd (action ∷ Type) (end ∷ Type) | action → end
+
+instance ConflictEnd rest end ⇒ ConflictActionEnd (Do (Nothing_ rest)) end
+
+else instance ConflictEnd rest end ⇒ ConflictActionEnd (Do (Update name fields (Set pairs rest))) end
+
+else instance Fail (Text "Incomplete ON CONFLICT clause: DO NOTHING or DO UPDATE SET is missing") ⇒ ConflictActionEnd action E
+
+-- | Statements that may follow a conflict action
+class ConflictEnd (rest ∷ Type) (end ∷ Type) | rest → end
+
+instance ConflictEnd rest end ⇒ ConflictEnd (Where c rest) end
+
+else instance ConflictEnd E E
+
+else instance ConflictEnd (Returning f) (Returning f)
+
+-- | Conflict targets must match a unique index of the table
+class ValidConflict (tableName ∷ Symbol) (fields ∷ Row Type) (tail ∷ Type)
+
+instance ValidConflict tableName fields E
+
+else instance ValidConflict tableName fields (Returning f)
+
+else instance
+      ( ConflictClause tail target action
+      , RowToList fields list
+      , UniqueIndexes list indexes
+      , ValidConflictTarget tableName target indexes
+      ) ⇒
+      ValidConflict tableName fields tail
+
+-- | A conflict target is either absent, a list of columns or a named constraint
+class ValidConflictTarget (tableName ∷ Symbol) (target ∷ Type) (indexes ∷ RowList Type)
+
+instance ValidConflictTarget tableName E indexes
+
+else instance
+      ( HasIndex name indexes found
+      , FoundNamedIndex found tableName name
+      ) ⇒
+      ValidConflictTarget tableName (OnConstraint name E) indexes
+
+else instance
+      ( TargetColumns target names
+      , MatchingIndex tableName names indexes indexes
+      ) ⇒
+      ValidConflictTarget tableName target indexes
+
+-- | Columns of a conflict target
+class TargetColumns (target ∷ Type) (names ∷ SymbolList) | target → names
+
+instance SymbolListSingleton name list ⇒ TargetColumns (Proxy name) list
+
+instance
+      ( TargetColumns some head
+      , TargetColumns more tail
+      , RowListAppend head tail all
+      ) ⇒
+      TargetColumns (some /\ more) all
+
+-- | Unique indexes (i.e., PRIMARY KEY and UNIQUE constraints) that may arbitrate a conflict
+class UniqueIndexes (columns ∷ RowList Type) (indexes ∷ RowList Type) | columns → indexes
+
+instance UniqueIndexes Nil Nil
+
+instance
+      ( IncludeIndex name constraints head
+      , UniqueIndexes rest tail
+      , RowListAppend head tail all
+      ) ⇒
+      UniqueIndexes (Cons name (Column t constraints) rest) all
+
+else instance UniqueIndexes rest all ⇒ UniqueIndexes (Cons name t rest) all
+
+-- | Unique indexes a given column is part of
+class IncludeIndex (columnName ∷ Symbol) (constraints ∷ Type) (indexes ∷ RowList Type) | columnName constraints → indexes
+
+instance
+      ( IncludeIndex columnName c head
+      , IncludeIndex columnName rest tail
+      , RowListAppend head tail all
+      ) ⇒
+      IncludeIndex columnName (c /\ rest) all
+
+else instance IncludeIndex columnName (Constraint (Composite name) PrimaryKey) (Cons name (C columnName PrimaryKey) Nil)
+
+else instance IncludeIndex columnName (Constraint (Composite name) Unique) (Cons name (C columnName Unique) Nil)
+
+else instance IncludeIndex columnName (Constraint name PrimaryKey) (Cons name (C columnName PrimaryKey) Nil)
+
+else instance IncludeIndex columnName (Constraint name Unique) (Cons name (C columnName Unique) Nil)
+
+--anonymous constraints are single column indexes, so the column name is enough to tell them apart
+else instance Append "0pk " columnName key ⇒ IncludeIndex columnName PrimaryKey (Cons key (C columnName PrimaryKey) Nil)
+
+else instance Append "0unique " columnName key ⇒ IncludeIndex columnName Unique (Cons key (C columnName Unique) Nil)
+
+else instance IncludeIndex columnName t Nil
+
+-- | Fails if no unique index matches the target columns
+class MatchingIndex (tableName ∷ Symbol) (target ∷ SymbolList) (candidates ∷ RowList Type) (indexes ∷ RowList Type)
+
+instance
+      ( SymbolListText target columns
+      , Append "Table " tableName start
+      , Append start " has no unique index on (" opening
+      , Append opening columns named
+      , Append named ")" message
+      , Fail (Text message)
+      ) ⇒
+      MatchingIndex tableName target Nil indexes
+
+else instance
+      ( IndexColumnNames name indexes columns
+      , ContainsAll target columns included
+      , ContainsAll columns target including
+      , And included including matches
+      , NextMatchingIndex matches tableName target rest indexes
+      ) ⇒
+      MatchingIndex tableName target (Cons name t rest) indexes
+
+-- | Keeps looking for a matching unique index
+class NextMatchingIndex (matches ∷ Boolean) (tableName ∷ Symbol) (target ∷ SymbolList) (candidates ∷ RowList Type) (indexes ∷ RowList Type)
+
+instance NextMatchingIndex True tableName target candidates indexes
+
+instance MatchingIndex tableName target candidates indexes ⇒ NextMatchingIndex False tableName target candidates indexes
+
+-- | Columns of a given unique index
+class IndexColumnNames (name ∷ Symbol) (indexes ∷ RowList Type) (columns ∷ SymbolList) | name indexes → columns
+
+instance IndexColumnNames name Nil Nil
+
+instance
+      ( Equals name key matches
+      , SymbolListSingleton columnName single
+      , If matches single Nil head
+      , IndexColumnNames name rest tail
+      , RowListAppend head tail all
+      ) ⇒
+      IndexColumnNames name (Cons key (C columnName t) rest) all
+
+else instance IndexColumnNames name rest all ⇒ IndexColumnNames name (Cons key t rest) all
+
+-- | Whether the table has a unique index with the given name
+class HasIndex (name ∷ Symbol) (indexes ∷ RowList Type) (found ∷ Boolean) | name indexes → found
+
+instance HasIndex name Nil False
+
+instance
+      ( Equals name key matches
+      , HasIndex name rest found
+      , Or matches found result
+      ) ⇒
+      HasIndex name (Cons key t rest) result
+
+-- |
+class FoundNamedIndex (found ∷ Boolean) (tableName ∷ Symbol) (name ∷ Symbol)
+
+instance FoundNamedIndex True tableName name
+
+instance
+      ( Append "Table " tableName start
+      , Append start " has no unique index named " named
+      , Append named name message
+      , Fail (Text message)
+      ) ⇒
+      FoundNamedIndex False tableName name
+
+-- | Whether a list of columns includes another; indexes are matched as sets, as column order is irrelevant
+class ContainsAll (some ∷ SymbolList) (more ∷ SymbolList) (contains ∷ Boolean) | some more → contains
+
+instance ContainsAll Nil more True
+
+instance
+      ( ContainsSymbol name more found
+      , ContainsAll rest more contains
+      , And found contains result
+      ) ⇒
+      ContainsAll (Cons name name rest) more result
+
+-- |
+class ContainsSymbol (name ∷ Symbol) (list ∷ SymbolList) (found ∷ Boolean) | name list → found
+
+instance ContainsSymbol name Nil False
+
+instance
+      ( Equals name key matches
+      , ContainsSymbol name rest found
+      , Or matches found result
+      ) ⇒
+      ContainsSymbol name (Cons key key rest) result
+
+-- | Column names as text, for error messages
+class SymbolListText (list ∷ SymbolList) (text ∷ Symbol) | list → text
+
+instance SymbolListText Nil ""
+
+else instance SymbolListText (Cons name name Nil) name
+
+else instance
+      ( SymbolListText rest tail
+      , Append ", " tail separated
+      , Append name separated text
+      ) ⇒
+      SymbolListText (Cons name name rest) text
+
 ---------------------------UPDATE------------------------------------------
 
 {-
@@ -1154,6 +1589,20 @@ class ToUpdatePairs (fields ∷ Row Type) (pairs ∷ Type)
 
 instance (Cons name t e fields, IsDefault t name) ⇒ ToUpdatePairs fields (Op (Proxy name) Default)
 
+--qualified columns are only in scope for ON CONFLICT DO UPDATE
+else instance
+      ( Cons name t e fields
+      , ColumnCannotBeSet t
+      , UnwrapDefinition t u
+      , UnwrapNullable u v
+      , AppendPath alias fieldName fullPath
+      , Cons fullPath s d fields
+      , UnwrapDefinition s w
+      , UnwrapNullable w x
+      , ValidComparision v x
+      ) ⇒
+      ToUpdatePairs fields (Op (Proxy name) (Path alias fieldName))
+
 else instance
       ( Cons name t e fields
       , ColumnCannotBeSet t
@@ -1168,11 +1617,43 @@ instance
       ) ⇒
       ToUpdatePairs fields (head /\ tail)
 
-update ∷ ∀ name fields. Table name fields → Update name fields E
-update _ = Update E
+-- | UPDATE is used by UPDATE statements and ON CONFLICT DO UPDATE
+class ToUpdate (source ∷ Type) (q ∷ Type) | source → q where
+      update ∷ source → q
 
-set ∷ ∀ name fields pairs. ToUpdatePairs fields pairs ⇒ pairs → Update name fields E → Update name fields (Set pairs E)
-set pairs (Update _) = Update $ Set pairs E
+-- | UPDATE table
+instance ToUpdate (Table name fields) (Update name fields E) where
+      update _ = Update E
+
+-- | ON CONFLICT ... DO UPDATE
+else instance
+      ( InsertRest fieldNames rest tail
+      , ConflictClause tail target (Do E)
+      , TargetedConflict target
+      , Resume (Insert (Into name fields fieldNames rest)) (Update name fields E) sql
+      ) ⇒
+      ToUpdate (Insert (Into name fields fieldNames rest)) sql where
+      update q = resume q (Update E)
+
+-- | SET is used by UPDATE statements and ON CONFLICT DO UPDATE
+class ToSet (pairs ∷ Type) (source ∷ Type) (q ∷ Type) | pairs source → q where
+      set ∷ pairs → source → q
+
+-- | UPDATE ... SET
+instance ToUpdatePairs fields pairs ⇒ ToSet pairs (Update name fields E) (Update name fields (Set pairs E)) where
+      set pairs (Update _) = Update $ Set pairs E
+
+-- | ON CONFLICT ... DO UPDATE SET
+else instance
+      ( InsertRest fieldNames rest tail
+      , ConflictClause tail target (Do (Update name fields E))
+      , ConflictFields name fields qualified
+      , Union fields qualified all
+      , ToUpdatePairs all pairs
+      , Resume (Insert (Into name fields fieldNames rest)) (Set pairs E) sql
+      ) ⇒
+      ToSet pairs (Insert (Into name fields fieldNames rest)) sql where
+      set pairs q = resume q (Set pairs E)
 
 ---------------------------DELETE------------------------------------------
 
@@ -1223,14 +1704,26 @@ full RETURNING syntax supported by droplet
 
 newtype Returning fieldNames = Returning fieldNames
 
-class ToReturning (f ∷ Type) (q ∷ Type) (r ∷ Type) | q → f, q → r where
-      returning ∷ f → q → r
+-- | RETURNING can only follow a complete INSERT
+class ToReturning (f ∷ Type) (q ∷ Type)
 
-instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields fn (Values fv E))) (Insert (Into tn fields fn (Values fv (Returning f)))) where
-      returning fieldNames (Insert (Into fields (Values fv E))) = Insert (Into fields (Values fv (Returning fieldNames)))
+instance
+      ( ReturningColumns f fields
+      , InsertRest fieldNames rest tail
+      , ReturnableTail tail
+      ) ⇒
+      ToReturning f (Insert (Into tableName fields fieldNames rest))
 
-instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields DefaultValues E)) (Insert (Into tn fields DefaultValues (Returning f))) where
-      returning fieldNames (Insert (Into fields E)) = Insert (Into fields (Returning fieldNames))
+-- | INSERT statements that are not finished by RETURNING yet
+class ReturnableTail (tail ∷ Type)
+
+instance ReturnableTail E
+
+else instance (ConflictClause tail target action, ConflictActionEnd action E) ⇒ ReturnableTail tail
+
+-- | RETURNING statement
+returning ∷ ∀ f q sql. ToReturning f q ⇒ Resume q (Returning f) sql ⇒ f → q → sql
+returning fieldNames q = resume q (Returning fieldNames)
 
 class ReturningColumns (f ∷ Type) (fields ∷ Row Type) | f → fields
 
@@ -1585,6 +2078,36 @@ else instance Resume rest b c ⇒ Resume (Set p rest) b (Set p c) where
 else instance Resume rest b c ⇒ Resume (Delete rest) b (Delete c) where
       resume (Delete rest) b = Delete $ resume rest b
 
+else instance Resume rest b c ⇒ Resume (Insert rest) b (Insert c) where
+      resume (Insert rest) b = Insert $ resume rest b
+
+else instance Resume rest b c ⇒ Resume (Into n f fn rest) b (Into n f fn c) where
+      resume (Into fn rest) b = Into fn $ resume rest b
+
+else instance Resume rest b c ⇒ Resume (Values v rest) b (Values v c) where
+      resume (Values v rest) b = Values v $ resume rest b
+
+else instance Resume rest b c ⇒ Resume (On cd rest) b (On cd c) where
+      resume (On cd rest) b = On cd $ resume rest b
+
+else instance Resume rest b c ⇒ Resume (Conflict t rest) b (Conflict t c) where
+      resume (Conflict t rest) b = Conflict t $ resume rest b
+
+else instance Resume rest b c ⇒ Resume (OnConstraint n rest) b (OnConstraint n c) where
+      resume (OnConstraint rest) b = OnConstraint $ resume rest b
+
+else instance Resume rest b c ⇒ Resume (Do rest) b (Do c) where
+      resume (Do rest) b = Do $ resume rest b
+
+else instance Resume rest b c ⇒ Resume (Nothing_ rest) b (Nothing_ c) where
+      resume (Nothing_ rest) b = Nothing_ $ resume rest b
+
+else instance Resume rest b c ⇒ Resume (Index n rest) b (Index n c) where
+      resume (Index rest) b = Index $ resume rest b
+
+else instance Resume rest b c ⇒ Resume (Unique_ rest) b (Unique_ c) where
+      resume (Unique_ rest) b = Unique_ $ resume rest b
+
 else instance Resume (As alias E) b (As alias b) where
       resume (As _) b = As b
 
@@ -1596,6 +2119,10 @@ else instance Resume rest b c ⇒ Resume (Drop rest) b (Drop c) where
 
 else instance Resume rest b c ⇒ Resume (Alter rest) b (Alter c) where
       resume (Alter rest) b = Alter $ resume rest b
+
+--avoids an infinite instance chain when a statement is added after RETURNING
+else instance Fail (Text "RETURNING must be the last statement of a query") ⇒ Resume (Returning f) b c where
+      resume _ _ = UC.unsafeCoerce unit
 
 else instance Resume E b b where
       resume _ b = b
@@ -1773,11 +2300,17 @@ instance (IsRepeated name some more, UniqueConstraints name more) ⇒ UniqueCons
 else instance UniqueConstraints name t
 
 -- | If a constraint appears more than once in a column
+-- |
+-- | Named (including composite) constraints are considered repeated if the column also declares the same constraint type anonymously
 class IsRepeated (name ∷ Symbol) (t ∷ Type) (constraints ∷ Type)
 
 instance (IsRepeated name t some, IsRepeated name t more) ⇒ IsRepeated name t (some /\ more)
 
 else instance Fail (Beside (Beside (Text "Constraint ") (Quote t)) (Beside (Text " declared more than once for column ") (QuoteLabel name))) ⇒ IsRepeated name t t
+
+else instance Fail (Beside (Beside (Text "Constraint ") (Quote t)) (Beside (Text " declared more than once for column ") (QuoteLabel name))) ⇒ IsRepeated name t (Constraint n t)
+
+else instance Fail (Beside (Beside (Text "Constraint ") (Quote t)) (Beside (Text " declared more than once for column ") (QuoteLabel name))) ⇒ IsRepeated name (Constraint n t) t
 
 else instance IsRepeated name t s
 
@@ -1817,6 +2350,9 @@ else instance ValidNullableConstraints name t constraints
 class IsValidNullableConstraint (name ∷ Symbol) (constraints ∷ Type)
 
 instance (IsValidNullableConstraint name some, IsValidNullableConstraint name more) ⇒ IsValidNullableConstraint name (some /\ more)
+
+--named and composite constraints are checked by the constraint they name
+else instance IsValidNullableConstraint name t ⇒ IsValidNullableConstraint name (Constraint n t)
 
 else instance IsValidNullableConstraint name Unique
 
@@ -1883,6 +2419,90 @@ else instance CheckComposite tableName name (C cn (ForeignKey rcn table)) (Cons 
 else instance Fail (Beside (Beside (Text "Constraint ") (QuoteLabel name)) (Beside (Text " declared more than once for table ") (QuoteLabel tableName))) ⇒ CheckComposite tableName name s (Cons name t rest)
 
 else instance CheckComposite tn name t rest ⇒ CheckComposite tn name t (Cons n s rest)
+
+---------------------------INDEX------------------------------------------
+
+{-
+
+full create index syntax supported by postgresql (https://www.postgresql.org/docs/current/sql-createindex.html)
+
+CREATE [ UNIQUE ] INDEX [ CONCURRENTLY ] [ [ IF NOT EXISTS ] name ] ON [ ONLY ] table_name [ USING method ]
+    ( { column_name | ( expression ) } [ COLLATE collation ] [ opclass [ ( opclass_parameter = value [, ... ] ) ] ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ] [, ...] )
+    [ INCLUDE ( column_name [, ...] ) ]
+    [ NULLS [ NOT ] DISTINCT ]
+    [ WITH ( storage_parameter [= value] [, ... ] ) ]
+    [ TABLESPACE tablespace_name ]
+    [ WHERE predicate ]
+
+-}
+
+{-
+
+full create index syntax supported by droplet
+
+CREATE [UNIQUE] INDEX [index name] ON table (column name | [, ...])
+
+-}
+
+-- | UNIQUE, for indexes
+data Unique_ rest = Unique_ rest
+
+-- | INDEX, optionally named
+data Index (name ∷ Type) rest = Index rest
+
+-- | UNIQUE INDEX statement
+unique ∷ Create E → Create (Unique_ E)
+unique _ = Create $ Unique_ E
+
+-- | Indexes either stand alone or are named
+class ToIndex (name ∷ Type) (q ∷ Type) | name → q where
+      index ∷ name → q
+
+-- | CREATE INDEX
+instance
+      ( ToIndexable (Create rest)
+      , Resume (Create rest) (Index E E) sql
+      ) ⇒
+      ToIndex (Create rest) sql where
+      index q = resume q (Index E)
+
+-- | CREATE INDEX name
+else instance
+      ( ToIndexable q
+      , Resume q (Index (Proxy name) E) sql
+      ) ⇒
+      ToIndex (Proxy name) (q → sql) where
+      index _ q = resume q (Index E)
+
+-- | INDEX can only follow CREATE or CREATE UNIQUE
+class ToIndexable (q ∷ Type)
+
+instance ToIndexable (Create E)
+
+instance ToIndexable (Create (Unique_ E))
+
+-- | Indexes must be created on a table
+class ToIndexOn (q ∷ Type)
+
+instance ToIndexOn (Create (Index name E))
+
+instance ToIndexOn (Create (Unique_ (Index name E)))
+
+-- | Index columns must be present in the table
+class IndexColumns (columns ∷ Type) (fields ∷ Row Type)
+
+instance Cons name t e fields ⇒ IndexColumns (Proxy name) fields
+
+instance (IndexColumns some fields, IndexColumns more fields) ⇒ IndexColumns (some /\ more) fields
+
+-- | Indexes must be created on a table
+class CompleteIndex (q ∷ Type)
+
+instance CompleteIndex rest ⇒ CompleteIndex (Unique_ rest)
+
+else instance CompleteIndex rest ⇒ CompleteIndex (Index name rest)
+
+else instance CompleteIndex (On (T (Table name fields) columns) E)
 
 ---------------------------ALTER------------------------------------------
 

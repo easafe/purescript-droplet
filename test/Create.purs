@@ -9,11 +9,17 @@ import Data.BigInt (BigInt)
 import Data.Date (Date)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
-import Data.Tuple.Nested (type (/\))
+import Data.Tuple.Nested (type (/\), (/\))
+import Droplet.Driver as DD
 import Droplet.Language.Internal.Translate as DLIQ
+import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
+import Test.Model (connectionInfo)
 import Test.Model as TM
+import Test.RunTestFailure as TR
 import Test.Spec (Spec)
 import Test.Spec as TS
+import Type.Proxy (Proxy(..))
 
 tests ∷ Spec Unit
 tests =
@@ -52,3 +58,40 @@ tests =
                               TS.it "foreign key" do
                                     let q = create # table (Table ∷ Table "test" (id ∷ Maybe Int, fk1 ∷ Column Int (Constraint (Composite "fk") (ForeignKey "id" DoublePrimaryKeyTable)), fk2 ∷ Column Int (Constraint (Composite "fk") (ForeignKey "second_id" DoublePrimaryKeyTable))))
                                     TM.notParameterized """CREATE TABLE "test" ("fk1" INTEGER NOT NULL, "fk2" INTEGER NOT NULL, "id" INTEGER, CONSTRAINT "fk" FOREIGN KEY("fk1", "fk2") REFERENCES "double_primary_key" ("id", "second_id"))""" $ DLIQ.buildQuery q
+            TS.describe "index" do
+                  TS.describe "invariants" do
+                        TS.it "column must be present in the table" do
+                              TR.testFailure "index-test-1" "TypesDoNotUnify" "anniversary"
+                  TS.it "single column" do
+                        let q = create # index # on testTable name
+                        TM.notParameterized """CREATE INDEX ON "test" ("name")""" $ DLIQ.buildQuery q
+                        createTestTable
+                        void $ TM.resultOnly q
+                  TS.it "many columns" do
+                        let q = create # index # on testTable (id /\ name)
+                        TM.notParameterized """CREATE INDEX ON "test" ("id", "name")""" $ DLIQ.buildQuery q
+                        createTestTable
+                        void $ TM.resultOnly q
+                  TS.it "named" do
+                        let q = create # index (Proxy ∷ _ "test_name") # on testTable name
+                        TM.notParameterized """CREATE INDEX "test_name" ON "test" ("name")""" $ DLIQ.buildQuery q
+                        createTestTable
+                        void $ TM.resultOnly q
+                  TS.it "unique" do
+                        let q = create # unique # index # on testTable name
+                        TM.notParameterized """CREATE UNIQUE INDEX ON "test" ("name")""" $ DLIQ.buildQuery q
+                        createTestTable
+                        void $ TM.resultOnly q
+                  TS.it "named unique" do
+                        let q = create # unique # index (Proxy ∷ _ "test_name") # on testTable (id /\ name)
+                        TM.notParameterized """CREATE UNIQUE INDEX "test_name" ON "test" ("id", "name")""" $ DLIQ.buildQuery q
+                        createTestTable
+                        void $ TM.resultOnly q
+
+testTable ∷ Table "test" (id ∷ Int, name ∷ String)
+testTable = Table
+
+createTestTable ∷ Aff Unit
+createTestTable = do
+      pool ← liftEffect $ DD.newPool connectionInfo
+      void <<< DD.withTransaction pool $ \c → DD.execute c $ create # table testTable

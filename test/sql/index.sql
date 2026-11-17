@@ -50,8 +50,10 @@ create table maybe_keys (
 );
 
 create table unique_values (
-    name text not null unique,
-    by integer unique,
+    name text not null,
+    by integer,
+
+    constraint name_unique unique(name),
     constraint unique_pairs unique(name, by)
 );
 

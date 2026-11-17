@@ -5,6 +5,7 @@ import Prelude
 import Effect (Effect)
 import Test.Alter as TAL
 import Test.As as TA
+import Test.Conflict as TCF
 import Test.Create as TC
 import Test.Delete as TD
 import Test.Distinct as TDS
@@ -54,3 +55,4 @@ main = TSR.runSpecAndExitProcess [ tapReporter ] do
       TNS.tests
       TST.tests
       TC.tests
+      TCF.tests

@@ -29,6 +29,9 @@ module Droplet.Language.Internal.Translate
       , class ToCompositeConstraintDefinition
       , class QueryMustNotBeAliased
       , class ToQuery
+      , class InsertEnd
+      , class EndProjection
+      , class TranslateConflictTarget
       , class TranslateNakedColumn
       , class NameList
       , class NameValuePairs
@@ -40,6 +43,7 @@ module Droplet.Language.Internal.Translate
       , toCompositeConstraintDefinition
       , argumentList
       , translateNakedColumn
+      , translateConflictTarget
       , toReferenceDefinition
       , toNullableDefinition
       , translateColumn
@@ -81,8 +85,8 @@ import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNu
 import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, E(..), ForeignKey, Identity, Path, PrimaryKey, Star, Table, Unique)
 import Droplet.Language.Internal.Definition as DLID
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
-import Droplet.Language.Internal.Syntax (class ConstraintsToRowList, class JoinedToMaybe, class OnlyAggregations, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, Add, Alter(..), As(..), Create, DefaultValues(..), Delete(..), Distinct(..), Drop, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), T(..), Union(..), Update(..), Values(..), Where(..))
-import Droplet.Language.Internal.Token (addKeyword, allKeyword, alterKeyword, andKeyword, array_aggFunctionName, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterEqualsThanSymbol, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, isNullKeyword, joinKeyword, leftKeyword, lesserEqualsThanSymbol, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Syntax (class CompleteIndex, class ConflictActionEnd, class ConflictClause, class ConstraintsToRowList, class InsertRest, class ValidConflict, class JoinedToMaybe, class OnlyAggregations, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, Add, Alter(..), As(..), Conflict(..), Create(..), DefaultValues(..), Delete(..), Distinct(..), Do(..), Drop, From(..), GroupBy(..), Inclusion(..), Index(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Nothing_(..), Offset(..), On(..), OnConstraint(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), T(..), Union(..), Unique_(..), Update(..), Values(..), Where(..))
+import Droplet.Language.Internal.Token (addKeyword, allKeyword, alterKeyword, andKeyword, array_aggFunctionName, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, conflictKeyword, constraintKeyword, countFunctionName, createKeyword, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, doKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterEqualsThanSymbol, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, indexKeyword, innerKeyword, insertKeyword, isNotNullKeyword, isNullKeyword, joinKeyword, leftKeyword, lesserEqualsThanSymbol, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, nothingKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
 import Foreign (Foreign)
 import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<<<), (<>), (==), (||))
 import Prim.Boolean (False, True)
@@ -145,29 +149,32 @@ instance
       ToQuery (Union q r) final where
       toQuery q = translate q
 
--- | INSERT DEFAULT VALUES ... RETURNING
+-- | INSERT, optionally followed by ON CONFLICT and RETURNING
 instance
-      ( ToProjection f fields Nil projection
-      , Translate (Insert (Into name fields DefaultValues (Returning f)))
+      ( InsertRest fieldNames rest tail
+      , InsertEnd tail end
+      , EndProjection end fields projection
+      , ValidConflict name fields tail
+      , Translate (Insert (Into name fields fieldNames rest))
       ) ⇒
-      ToQuery (Insert (Into name fields DefaultValues (Returning f))) projection where
+      ToQuery (Insert (Into name fields fieldNames rest)) projection where
       toQuery q = translate q
 
--- | INSERT ... RETURNING
-instance
-      ( ToProjection f fields Nil projection
-      , Translate (Insert (Into name fields fieldNames (Values v (Returning f))))
-      ) ⇒
-      ToQuery (Insert (Into name fields fieldNames (Values v (Returning f)))) projection where
-      toQuery q = translate q
+-- | The statement an INSERT ends with
+class InsertEnd (tail ∷ Type) (end ∷ Type) | tail → end
 
--- | INSERT DEFAULT VALUES
-instance Translate (Insert (Into name fields DefaultValues E)) ⇒ ToQuery (Insert (Into name fields DefaultValues E)) () where
-      toQuery q = translate q
+instance InsertEnd E E
 
--- | INSERT
-instance Translate (Insert (Into name fields fieldNames (Values v E))) ⇒ ToQuery (Insert (Into name fields fieldNames (Values v E))) () where
-      toQuery q = translate q
+else instance InsertEnd (Returning f) (Returning f)
+
+else instance (ConflictClause tail target action, ConflictActionEnd action end) ⇒ InsertEnd tail end
+
+-- | INSERT projections are empty unless RETURNING is used
+class EndProjection (end ∷ Type) (fields ∷ Row Type) (projection ∷ Row Type) | end → projection
+
+instance ToProjection f fields Nil projection ⇒ EndProjection (Returning f) fields projection
+
+else instance EndProjection end fields ()
 
 -- | UPDATE
 instance Translate (Update table fields (Set values rest)) ⇒ ToQuery (Update table fields (Set values rest)) () where
@@ -179,6 +186,13 @@ instance Translate (Delete (From f fields rest)) ⇒ ToQuery (Delete (From f fie
 
 -- | CREATE TABLE
 instance Translate (Create (Table name fields)) ⇒ ToQuery (Create (Table name fields)) () where
+      toQuery q = translate q
+
+-- | CREATE [UNIQUE] INDEX
+instance (CompleteIndex (Index name rest), Translate (Create (Index name rest))) ⇒ ToQuery (Create (Index name rest)) () where
+      toQuery q = translate q
+
+instance (CompleteIndex (Unique_ rest), Translate (Create (Unique_ rest))) ⇒ ToQuery (Create (Unique_ rest)) () where
       toQuery q = translate q
 
 -- | ALTER TABLE
@@ -631,12 +645,70 @@ instance ToJoinType Inner where
 instance ToJoinType Outer where
       toJoinType _ = leftKeyword <> joinKeyword
 
--- | ON
-instance (TranslateConditions c, Translate rest) ⇒ Translate (On c rest) where
+-- | INSERT ... ON CONFLICT
+instance Translate rest ⇒ Translate (On E rest) where
+      translate (On _ rest) = do
+            q ← translate rest
+            pure $ onKeyword <> q
+
+-- | CREATE INDEX ... ON
+else instance (Reflectable name String, NameList columns, Translate rest) ⇒ Translate (On (T (Table name fields) columns) rest) where
+      translate (On (T columns) rest) = do
+            q ← translate rest
+            pure $ onKeyword
+                  <> quote (Proxy ∷ _ name)
+                  <> space
+                  <> openBracket
+                  <> nameList columns
+                  <> closeBracket
+                  <> q
+
+-- | JOIN ... ON
+else instance (TranslateConditions c, Translate rest) ⇒ Translate (On c rest) where
       translate (On c rest) = do
             q ← translateConditions c
             otherQ ← translate rest
             pure $ onKeyword <> q <> otherQ
+
+-- | CONFLICT
+instance (TranslateConflictTarget target, Translate rest) ⇒ Translate (Conflict target rest) where
+      translate (Conflict target rest) = do
+            q ← translate rest
+            pure $ conflictKeyword <> translateConflictTarget target <> q
+
+-- | Conflict targets are either absent or a list of columns
+class TranslateConflictTarget (target ∷ Type) where
+      translateConflictTarget ∷ target → String
+
+instance TranslateConflictTarget E where
+      translateConflictTarget _ = ""
+
+else instance NameList columns ⇒ TranslateConflictTarget columns where
+      translateConflictTarget columns = space <> openBracket <> nameList columns <> closeBracket
+
+-- | ON CONSTRAINT (the ON statement is printed by the enclosing On node)
+instance (Reflectable name String, Translate rest) ⇒ Translate (OnConstraint name rest) where
+      translate (OnConstraint rest) = do
+            q ← translate rest
+            pure $ constraintKeyword <> quote (Proxy ∷ _ name) <> q
+
+-- | DO UPDATE
+instance Translate rest ⇒ Translate (Do (Update name fields rest)) where
+      translate (Do (Update rest)) = do
+            q ← translate rest
+            pure $ doKeyword <> space <> updateKeyword <> q
+
+-- | DO
+else instance Translate rest ⇒ Translate (Do rest) where
+      translate (Do rest) = do
+            q ← translate rest
+            pure $ doKeyword <> q
+
+-- | NOTHING
+instance Translate rest ⇒ Translate (Nothing_ rest) where
+      translate (Nothing_ rest) = do
+            q ← translate rest
+            pure $ nothingKeyword <> q
 
 -- | (SELECT ... FROM ...) AS
 instance Reflectable name String ⇒ Translate (As name E) where
@@ -863,15 +935,20 @@ else instance ToValue p ⇒ ValueList p where
             pure $ "$" <> show (DA.length parameters)
 
 -- | UPDATE
-instance (Reflectable name String, NameValuePairs pairs, Translate rest) ⇒ Translate (Update name fields (Set pairs rest)) where
-      translate (Update (Set pairs rest)) = do
+instance (Reflectable name String, Translate (Set pairs rest)) ⇒ Translate (Update name fields (Set pairs rest)) where
+      translate (Update s) = do
+            q ← translate s
+            pure $ updateKeyword
+                  <> space
+                  <> quote (Proxy ∷ _ name)
+                  <> q
+
+-- | SET
+instance (NameValuePairs pairs, Translate rest) ⇒ Translate (Set pairs rest) where
+      translate (Set pairs rest) = do
             q ← nameValuePairs pairs
             otherQ ← translate rest
-            pure $ updateKeyword
-                  <> quote (Proxy ∷ _ name)
-                  <> setKeyword
-                  <> q
-                  <> otherQ
+            pure $ setKeyword <> q <> otherQ
 
 -- | UPDATE list
 class NameValuePairs pairs where
@@ -879,6 +956,9 @@ class NameValuePairs pairs where
 
 instance Reflectable name String ⇒ NameValuePairs (Op (Proxy name) Default) where
       nameValuePairs (Op _ name _) = pure $ DR.reflectType name <> equalsSymbol <> defaultKeyword
+
+else instance (Reflectable name String, Reflectable alias String, Reflectable fieldName String) ⇒ NameValuePairs (Op (Proxy name) (Path alias fieldName)) where
+      nameValuePairs (Op _ name _) = pure $ DR.reflectType name <> equalsSymbol <> quotePath (Proxy ∷ _ alias) (Proxy ∷ _ fieldName)
 
 else instance (Reflectable name String, ToValue p) ⇒ NameValuePairs (Op (Proxy name) p) where
       nameValuePairs (Op _ name p) = do
@@ -939,6 +1019,12 @@ instance
                   <> DST.joinWith comma (translateFieldDefinition (Proxy ∷ _ columnList) <> translateCompositeConstraint (Proxy ∷ _ composites))
                   <> closeBracket
 
+-- | CREATE [UNIQUE] INDEX
+else instance Translate rest ⇒ Translate (Create rest) where
+      translate (Create rest) = do
+            q ← translate rest
+            pure $ createKeyword <> q
+
 -- |
 class TranslateFieldDefinition (list ∷ RowList Type) where
       translateFieldDefinition ∷ Proxy list → Array String
@@ -988,7 +1074,7 @@ instance ToConstraintDefinition Identity where
       toConstraintDefinition _ = identityKeyword
 
 instance ToConstraintDefinition Unique where
-      toConstraintDefinition _ = uniqueKeyword
+      toConstraintDefinition _ = space <> uniqueKeyword
 
 instance ToConstraintDefinition PrimaryKey where
       toConstraintDefinition _ = primaryKeyKeyword
@@ -1130,6 +1216,24 @@ class SingleColumn (name ∷ Symbol) (c ∷ Type) (output ∷ RowList Type) | na
 instance SingleColumn name (Proxy t) (Cons name t Nil)
 
 instance SingleColumn name (Column t constraints) (Cons name (Column t constraints) Nil)
+
+-- | CREATE UNIQUE INDEX
+instance Translate rest ⇒ Translate (Unique_ rest) where
+      translate (Unique_ rest) = do
+            q ← translate rest
+            pure $ uniqueKeyword <> space <> q
+
+-- | CREATE INDEX name
+instance (Reflectable name String, Translate rest) ⇒ Translate (Index (Proxy name) rest) where
+      translate (Index rest) = do
+            q ← translate rest
+            pure $ indexKeyword <> space <> quote (Proxy ∷ _ name) <> q
+
+-- | CREATE INDEX
+else instance Translate rest ⇒ Translate (Index name rest) where
+      translate (Index rest) = do
+            q ← translate rest
+            pure $ indexKeyword <> q
 
 -- | DROP TABLE
 instance Reflectable name String ⇒ Translate (Drop (Table name fields)) where

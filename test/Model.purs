@@ -11,8 +11,11 @@ import Data.Either (Either(..))
 import Data.Enum (class BoundedEnum)
 import Data.Enum as DE
 import Data.Eq (class EqRecord)
+import Data.Int as DI
 import Data.Maybe (Maybe(..))
 import Data.Maybe as DM
+import Data.Nullable (Nullable)
+import Data.Nullable as DN
 import Data.Show (class ShowRecordFields)
 import Data.Tuple.Nested ((/\))
 import Droplet.Driver (class FromResult, Configuration, Connection, PgError)
@@ -117,10 +120,14 @@ insertDefaultRecords = do
                   void <<< DD.query connection $ insert # into doublePrimaryKey defaultValues
                   void <<< DD.query connection $ insert # into composite (secondId /\ name /\ sender /\ recipient) # values (1 /\ "adam" /\ 1 /\ 2)
 
+foreign import environmentVariable_ ∷ String → Nullable String
+
+-- | Tests run against a throwaway database container (see test.sh), located by the usual postgres environment variables
 connectionInfo ∷ Configuration
 connectionInfo = (DD.defaultConfiguration "droplet")
       { user = Just "droplet"
-      , host = Nothing
+      , host = DN.toMaybe $ environmentVariable_ "PGHOST"
+      , port = DI.fromString =<< DN.toMaybe (environmentVariable_ "PGPORT")
       , password = Just "droplet"
       , idleTimeoutMillis = Just 1000
       }

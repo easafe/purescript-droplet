@@ -184,6 +184,10 @@ runSql connection = do
             _, _ -> pure unit
 ```
 
+### Running tests
+
+`./test.sh` runs the test suite against a throwaway postgres container (requires docker), so test runs don't touch local databases or interfere with each other. Extra arguments are passed along to `spago test`
+
 ### Licensing
 
 Wrapper code around [pg](https://github.com/brianc/node-postgres) was adapted from [purescript-postgresql-client](https://github.com/rightfold/purescript-postgresql-client) so its license has been included in [PURESCRIPT-POSTGRESQL-CLIENT-LICENSE](PURESCRIPT-POSTGRESQL-CLIENT-LICENSE)
