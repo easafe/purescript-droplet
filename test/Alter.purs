@@ -15,12 +15,16 @@ import Droplet.Language.Internal.Translate as DLIQ
 import Effect.Class (liftEffect)
 import Test.Model (connectionInfo)
 import Test.Model as TM
+import Test.RunTestFailure as TR
 import Test.Spec (Spec)
 import Test.Spec as TS
 import Type.Proxy (Proxy(..))
 
 tests ∷ Spec Unit
 tests = TS.describe "alter" do
+      TS.describe "invariants" do
+            TS.it "ADD requires ALTER TABLE" do
+                  TR.testFailure "alter-test-1" "TypesDoNotUnify" "Create"
       TS.describe "table" do
             TS.describe "add" do
                   TS.it "no constraint" do

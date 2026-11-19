@@ -1,0 +1,5 @@
+package:
+  name: offset-test-1
+  dependencies:
+    - droplet: "*"
+    - prelude: ">=6.0.3 <7.0.0"

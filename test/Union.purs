@@ -2,10 +2,11 @@ module Test.Union where
 
 import Droplet.Language (as, from, select, union, unionAll, wher, (.<>.), (.=.))
 import Prelude
-import Test.Types (b, id, messages, name, users)
+import Test.Types (id, messages, name, users)
 
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
+import Test.RunTestFailure as TR
 
 import Test.Spec (Spec)
 import Test.Spec as TS
@@ -13,12 +14,15 @@ import Test.Spec as TS
 tests ∷ Spec Unit
 tests = do
       TS.describe "union" do
+            TS.describe "invariants" do
+                  TS.it "projections must match" do
+                        TR.testFailure "union-test-1" "NoInstanceFound" "UNION column types and count must match"
             TS.it "select" do
                   let q = (select id # from users # wher (name .=. "mary")) `union` (select id # from users # wher (name .<>. "mary"))
                   TM.parameterized """(SELECT "id" FROM "users" WHERE "name" = $1 UNION SELECT "id" FROM "users" WHERE "name" <> $2)""" $ DLIQ.buildQuery q
                   TM.result q [ { id: 2 }, { id: 1 } ]
             TS.it "as" do
-                  let q = (select id # from (users # as b)) `union` (select id # from users # wher (name .<>. "mary"))
+                  let q = (select id # from (users # as @"b")) `union` (select id # from users # wher (name .<>. "mary"))
                   TM.parameterized """(SELECT "id" FROM "users" AS "b" UNION SELECT "id" FROM "users" WHERE "name" <> $1)""" $ DLIQ.buildQuery q
                   TM.result q [ { id: 2 }, { id: 1 } ]
             TS.describe "from union" do
@@ -37,7 +41,7 @@ tests = do
                   TM.parameterized """(SELECT "id" FROM "users" WHERE "name" = $1 UNION ALL SELECT "id" FROM "users" WHERE "name" <> $2)""" $ DLIQ.buildQuery q
                   TM.result q [ { id: 2 }, { id: 1 } ]
             TS.it "as" do
-                  let q = (select id # from (users # as b)) `unionAll` (select id # from users # wher (name .<>. "mary"))
+                  let q = (select id # from (users # as @"b")) `unionAll` (select id # from users # wher (name .<>. "mary"))
                   TM.parameterized """(SELECT "id" FROM "users" AS "b" UNION ALL SELECT "id" FROM "users" WHERE "name" <> $1)""" $ DLIQ.buildQuery q
                   TM.result q [ { id: 1 }, { id: 2 }, { id: 1 } ]
             TS.describe "from unionAll" do

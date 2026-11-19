@@ -7,8 +7,9 @@ import Prelude
 
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Maybe (Maybe(..))
-import Droplet.Language.Internal.Definition (class IsNullable, class ToValue, class UnwrapDefinition, class UnwrapNullable, Path)
+import Droplet.Language.Internal.Definition (class ColumnInScope, class IsNullable, class ToValue, class UnwrapNullable, Path)
 import Prim.Row (class Cons)
+import Prim.RowList (class RowToList)
 import Prim.TypeError (class Fail, Text)
 import Type.Proxy (Proxy)
 
@@ -79,19 +80,9 @@ else instance
 -- | Whether expression can be compared
 class Comparison (c ∷ Type) (fields ∷ Row Type) (alias ∷ Symbol) (t ∷ Type) | c → fields t
 
-instance
-      ( Cons name t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
-      ) ⇒
-      Comparison (Proxy name) fields alias v
+instance (RowToList fields list, ColumnInScope name list t, UnwrapNullable t v) ⇒ Comparison (Proxy name) fields alias v
 
-else instance
-      ( Cons name t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
-      ) ⇒
-      Comparison (Path alias name) fields alias v
+else instance (Cons name t d fields, UnwrapNullable t v) ⇒ Comparison (Path alias name) fields alias v
 
 else instance Comparison (Path table name) fields alias OuterScope
 

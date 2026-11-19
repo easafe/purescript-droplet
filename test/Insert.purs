@@ -7,6 +7,7 @@ import Test.Types
 import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
+import Test.RunTestFailure as TR
 
 import Test.Spec (Spec)
 import Test.Spec as TS
@@ -14,6 +15,13 @@ import Test.Spec as TS
 tests ∷ Spec Unit
 tests = do
       TS.describe "insert" do
+            TS.describe "invariants" do
+                  TS.it "identity columns cannot be inserted" do
+                        TR.testFailure "insert-test-1" "NoInstanceFound" "Identity columns cannot be inserted or updated"
+                  TS.it "required columns must be inserted" do
+                        TR.testFailure "insert-test-2" "TypesDoNotUnify" "MissingRequiredColumns"
+                  TS.it "RETURNING requires VALUES" do
+                        TR.testFailure "insert-test-3" "NoInstanceFound" "RETURNING must follow INSERT ... VALUES or INSERT ... DEFAULT VALUES"
             TS.describe "values" do
                   TS.it "all fields" do
                         let q = insert # into users (name /\ surname /\ birthday /\ joined) # values ("mary" /\ "m." /\ TM.makeDate 2000 9 9 /\ TM.makeDate 2009 9 9)

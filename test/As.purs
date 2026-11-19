@@ -6,46 +6,49 @@ import Prelude
 import Data.Maybe (Maybe(..))
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
+import Test.RunTestFailure as TR
 import Test.Spec (Spec)
 import Test.Spec as TS
-import Test.Types (b, created, id, messages, n, name, t, tags, u, users)
-import Type.Proxy (Proxy(..))
+import Test.Types (created, id, messages, name, tags, u, users)
 
 tests ∷ Spec Unit
 tests =
       TS.describe "as" do
+            TS.describe "invariants" do
+                  TS.it "cannot be top level" do
+                        TR.testFailure "as-test-1" "NoInstanceFound" "AS statement cannot be top level"
             TS.describe "named field" do
                   TS.it "casing" do
-                        let q = select (id # as (Proxy ∷ Proxy "AbCd")) # from users
+                        let q = select (id # as @"AbCd") # from users
                         TM.notParameterized """SELECT "id" AS "AbCd" FROM "users"""" $ DLIQ.buildQuery q
                         TM.result q [ { "AbCd": 1 }, { "AbCd": 2 } ]
                   TS.it "comparision" do
-                        let q = select (isNotNull created # as n) # from tags
+                        let q = select (isNotNull created # as @"n") # from tags
                         TM.notParameterized """SELECT "created" IS NOT NULL AS "n" FROM "tags"""" $ DLIQ.buildQuery q
                         TM.result q [ { "n": false } ]
             TS.describe "named table" do
                   TS.it "field" do
-                        let q = select id # from (users # as u)
+                        let q = select id # from (users # as @"u")
                         TM.notParameterized """SELECT "id" FROM "users" AS "u"""" $ DLIQ.buildQuery q
                         TM.result q [ { id: 1 }, { id: 2 } ]
                   TS.it "named aliased field" do
-                        let q = select (u ... id # as id) # from (users # as u)
+                        let q = select (u ... id # as @"id") # from (users # as @"u")
                         TM.notParameterized """SELECT "u"."id" AS "id" FROM "users" AS "u"""" $ DLIQ.buildQuery q
                         TM.result q [ { id: 1 }, { id: 2 } ]
             TS.describe "named queries" do
                   TS.it "subquery column" do
-                        let q = select (select id # from users # wher (name .=. "mary") # orderBy id # limit (Proxy ∷ _ 1) # as b) # from users # wher (id .=. 1 .||. id .=. 2)
+                        let q = select (select id # from users # wher (name .=. "mary") # orderBy id # limit @1 # as @"b") # from users # wher (id .=. 1 .||. id .=. 2)
                         TM.parameterized """SELECT (SELECT "id" FROM "users" WHERE "name" = $1 ORDER BY "id" LIMIT 1) AS "b" FROM "users" WHERE ("id" = $2 OR "id" = $3)""" $ DLIQ.buildQuery q
                         TM.result q [ { b: Just 2 }, { b: Just 2 } ]
                   TS.it "scalar" do
-                        let q = select (4 # as n) # from (select (4 # as n) # from users # wher (id .=. id) # as u)
+                        let q = select (4 # as @"n") # from (select (4 # as @"n") # from users # wher (id .=. id) # as @"u")
                         TM.notParameterized """SELECT 4 AS "n" FROM (SELECT 4 AS "n" FROM "users" WHERE "id" = "id") AS "u"""" $ DLIQ.buildQuery q
                         TM.result q [ { n: 4 }, { n: 4 } ]
                   TS.it "boolean" do
-                        let q = select (false # as n) # from (select (true # as n) # from users # wher (id .=. id) # as u)
+                        let q = select (false # as @"n") # from (select (true # as @"n") # from users # wher (id .=. id) # as @"u")
                         TM.notParameterized """SELECT false AS "n" FROM (SELECT true AS "n" FROM "users" WHERE "id" = "id") AS "u"""" $ DLIQ.buildQuery q
                         TM.result q [ { n: false }, { n: false } ]
                   TS.it "field" do
-                        let q = select id # from (select id # from messages # wher (id .=. id) # as t)
+                        let q = select id # from (select id # from messages # wher (id .=. id) # as @"t")
                         TM.notParameterized """SELECT "id" FROM (SELECT "id" FROM "messages" WHERE "id" = "id") AS "t"""" $ DLIQ.buildQuery q
                         TM.result q [ { id: 1 }, { id: 2 } ]

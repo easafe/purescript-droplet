@@ -1,0 +1,5 @@
+package:
+  name: subquery-test-2
+  dependencies:
+    - droplet: "*"
+    - prelude: ">=6.0.3 <7.0.0"

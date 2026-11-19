@@ -5,6 +5,7 @@ import Prelude
 import Effect (Effect)
 import Test.Alter as TAL
 import Test.As as TA
+import Test.Columns as TCL
 import Test.Create as TC
 import Test.Delete as TD
 import Test.Distinct as TDS
@@ -19,6 +20,7 @@ import Test.Migration as TMG
 import Test.NakedSelect as TNS
 import Test.Offset as TOF
 import Test.OrderBy as TO
+import Test.Prepare as TP
 import Test.Returning as TR
 import Test.Spec.Reporter.Tap (tapReporter)
 import Test.Spec.Runner.Node as TSR
@@ -54,3 +56,5 @@ main = TSR.runSpecAndExitProcess [ tapReporter ] do
       TNS.tests
       TST.tests
       TC.tests
+      TP.tests
+      TCL.tests

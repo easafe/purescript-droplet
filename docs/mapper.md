@@ -47,7 +47,7 @@ single ::
 
 Because queries can be freely composed, a few checks can only be performed when using one of the querying functions above. This includes checking for out of scope column access, ill formed aggregations, invalid top levels, etc.
 
-For the mapping to work, all columns names in a projection must be unique -- same reason as why literals and functions must be aliased. Since names are always quoted by the query mapper, it is safe to use any casing in columns or aliases. This also means table aliases are not stripped. For example, running the query `SELECT u.id FROM users AS u` on Postgres renders columns as "id"; the Droplet equivalent `select (u ... id) # from (users # as u)` results in the record `{ "u.id" :: Int }`.
+For the mapping to work, all columns names in a projection must be unique -- same reason as why literals and functions must be aliased. Since names are always quoted by the query mapper, it is safe to use any casing in columns or aliases. This also means table aliases are not stripped. For example, running the query `SELECT u.id FROM users AS u` on Postgres renders columns as "id"; the Droplet equivalent `select (u ... id) # from (users # as @"u")` results in the record `{ "u.id" :: Int }`.
 
 ## Unsafe queries
 

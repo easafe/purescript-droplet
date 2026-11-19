@@ -7,16 +7,19 @@ import Test.Types (id, n, name, users)
 import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Translate as DLIQ
 import Test.Model as TM
+import Test.RunTestFailure as TR
 
 import Test.Spec (Spec)
 import Test.Spec as TS
-import Type.Proxy (Proxy(..))
 
 tests ∷ Spec Unit
 tests =
       TS.describe "offset" do
+            TS.describe "invariants" do
+                  TS.it "must follow ORDER BY" do
+                        TR.testFailure "offset-test-1" "NoInstanceFound" "OFFSET must follow ORDER BY or LIMIT"
             TS.it "from" do
-                  let q = select (4 # as n) # from users # orderBy n # offset 1
+                  let q = select (4 # as @"n") # from users # orderBy n # offset 1
                   TM.notParameterized """SELECT 4 AS "n" FROM "users" ORDER BY "n" OFFSET 1""" $ DLIQ.buildQuery q
                   TM.result q [ { n: 4 } ]
             TS.it "where" do
@@ -24,6 +27,6 @@ tests =
                   TM.parameterized """SELECT "id" FROM "users" WHERE "id" <> $1 ORDER BY "id", "name" OFFSET 2""" $ DLIQ.buildQuery q
                   TM.result q []
             TS.it "limit" do
-                  let q = select (4 # as n) # from users # orderBy n # limit (Proxy ∷ _ 5) # offset 4
+                  let q = select (4 # as @"n") # from users # orderBy n # limit @5 # offset 4
                   TM.notParameterized """SELECT 4 AS "n" FROM "users" ORDER BY "n" LIMIT 5 OFFSET 4""" $ DLIQ.buildQuery q
                   TM.result q []

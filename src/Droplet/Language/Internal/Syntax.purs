@@ -35,6 +35,8 @@ module Droplet.Language.Internal.Syntax
       , Values(..)
       , Offset(..)
       , SymbolList
+      , class SelectQuery
+      , class IsSubQuery
       , class ToOffset
       , class SingleTypeComposite
       , class SortColumnsSource
@@ -48,7 +50,7 @@ module Droplet.Language.Internal.Syntax
       , class LimitedResults
       , class ToAdd
       , class ColumnNames
-      , class UnwrapAll
+      , class ColumnTypes
       , class UniqueColumnNames
       , class UniqueTableColumnNames
       , class IsRequiredColumn
@@ -62,7 +64,6 @@ module Droplet.Language.Internal.Syntax
       , class ValidComposites
       , class ValidConstraints
       , class ToLimit
-      , class Resume
       , class UniqueConstraints
       , class IsRepeated
       , class ToTable
@@ -75,11 +76,8 @@ module Droplet.Language.Internal.Syntax
       , class SourceAlias
       , class MissingRequiredColumns
       , class ToPath
-      , class QueryMustBeAliased
-      , class UniqueSources
       , class OuterScopeAlias
       , class OnCondition
-      , class QueryOptionallyAliased
       , class ToJoin
       , class QualifiedColumn
       , class OnComparision
@@ -88,20 +86,19 @@ module Droplet.Language.Internal.Syntax
       , class ToGroupBy
       , class ToOuterColumns
       , class ToWhere
-      , class JoinedToMaybe
       , class CompatibleProjection
       , class ToUnion
       , class RequiredColumns
       , class ToAs
       , class ToFrom
-      , class GroupBySource
       , class InsertList
       , class InsertValues
       , class ToPrepare
       , class ToProjection
       , class ToSelect
+      , class ToSelectColumn
       , class ToSingleColumn
-      , class ToSubExpression
+      , class ToSubSelectColumn
       , class IncludeAllColumns
       , class SourceColumns
       , class ToUpdatePairs
@@ -113,7 +110,6 @@ module Droplet.Language.Internal.Syntax
       , create
       , table
       , leftJoin
-      , resume
       , exists
       , defaultValues
       , on
@@ -149,7 +145,7 @@ import Prim hiding (Constraint)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Droplet.Language.Internal.Condition (class ToCondition, class ValidComparision, Exists(..), Op(..), OuterScope)
-import Droplet.Language.Internal.Definition (class AppendPath, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, Dot, E(..), Empty, ForeignKey, Identity, Joined, Path, PrimaryKey, Star, Table(..), Unique)
+import Droplet.Language.Internal.Definition (class AppendPath, class ColumnInScope, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, Dot, Empty, ForeignKey, Identity, Path, PrimaryKey, Star, Table, Unique)
 import Droplet.Language.Internal.Function (class ToArrayAgg, class ToStringAgg, Aggregate, PgFunction)
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
@@ -159,6 +155,22 @@ import Prim.TypeError (class Fail, Beside, Quote, QuoteLabel, Text)
 import Type.Data.Boolean (class And, class If)
 import Type.Proxy (Proxy)
 import Type.RowList (class ListToRow, class RowListAppend, class RowListNub)
+
+{-
+
+Statements are represented as nested data types where the last clause written is the outermost type, e.g.
+
+      select id # from users # wher (id .=. 1) # orderBy id # limit (Proxy ∷ _ 1)
+
+has type
+
+      Limit 1 (OrderBy (Proxy "id") (Where (Op (Proxy "id") Int) (From (Table "users" Users) Users (id ∷ Int) (Select (Proxy "id")))))
+
+Each combinator checks the outermost type of the statement it receives (i.e., what clause it follows) and wraps it
+
+Keywords that carry no information (INSERT, CREATE, ALTER, DROP, DELETE) are represented by empty data types
+
+-}
 
 ----------------------PREPARE----------------------------
 
@@ -170,13 +182,19 @@ newtype Plan = Plan String
 -- | Only complete statements are accepted by PREPARE
 class ToPrepare (q ∷ Type)
 
-instance ToPrepare (Select s p (From f fields rest))
+instance ToPrepare (Values v (Into name fields fieldNames))
 
-instance ToPrepare (Insert (Into name fields fieldNames (Values v rest)))
+else instance ToPrepare (Returning f (Values v (Into name fields fieldNames)))
 
-instance ToPrepare (Update name fields (Set v rest))
+else instance ToPrepare (Set v (Update name fields))
 
-instance ToPrepare (Delete (From f fields rest))
+else instance ToPrepare (Where c (Set v (Update name fields)))
+
+else instance ToPrepare (From f fields projection Delete)
+
+else instance ToPrepare (Where c (From f fields projection Delete))
+
+else instance SelectQuery q s f fields projection ⇒ ToPrepare q
 
 -- | https://www.postgresql.org/docs/current/sql-prepare.html
 -- |
@@ -276,75 +294,78 @@ OFFSET
 
 -}
 
--- | SELECT representation. `projection` refers to the final output of this statement
-data Select s (projection ∷ Row Type) rest = Select s rest
+-- | SELECT representation. The projection (final output) of a statement is computed by FROM
+data Select s = Select s
 
--- | Acceptable column types for SELECT statements
+-- | Acceptable SELECT projection list
 class ToSelect (s ∷ Type)
 
-instance ToSelect (Proxy name)
+instance ToSelectColumn s ⇒ ToSelect (Distinct s)
 
-instance ToSelect (Path table name)
+else instance ToSelectColumn s ⇒ ToSelect s
 
-instance ToSelect (As alias Int)
+-- | Acceptable column types for SELECT statements
+class ToSelectColumn (s ∷ Type)
 
-instance ToSelect (As alias Boolean)
+instance ToSelectColumn (Proxy name)
 
-instance ToSelect (As alias (Op one another))
+else instance ToSelectColumn (Path table name)
 
-instance ToSelect (As alias (Proxy name))
+else instance ToSelectColumn (As alias Int)
 
-instance ToSelect (As alias (Path table name))
+else instance ToSelectColumn (As alias Boolean)
 
-instance ToSelect (As alias (Aggregate inp rest fields out))
+else instance ToSelectColumn (As alias (Op one another))
 
-instance ToSelect (As alias (PgFunction inp arg fields out))
+else instance ToSelectColumn (As alias (Proxy name))
 
-instance (ToSelect r, ToSelect t) ⇒ ToSelect (r /\ t)
+else instance ToSelectColumn (As alias (Path table name))
 
-instance ToSelect Star
+else instance ToSelectColumn (As alias (Aggregate inp rest fields out))
 
-instance ToSelect (Distinct s)
+else instance ToSelectColumn (As alias (PgFunction inp arg fields out))
 
-instance (ToSubExpression f, LimitedResults rest) ⇒ ToSelect (Select f projection rest)
+else instance (ToSelectColumn r, ToSelectColumn t) ⇒ ToSelectColumn (r /\ t)
+
+else instance ToSelectColumn Star
+
+else instance Fail (Text "DISTINCT must follow SELECT") ⇒ ToSelectColumn (Distinct s)
+
+-- | Aliased subquery
+else instance (SelectQuery q s f fields projection, ToSubSelectColumn s, LimitedResults q) ⇒ ToSelectColumn (As alias q)
+
+-- | Subquery
+else instance (SelectQuery q s f fields projection, ToSubSelectColumn s, LimitedResults q) ⇒ ToSelectColumn q
 
 -- | Only single columns can be projected by subqueries
-class ToSubExpression (f ∷ Type)
+class ToSubSelectColumn (f ∷ Type)
 
-instance ToSubExpression (Proxy name)
+instance ToSubSelectColumn (Proxy name)
 
-instance ToSubExpression (Path table name)
+instance ToSubSelectColumn (Path table name)
 
-instance ToSubExpression (As alias Int)
+instance ToSubSelectColumn (As alias Int)
 
-instance ToSubExpression (As alias Boolean)
+instance ToSubSelectColumn (As alias Boolean)
 
-instance ToSubExpression (As alias (Proxy name))
+instance ToSubSelectColumn (As alias (Proxy name))
 
-instance ToSubExpression (As alias (Path table name))
+instance ToSubSelectColumn (As alias (Path table name))
 
-instance ToSubExpression (As alias (PgFunction inp arg fields out))
+instance ToSubSelectColumn (As alias (PgFunction inp arg fields out))
 
-instance ToSubExpression (As alias (Aggregate inp r fields out))
+instance ToSubSelectColumn (As alias (Aggregate inp r fields out))
 
-instance Fail (Text "Subqueries must return a single column") ⇒ ToSubExpression (a /\ b)
+instance Fail (Text "Subqueries must return a single column") ⇒ ToSubSelectColumn (a /\ b)
 
 -- | Subqueries must return a single result
 class LimitedResults (q ∷ Type)
 
-instance LimitedResults rest ⇒ LimitedResults (From f fields rest)
+instance LimitedResults (Limit 1 q)
 
-instance LimitedResults rest ⇒ LimitedResults (Where c rest)
+else instance LimitedResults q ⇒ LimitedResults (Offset q)
 
-instance LimitedResults rest ⇒ LimitedResults (GroupBy f rest)
-
-instance LimitedResults rest ⇒ LimitedResults (OrderBy f rest)
-
-instance LimitedResults rest ⇒ LimitedResults (Offset rest)
-
-instance LimitedResults (Limit 1 rest)
-
-instance Fail (Text "Subqueries must return zero or one rows. Are you missing ORDER BY ... LIMIT 1?") ⇒ LimitedResults E
+else instance Fail (Text "Subqueries must return zero or one rows. Are you missing ORDER BY ... LIMIT 1?") ⇒ LimitedResults q
 
 -- | SELECT can project literals, columns and subqueries with the following considerations:
 -- |
@@ -352,27 +373,59 @@ instance Fail (Text "Subqueries must return zero or one rows. Are you missing OR
 -- | - Literal values (e.g., numbers) must be aliased (with AS)
 -- | - Columns names in projections must be unique, or referenced by different table aliases (e.g., u.name, t.name)
 -- | - Subqueries must return a single column
-select ∷ ∀ s projection. ToSelect s ⇒ s → Select s projection E
-select s = Select s E
+select ∷ ∀ s. ToSelect s ⇒ s → Select s
+select = Select
+
+-- | Finds the SELECT ... FROM core of a statement, skipping over any trailing clauses (WHERE, GROUP BY, ORDER BY, LIMIT, OFFSET)
+-- |
+-- | `s` is the select list, `f` the FROM source, `fields` the source columns and `projection` the statement output
+class SelectQuery (q ∷ Type) (s ∷ Type) (f ∷ Type) (fields ∷ Row Type) (projection ∷ Row Type) | q → s f fields projection
+
+instance SelectQuery (From f fields projection (Select s)) s f fields projection
+
+else instance SelectQuery q s f fields projection ⇒ SelectQuery (Where c q) s f fields projection
+
+else instance SelectQuery q s f fields projection ⇒ SelectQuery (GroupBy g q) s f fields projection
+
+else instance SelectQuery q s f fields projection ⇒ SelectQuery (OrderBy o q) s f fields projection
+
+else instance SelectQuery q s f fields projection ⇒ SelectQuery (Limit n q) s f fields projection
+
+else instance SelectQuery q s f fields projection ⇒ SelectQuery (Offset q) s f fields projection
+
+else instance Fail (Text "Expected a SELECT ... FROM ... statement") ⇒ SelectQuery q s f fields projection
+
+-- | Whether a projected expression is a subquery (which must end in LIMIT or OFFSET, and may be aliased)
+class IsSubQuery (q ∷ Type) (is ∷ Boolean) | q → is
+
+instance IsSubQuery (Limit n q) True
+
+else instance IsSubQuery (Offset q) True
+
+else instance IsSubQuery (As alias (Limit n q)) True
+
+else instance IsSubQuery (As alias (Offset q)) True
+
+else instance IsSubQuery q False
 
 -------------------------------DISTINCT----------------------------
 
 newtype Distinct s = Distinct s
 
-distinct ∷ ∀ s. ToSelect s ⇒ s → Distinct s
+distinct ∷ ∀ s. ToSelectColumn s ⇒ s → Distinct s
 distinct = Distinct
 
 -------------------------------FROM----------------------------
 
 --as it is, From does not try to carry all source fields (for example qualified and unqualified columns from table as alias) because it makes projection code a lot harder for joins and select *
 -- this can change if a simpler design is found
-data From f (fields ∷ Row Type) rest = From f rest
+data From f (fields ∷ Row Type) (projection ∷ Row Type) q = From f q
 
 -- | Acceptable sources for FROM statements
-class ToFrom (f ∷ Type) (q ∷ Type) (fields ∷ Row Type) | q f → fields
+class ToFrom (f ∷ Type) (q ∷ Type) (fields ∷ Row Type) (projection ∷ Row Type) | q f → fields projection
 
 -- | (DELETE) FROM table
-instance ToFrom (Table name fields) (Delete E) fields
+instance (RowToList fields list, ColumnTypes list columns) ⇒ ToFrom (Table name fields) Delete columns ()
 
 -- | FROM ... JOIN ...
 else instance
@@ -380,7 +433,7 @@ else instance
       , Nub selected unique
       , UniqueColumnNames selected unique
       ) ⇒
-      ToFrom (Join k fields l r aliases (On c rest)) (Select s unique E) fields
+      ToFrom (On c (Join k fields l r aliases)) (Select s) fields unique
 
 -- | Anything `SourceColumns` can compute
 else instance
@@ -389,7 +442,7 @@ else instance
       , Nub selected unique
       , UniqueColumnNames selected unique
       ) ⇒
-      ToFrom f (Select s unique E) fields
+      ToFrom f (Select s) fields unique
 
 -- | FROM accepts the following sources
 -- |
@@ -403,8 +456,8 @@ else instance
 -- | - `SELECT column FROM table alias JOIN other_table other_alias` should be `select column # from ((table # as alias) `join` (other_table # as other_alias))`)
 -- |
 -- | To aid composition, SELECT projections are only validated on FROM
-from ∷ ∀ f q fields sql. ToFrom f q fields ⇒ Resume q (From f fields E) sql ⇒ f → q → sql
-from f q = resume q $ From f E
+from ∷ ∀ f q fields projection. ToFrom f q fields projection ⇒ f → q → From f fields projection q
+from f q = From f q
 
 -------------------------------JOIN----------------------------
 
@@ -414,9 +467,9 @@ data Side
 foreign import data Inner ∷ Side
 foreign import data Outer ∷ Side
 
-data Join (k ∷ Side) (fields ∷ Row Type) q r (aliases ∷ SymbolList) rest = Join q r rest
+data Join (k ∷ Side) (fields ∷ Row Type) q r (aliases ∷ SymbolList) = Join q r
 
-data On c rest = On c rest
+data On c j = On c j
 
 -- | Given a source `q`, compute its joined (non and qualified) fields
 class ToJoin (q ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) | q → fields aliases
@@ -429,7 +482,7 @@ instance
       , Nub all fields
       , RowListAppend las ras aliases
       ) ⇒
-      ToJoin (Join Inner fd l r a (On c rest)) fields aliases
+      ToJoin (On c (Join Inner fd l r a)) fields aliases
 
 -- | outer JOIN ... ON
 else instance
@@ -441,27 +494,25 @@ else instance
       , Nub all fields
       , RowListAppend las ras aliases
       ) ⇒
-      ToJoin (Join Outer fd l r a (On c rest)) fields aliases
+      ToJoin (On c (Join Outer fd l r a)) fields aliases
 
 else instance SourceColumns q fields aliases ⇒ ToJoin q fields aliases
 
 -- | OUTER JOINs make one side nullable, as a corresponding record may not be found
--- |
--- | For ease of use, this class marks the nullable side fields with `Joined`, later on `ToProjection` will flatten it to `Maybe`
 class ToOuterColumns (list ∷ RowList Type) (fields ∷ Row Type) | list → fields
 
 instance ToOuterColumns Nil ()
 
--- | Avoid nesting `Joined`s
+-- | Already nullable columns are kept as they are
 instance
-      ( Cons name (Joined t) () head
+      ( Cons name (Maybe t) () head
       , ToOuterColumns rest tail
       , Union head tail all
       ) ⇒
-      ToOuterColumns (Cons name (Joined t) rest) all
+      ToOuterColumns (Cons name (Maybe t) rest) all
 
 else instance
-      ( Cons name (Joined t) () head
+      ( Cons name (Maybe t) () head
       , ToOuterColumns rest tail
       , Union head tail all
       ) ⇒
@@ -474,7 +525,6 @@ join ∷
       ∀ r l aliases unique las ras right rf lf left all source fields.
       ToJoin l left las ⇒
       ToJoin r right ras ⇒
-      UniqueSources left right ⇒
       RowListAppend las ras aliases ⇒
       RowListNub aliases unique ⇒
       UniqueAliases aliases unique ⇒
@@ -485,8 +535,8 @@ join ∷
       Union lf rf fields ⇒
       l →
       r →
-      Join Inner fields l r aliases E
-join l r = Join l r E
+      Join Inner fields l r aliases
+join l r = Join l r
 
 -- | LEFT OUTER JOIN statement
 -- |
@@ -495,7 +545,6 @@ leftJoin ∷
       ∀ r l las ras list out aliases unique rf lf right left all fields source.
       ToJoin l left las ⇒
       ToJoin r right ras ⇒
-      UniqueSources left right ⇒
       RowListAppend las ras aliases ⇒
       RowListNub aliases unique ⇒
       UniqueAliases aliases unique ⇒
@@ -508,8 +557,8 @@ leftJoin ∷
       Union rf out fields ⇒
       l →
       r →
-      Join Outer fields l r aliases E
-leftJoin l r = Join l r E
+      Join Outer fields l r aliases
+leftJoin l r = Join l r
 
 --would be nice to have a unified (but not messy) way to reuse tocondition here
 -- | Comparison logic for ON statements
@@ -526,12 +575,7 @@ else instance
 
 class OnComparision (a ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) (t ∷ Type) | a → t
 
-instance
-      ( Cons name t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
-      ) ⇒
-      OnComparision (Proxy name) fields aliases v
+instance (RowToList fields list, ColumnInScope name list t, UnwrapNullable t v) ⇒ OnComparision (Proxy name) fields aliases v
 
 else instance
       ( SymbolListSingleton alias single
@@ -548,64 +592,43 @@ else instance OnComparision (Path alias name) fields aliases OuterScope
 else instance ToValue t ⇒ OnComparision t fields aliases t
 
 -- | JOIN ... ON statement
-on ∷ ∀ k l r c fields aliases. OnCondition c fields aliases ⇒ c → Join k fields l r aliases E → Join k fields l r aliases (On c E)
-on c (Join q r _) = Join q r $ On c E
+on ∷ ∀ k l r c fields aliases. OnCondition c fields aliases ⇒ c → Join k fields l r aliases → On c (Join k fields l r aliases)
+on c j = On c j
 
 -------------------------------WHERE----------------------------
 
-data Where c rest = Where c rest
+data Where c q = Where c q
 
--- | WHERE can only follow FROM, UPDATE and DELETE
+-- | WHERE can only follow FROM (SELECT and DELETE) and SET (UPDATE)
 class ToWhere (c ∷ Type) (q ∷ Type)
 
-instance (SourceAlias f alias, ToCondition c fields alias) ⇒ ToWhere c (Select s projection (From f fields E))
+instance (SourceAlias f alias, ToCondition c fields alias) ⇒ ToWhere c (From f fields projection q)
 
-instance ToCondition c fields Empty ⇒ ToWhere c (Update name fields (Set v E))
+else instance (RowToList fields list, ColumnTypes list columns, ToCondition c columns Empty) ⇒ ToWhere c (Set v (Update name fields))
 
-instance ToCondition c fields Empty ⇒ ToWhere c (Delete (From f fields E))
+else instance Fail (Text "WHERE must follow FROM or SET") ⇒ ToWhere c q
 
 -- | WHERE statement
-wher ∷ ∀ c q sql. ToWhere c q ⇒ Resume q (Where c E) sql ⇒ c → q → sql
-wher c q = resume q $ Where c E
+wher ∷ ∀ c q. ToWhere c q ⇒ c → q → Where c q
+wher c q = Where c q
 
 ----------------------------EXISTS----------------------------
 
-exists ∷ ∀ s projection f fields rest. Select s projection (From f fields rest) → Op Exists (Select s projection (From f fields rest))
+exists ∷ ∀ q s f fields projection. SelectQuery q s f fields projection ⇒ q → Op Exists q
 exists q = Op Nothing Exists q
 
 ----------------------------GROUP BY----------------------------
 
-data GroupBy f rest = GroupBy f rest
+data GroupBy f q = GroupBy f q
 
--- | GROUP BY can only follow FROM or WHERE
+-- | GROUP BY can only follow FROM or WHERE. Grouped columns are the FROM source columns
 class ToGroupBy (q ∷ Type) (s ∷ Type) (columns ∷ Row Type) | q → s columns
 
-instance GroupBySource f columns ⇒ ToGroupBy (Select s p (From f fd E)) s columns
+instance ToGroupBy (From f columns projection (Select s)) s columns
 
-instance GroupBySource f columns ⇒ ToGroupBy (Select s p (From f fd (Where cond E))) s columns
+else instance ToGroupBy (Where c (From f columns projection (Select s))) s columns
 
--- |
-class GroupBySource (f ∷ Type) (columns ∷ Row Type) | f → columns
-
---refactor: could be the same as tojoin if joins accepted non aliased tables
-instance GroupBySource (Table name columns) columns
-
-instance
-      ( RowToList columns list
-      , QualifiedColumns list alias aliased
-      , Union aliased columns all
-      ) ⇒
-      GroupBySource (As alias (Table name columns)) all
-
-instance GroupBySource (Join k columns q r a rest) columns
-
-instance
-      ( QueryMustBeAliased rest alias
-      , RowToList projection list
-      , QualifiedColumns list alias aliased
-      , Union aliased projection all
-      ) ⇒
-      GroupBySource (Select s projection (From f fd rest)) all
+else instance Fail (Text "GROUP BY must follow FROM or WHERE") ⇒ ToGroupBy q s columns
 
 -- |
 class GroupedColumns (f ∷ Type) (columns ∷ Row Type) (grouped ∷ Row Type) | f → columns grouped
@@ -658,100 +681,92 @@ else instance OnlyAggregations s False
 
 -- | GROUP BY statement
 groupBy ∷
-      ∀ f s q sql grouped columns.
+      ∀ f s q grouped columns.
       ToGroupBy q s columns ⇒
       GroupedColumns f columns grouped ⇒
       ValidGroupByProjection s grouped ⇒
-      Resume q (GroupBy f E) sql ⇒
       f →
       q →
-      sql
-groupBy f q = resume q $ GroupBy f E
+      GroupBy f q
+groupBy f q = GroupBy f q
 
 ----------------------------AS----------------------------
 
-newtype As (alias ∷ Symbol) rest = As rest
+newtype As (alias ∷ Symbol) q = As q
 
 -- | Acceptable alias targets
-class ToAs (q ∷ Type) (alias ∷ Symbol) | q → alias
+class ToAs (q ∷ Type)
 
-instance ToAs Int alias
+instance ToAs Int
 
-instance ToAs Boolean alias
+else instance ToAs Boolean
 
-instance ToAs (Table name fields) alias
+else instance ToAs (Table name fields)
 
-instance ToAs (Proxy name) alias
+else instance ToAs (Proxy name)
 
-instance ToAs (Path table name) alias
+else instance ToAs (Path table name)
 
-instance ToAs (Op one another) alias
+else instance ToAs (Op one another)
 
-instance ToAs (Aggregate inp rest fields out) alias
+else instance ToAs (Aggregate inp rest fields out)
 
-instance ToAs (PgFunction inp args fields out) alias
+else instance ToAs (PgFunction inp args fields out)
 
-instance ToAs (Select s p (From f fields rest)) alias
+else instance SelectQuery q s f fields projection ⇒ ToAs q
 
 -- | AS statement
-as ∷ ∀ q alias sql. ToAs q alias ⇒ Resume q (As alias E) sql ⇒ Proxy alias → q → sql
-as _ q = resume q $ As E
+as ∷ ∀ @alias q. ToAs q ⇒ q → As alias q
+as q = As q
 
 ---------------------------ORDER BY------------------------------------------
 
-data OrderBy f rest = OrderBy f rest
+data OrderBy f q = OrderBy f q
 
 data Sort (f ∷ Type) = Asc | Desc
 
--- | ORDER BY
+-- | ORDER BY can only follow FROM, WHERE or GROUP BY
 class ToOrderBy (f ∷ Type) (q ∷ Type)
 
-instance (SortColumnsSource s projection f columns available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f columns E))
+instance (SortColumnsSource s projection f columns available, SortColumns st available) ⇒ ToOrderBy st (From f columns projection (Select s))
+
+else instance ToOrderBy st (From f columns projection (Select s)) ⇒ ToOrderBy st (Where c (From f columns projection (Select s)))
 
 --only grouped columns are allowed here
-instance
-      ( GroupedColumns g columns grouped
+else instance
+      ( SelectQuery q s f columns projection
+      , GroupedColumns g columns grouped
       , Union projection grouped pg
       , Nub pg available
       , SortColumns st available
       ) ⇒
-      ToOrderBy st (Select s projection (From f columns (GroupBy g E)))
-
-instance (SortColumnsSource s projection f columns available, SortColumns st available) ⇒ ToOrderBy st (Select s projection (From f columns (Where cd E)))
-
-instance
-      ( GroupedColumns g columns grouped
-      , Union projection grouped pg
-      , Nub pg available
-      , SortColumns st available
-      ) ⇒
-      ToOrderBy st (Select s projection (From f columns (Where cd (GroupBy g E))))
+      ToOrderBy st (GroupBy g q)
 
 -- for aggregate/window functions
-instance ToOrderBy (Proxy name) String
+else instance ToOrderBy (Proxy name) String
 
-instance ToOrderBy (Path alias name) String
+else instance ToOrderBy (Path alias name) String
 
-instance ToOrderBy (Proxy name) (Proxy otherName)
+else instance ToOrderBy (Proxy name) (Proxy otherName)
 
-instance ToOrderBy (Path alias name) (Path otherAlias otherName)
+else instance ToOrderBy (Path alias name) (Path otherAlias otherName)
+
+else instance Fail (Text "ORDER BY must follow FROM, WHERE or GROUP BY") ⇒ ToOrderBy f q
 
 --must be typed here
 instance
       ( Cons name t e fields
       , Cons otherName v r fields
-      , UnwrapDefinition v w
       ) ⇒
-      ToArrayAgg (OrderBy (Proxy name) (Proxy otherName)) fields w
+      ToArrayAgg (OrderBy (Proxy name) (Proxy otherName)) fields v
 
 instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e fields
       , AppendPath otherAlias otherName otherFullPath
       , Cons otherFullPath v r fields
-      , UnwrapDefinition v w
       ) ⇒
-      ToArrayAgg (OrderBy (Path alias name) (Path otherAlias otherName)) fields w
+      ToArrayAgg (OrderBy (Path alias name) (Path otherAlias otherName)) fields v
 
 --this error might not be clear for the user
 -- | Columns available for sorting this query
@@ -799,8 +814,8 @@ desc ∷ ∀ name. name → Sort name
 desc _ = Desc
 
 -- | ORDER BY statement
-orderBy ∷ ∀ f q sql. ToOrderBy f q ⇒ Resume q (OrderBy f E) sql ⇒ f → q → sql
-orderBy f q = resume q $ OrderBy f E
+orderBy ∷ ∀ f q. ToOrderBy f q ⇒ f → q → OrderBy f q
+orderBy f q = OrderBy f q
 
 instance (Cons name t e columns, Cons fd g h columns) ⇒ ToStringAgg (Proxy name) (OrderBy (Proxy fd) String) columns
 
@@ -812,59 +827,42 @@ instance ToStringAgg (Path table name) (OrderBy (Path alias fd) String) columns
 
 ------------------------LIMIT---------------------------
 
-data Limit (n ∷ Int) rest = Limit rest
+data Limit (n ∷ Int) q = Limit q
 
+-- | LIMIT can only follow ORDER BY or OFFSET
 class ToLimit (q ∷ Type)
 
-instance ToLimit (Select s projection (From fr fields (OrderBy f E)))
+instance SelectQuery q s f fields projection ⇒ ToLimit (OrderBy o q)
 
-instance ToLimit (Select s projection (From fr fields (OrderBy f (Offset E))))
+else instance SelectQuery q s f fields projection ⇒ ToLimit (Offset (OrderBy o q))
 
-instance ToLimit (Select s projection (From fr fields (GroupBy fg (OrderBy f E))))
-
-instance ToLimit (Select s projection (From fr fields (GroupBy fg (OrderBy f (Offset E)))))
-
-instance ToLimit (Select s projection (From fr fields (Where cd (OrderBy f E))))
-
-instance ToLimit (Select s projection (From fr fields (Where cd (OrderBy f (Offset E)))))
-
-instance ToLimit (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f E)))))
-
-instance ToLimit (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f (Offset E))))))
+else instance Fail (Text "LIMIT must follow ORDER BY") ⇒ ToLimit q
 
 -- | LIMIT statement
 -- |
 -- | Note: LIMIT must always follow after ORDER BY
-limit ∷ ∀ n q sql. ToLimit q ⇒ Resume q (Limit n E) sql ⇒ Proxy n → q → sql
-limit _ q = resume q $ Limit E
+-- | e.g. `orderBy id # limit @10`
+limit ∷ ∀ @n q. ToLimit q ⇒ q → Limit n q
+limit q = Limit q
 
 ------------------------OFFSET---------------------------
 
-data Offset rest = Offset Int rest
+data Offset q = Offset Int q
 
+-- | OFFSET can only follow ORDER BY or LIMIT
 class ToOffset (q ∷ Type)
 
-instance ToOffset (Select s projection (From fr fields (OrderBy f E)))
+instance SelectQuery q s f fields projection ⇒ ToOffset (OrderBy o q)
 
-instance ToOffset (Select s projection (From fr fields (OrderBy f (Limit n E))))
+else instance SelectQuery q s f fields projection ⇒ ToOffset (Limit n (OrderBy o q))
 
-instance ToOffset (Select s projection (From fr fields (GroupBy fg (OrderBy f E))))
-
-instance ToOffset (Select s projection (From fr fields (GroupBy fg (OrderBy f (Limit n E)))))
-
-instance ToOffset (Select s projection (From fr fields (Where cd (OrderBy f E))))
-
-instance ToOffset (Select s projection (From fr fields (Where cd (OrderBy f (Limit n E)))))
-
-instance ToOffset (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f E)))))
-
-instance ToOffset (Select s projection (From fr fields (Where cd (GroupBy fg (OrderBy f (Limit n E))))))
+else instance Fail (Text "OFFSET must follow ORDER BY or LIMIT") ⇒ ToOffset q
 
 -- | OFFSET statement
 -- |
 -- | Note: OFFSET must always follow after LIMIT or ORDER BY
-offset ∷ ∀ q sql. ToOffset q ⇒ Resume q (Offset E) sql ⇒ Int → q → sql
-offset n q = resume q $ Offset n E
+offset ∷ ∀ q. ToOffset q ⇒ Int → q → Offset q
+offset n q = Offset n q
 
 ------------------------UNION---------------------------
 
@@ -874,16 +872,18 @@ data Inclusion = All | Unique
 
 class ToUnion (q ∷ Type) (r ∷ Type)
 
-instance
-      ( RowToList some slist
+instance ToUnion q r ⇒ ToUnion (Union q u) r
+
+else instance ToUnion q r ⇒ ToUnion q (Union r u)
+
+else instance
+      ( SelectQuery q s f fields some
+      , SelectQuery r t g columns more
+      , RowToList some slist
       , RowToList more mlist
       , CompatibleProjection slist mlist
       ) ⇒
-      ToUnion (Select s some (From f fd rt)) (Select t more (From g ge es))
-
-instance ToUnion (Select s p (From f fd rt)) (Select t q (From g ge es)) ⇒ ToUnion (Union (Select s p (From f fd rt)) sel) (Select t q (From g ge es))
-
-instance ToUnion (Select s p (From f fd rt)) (Select t q (From g ge es)) ⇒ ToUnion (Select s p (From f fd rt)) (Union (Select t q (From g ge es)) sel)
+      ToUnion q r
 
 class CompatibleProjection (pro ∷ RowList Type) (jection ∷ RowList Type)
 
@@ -938,12 +938,12 @@ INSERT INTO
 
 -}
 
-newtype Insert rest = Insert rest
+data Insert = Insert
 
-insert ∷ Insert E
-insert = Insert E
+insert ∷ Insert
+insert = Insert
 
-data Into (name ∷ Symbol) (fields ∷ Row Type) fieldNames rest = Into fieldNames rest
+data Into (name ∷ Symbol) (fields ∷ Row Type) fieldNames = Into fieldNames
 
 -- | Compute list of inserted fields
 class InsertList (fields ∷ Row Type) (fieldNames ∷ Type) (inserted ∷ Row Type) | fieldNames → fields inserted
@@ -1030,11 +1030,11 @@ into ∷
       MissingRequiredColumns required inserted ⇒
       Table tableName fields →
       fieldNames →
-      Insert E →
-      Insert (Into tableName fields fieldNames E)
-into _ fieldNames _ = Insert (Into fieldNames E)
+      Insert →
+      Into tableName fields fieldNames
+into _ fieldNames _ = Into fieldNames
 
-data Values fieldValues rest = Values fieldValues rest
+data Values fieldValues q = Values fieldValues q
 
 data DefaultValues = DefaultValues
 
@@ -1112,9 +1112,9 @@ values ∷
       ConsistentArity fieldValues ⇒
       InsertValues fields names fieldValues ⇒
       fieldValues →
-      Insert (Into tableName fields names E) →
-      Insert (Into tableName fields names (Values fieldValues E))
-values fieldValues (Insert (Into names _)) = Insert <<< Into names $ Values fieldValues E
+      Into tableName fields names →
+      Values fieldValues (Into tableName fields names)
+values fieldValues q = Values fieldValues q
 
 defaultValues ∷ DefaultValues
 defaultValues = DefaultValues
@@ -1146,9 +1146,9 @@ UPDATE table name
       [WHERE conditions]
 -}
 
-newtype Update (name ∷ Symbol) (fields ∷ Row Type) rest = Update rest
+data Update (name ∷ Symbol) (fields ∷ Row Type) = Update
 
-data Set pairs rest = Set pairs rest
+data Set pairs q = Set pairs q
 
 class ToUpdatePairs (fields ∷ Row Type) (pairs ∷ Type)
 
@@ -1168,11 +1168,11 @@ instance
       ) ⇒
       ToUpdatePairs fields (head /\ tail)
 
-update ∷ ∀ name fields. Table name fields → Update name fields E
-update _ = Update E
+update ∷ ∀ name fields. Table name fields → Update name fields
+update _ = Update
 
-set ∷ ∀ name fields pairs. ToUpdatePairs fields pairs ⇒ pairs → Update name fields E → Update name fields (Set pairs E)
-set pairs (Update _) = Update $ Set pairs E
+set ∷ ∀ name fields pairs. ToUpdatePairs fields pairs ⇒ pairs → Update name fields → Set pairs (Update name fields)
+set pairs u = Set pairs u
 
 ---------------------------DELETE------------------------------------------
 
@@ -1197,10 +1197,10 @@ DELETE FROM table name
 -}
 
 --real work is done in from and wher
-newtype Delete rest = Delete rest
+data Delete = Delete
 
-delete ∷ Delete E
-delete = Delete E
+delete ∷ Delete
+delete = Delete
 
 ---------------------------RETURNING------------------------------------------
 
@@ -1221,16 +1221,20 @@ full RETURNING syntax supported by droplet
       field | [, ...]
 -}
 
-newtype Returning fieldNames = Returning fieldNames
+data Returning fieldNames q = Returning fieldNames q
 
-class ToReturning (f ∷ Type) (q ∷ Type) (r ∷ Type) | q → f, q → r where
-      returning ∷ f → q → r
+-- | RETURNING can only follow INSERT
+class ToReturning (q ∷ Type) (fields ∷ Row Type) | q → fields
 
-instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields fn (Values fv E))) (Insert (Into tn fields fn (Values fv (Returning f)))) where
-      returning fieldNames (Insert (Into fields (Values fv E))) = Insert (Into fields (Values fv (Returning fieldNames)))
+instance ToReturning (Values v (Into name fields fieldNames)) fields
 
-instance ReturningColumns f fields ⇒ ToReturning f (Insert (Into tn fields DefaultValues E)) (Insert (Into tn fields DefaultValues (Returning f))) where
-      returning fieldNames (Insert (Into fields E)) = Insert (Into fields (Returning fieldNames))
+else instance ToReturning (Into name fields DefaultValues) fields
+
+else instance Fail (Text "RETURNING must follow INSERT ... VALUES or INSERT ... DEFAULT VALUES") ⇒ ToReturning q fields
+
+-- | RETURNING statement
+returning ∷ ∀ f q fields. ToReturning q fields ⇒ ReturningColumns f fields ⇒ f → q → Returning f q
+returning f q = Returning f q
 
 class ReturningColumns (f ∷ Type) (fields ∷ Row Type) | f → fields
 
@@ -1247,13 +1251,7 @@ type SymbolList = RowList Symbol
 class ToProjection (s ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) (projection ∷ Row Type) | s → fields projection
 
 -- | Columns
-instance
-      ( Cons name t e fields
-      , JoinedToMaybe t v
-      , UnwrapDefinition v u
-      , Cons name u () projection
-      ) ⇒
-      ToProjection (Proxy name) fields aliases projection
+instance (RowToList fields list, ColumnInScope name list t, Cons name t () projection) ⇒ ToProjection (Proxy name) fields aliases projection
 
 -- | Qualified column
 -- |
@@ -1285,13 +1283,7 @@ else instance Cons alias t () projection ⇒ ToProjection (As alias (Aggregate i
 else instance Cons alias t () projection ⇒ ToProjection (As alias (PgFunction inp args fields t)) fields aliases projection
 
 -- | Aliased column
-else instance
-      ( Cons name t e fields
-      , JoinedToMaybe t v
-      , UnwrapDefinition v u
-      , Cons alias u () projection
-      ) ⇒
-      ToProjection (As alias (Proxy name)) fields aliases projection
+else instance (RowToList fields list, ColumnInScope name list t, Cons alias t () projection) ⇒ ToProjection (As alias (Proxy name)) fields aliases projection
 
 -- | Aliased qualified column
 -- |
@@ -1318,26 +1310,35 @@ else instance
       ) ⇒
       ToProjection (s /\ t) fields aliases projection
 
--- | Subquery as column
+-- | DISTINCT
+else instance ToProjection s fields aliases projection ⇒ ToProjection (Distinct s) fields aliases projection
+
+-- | Aliased subquery as column
 else instance
-      ( --does source has an alias? we need it to figure out which qualified fields can be validated here
-        SourceAlias f table
+      ( SelectQuery q s f fields p
+      --does source has an alias? we need it to figure out which qualified fields can be validated here
+      , SourceAlias f table
       , SymbolListSingleton table single
       , ToProjection s fields single pro
       , RowToList pro list
       --is column already Maybe or needs to be made into Maybe? subquery can only return a single column
       , ToSingleColumn list name t
-      --is query aliased? if so we have to use the alias instead of the column name
-      , QueryOptionallyAliased rest name alias
+      --query is aliased so we have to use the alias instead of the column name
       , Cons alias t () projection
       ) ⇒
-      ToProjection (Select s p (From f fields rest)) fd aliases projection
+      ToProjection (As alias q) fd aliases projection
 
--- | DISTINCT
-else instance ToProjection s fields aliases projection ⇒ ToProjection (Distinct s) fields aliases projection
-
--- | Any valid instance should be recognizable
-else instance Fail (Text "Cannot recognize projection") ⇒ ToProjection x f a p
+-- | Subquery as column
+else instance
+      ( SelectQuery q s f fields p
+      , SourceAlias f table
+      , SymbolListSingleton table single
+      , ToProjection s fields single pro
+      , RowToList pro list
+      , ToSingleColumn list name t
+      , Cons name t () projection
+      ) ⇒
+      ToProjection q fd aliases projection
 
 -- | Is this column present in the current field source?
 class OuterScopeAlias (all ∷ SymbolList) (unique ∷ SymbolList) (y ∷ Boolean) | all unique → y
@@ -1357,12 +1358,7 @@ class QualifiedColumn (unscoped ∷ Boolean) (fullPath ∷ Symbol) (fields ∷ R
 
 instance QualifiedColumn True fullPath fields OuterScope
 
-instance
-      ( Cons fullPath t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
-      ) ⇒
-      QualifiedColumn False fullPath fields v
+instance (Cons fullPath t d fields, UnwrapNullable t v) ⇒ QualifiedColumn False fullPath fields v
 
 --not required but makes for clearer type errors
 class ToSingleColumn (fields ∷ RowList Type) (name ∷ Symbol) (t ∷ Type) | fields → name t
@@ -1376,61 +1372,24 @@ class UniqueColumnNames (some ∷ Row Type) (more ∷ Row Type)
 
 instance UniqueColumnNames fields fields
 
--- | Joined tables should not be the same
-class UniqueSources (some ∷ Row Type) (more ∷ Row Type)
-
-instance (Fail (Text "Cannot JOIN source to itself")) ⇒ UniqueSources fields fields
-
-else instance UniqueSources some more
-
---needs to be improved for clarity
--- | Joined tables should not repeat table aliases
+-- | Joined sources must have unique names (alias or, for unaliased tables, the table name)
+-- |
+-- | Compares the list of names with its deduplicated version
 class UniqueAliases (some ∷ SymbolList) (more ∷ SymbolList)
 
 instance UniqueAliases aliases aliases
 
+else instance Fail (Text "JOIN sources must have unique names. Alias tables that are joined more than once, e.g. users # as @\"u\"") ⇒ UniqueAliases some more
+
 -- | Table/subquery alias or `Empty`
 class SourceAlias (f ∷ Type) (alias ∷ Symbol) | f → alias
 
-instance SourceAlias (As alias (Table name fields)) alias
+instance SourceAlias (As alias q) alias
 
-else instance QueryOptionallyAliased rest Empty alias ⇒ SourceAlias (Select s p (From f fd rest)) alias
+-- | Unaliased tables can be qualified by their name
+else instance SourceAlias (Table name fields) name
 
 else instance SourceAlias f Empty
-
--- | Find this query's alias, or fail at compile time if query is not aliased
-class QueryMustBeAliased (q ∷ Type) (alias ∷ Symbol) | q → alias
-
-instance QueryMustBeAliased rest alias ⇒ QueryMustBeAliased (Where cd rest) alias
-
-instance QueryMustBeAliased rest alias ⇒ QueryMustBeAliased (GroupBy f rest) alias
-
-instance QueryMustBeAliased rest alias ⇒ QueryMustBeAliased (OrderBy f rest) alias
-
-instance QueryMustBeAliased rest alias ⇒ QueryMustBeAliased (Limit n rest) alias
-
-instance QueryMustBeAliased rest alias ⇒ QueryMustBeAliased (Offset rest) alias
-
-instance Fail (Text "Expected query to end in AS statement") ⇒ QueryMustBeAliased E alias
-
-instance QueryMustBeAliased (As alias E) alias
-
--- | If this query is in the form of (SELECT ...) AS alias, return `alias`, otherwise keep `name`
-class QueryOptionallyAliased (q ∷ Type) (name ∷ Symbol) (alias ∷ Symbol) | q → name alias
-
-instance QueryOptionallyAliased rest name alias ⇒ QueryOptionallyAliased (Where cd rest) name alias
-
-instance QueryOptionallyAliased rest name alias ⇒ QueryOptionallyAliased (GroupBy f rest) name alias
-
-instance QueryOptionallyAliased rest name alias ⇒ QueryOptionallyAliased (OrderBy f rest) name alias
-
-instance QueryOptionallyAliased rest name alias ⇒ QueryOptionallyAliased (Limit n rest) name alias
-
-instance QueryOptionallyAliased rest name alias ⇒ QueryOptionallyAliased (Offset rest) name alias
-
-instance QueryOptionallyAliased E name name
-
-instance QueryOptionallyAliased (As alias E) name alias
 
 -- | SELECT * FROM should:
 -- |
@@ -1445,9 +1404,7 @@ instance
       , ListToRow included extended
       , Union fields extended all
       , Nub all nubbed
-      , Union extended unqualified nubbed
-      , RowToList unqualified ulist
-      , UnwrapAll ulist projection
+      , Union extended projection nubbed
       ) ⇒
       StarProjection list fields aliases projection
 
@@ -1470,18 +1427,20 @@ instance IncludeColumn name t Nil Nil
 
 instance (AppendPath alias name fullPath, IncludeColumn name t rest included) ⇒ IncludeColumn name t (Cons alias alias rest) (Cons fullPath t included)
 
--- | Recursively remove source field wrappers
-class UnwrapAll (list ∷ RowList Type) (projection ∷ Row Type) | list → projection
+-- | Column types of a table definition, without `Column` wrappers
+-- |
+-- | Statements only see these plain types (nullable columns are `Maybe`); `Column` constraints are only needed for INSERT, UPDATE and DDL
+class ColumnTypes (list ∷ RowList Type) (columns ∷ Row Type) | list → columns
 
-instance UnwrapAll Nil ()
+instance ColumnTypes Nil ()
 
 instance
       ( UnwrapDefinition t u
       , Cons name u () head
-      , UnwrapAll rest tail
-      , Union head tail projection
+      , ColumnTypes rest tail
+      , Union head tail columns
       ) ⇒
-      UnwrapAll (Cons name t rest) projection
+      ColumnTypes (Cons name t rest) columns
 
 -- | Computes all source fields with their alias
 class QualifiedColumns (list ∷ RowList Type) (alias ∷ Symbol) (fields ∷ Row Type) | list alias → fields
@@ -1504,17 +1463,6 @@ instance ToPath Empty Empty
 
 else instance Append alias Dot path ⇒ ToPath alias path
 
--- | `Joined` fields appear as `Maybe` in projections
-class JoinedToMaybe (t ∷ Type) (v ∷ Type) | t → v
-
-instance JoinedToMaybe (Joined (f (Maybe t))) (Maybe t)
-
-else instance JoinedToMaybe (Joined (Maybe t)) (Maybe t)
-
-else instance UnwrapDefinition t u ⇒ JoinedToMaybe (Joined t) (Maybe u)
-
-else instance JoinedToMaybe t t
-
 -- | Creates a `SymbolList` single with a single entry
 class SymbolListSingleton (alias ∷ Symbol) (list ∷ SymbolList) | alias → list
 
@@ -1523,105 +1471,71 @@ instance SymbolListSingleton alias (Cons alias alias Nil)
 -- | Given a source `f`, compute its (non and qualified) fields
 class SourceColumns (f ∷ Type) (fields ∷ Row Type) (aliases ∷ SymbolList) | f → fields aliases
 
--- | Tables
-instance SourceColumns (Table name fields) fields Nil
+-- | Tables, whose columns can also be qualified by the table name
+instance
+      ( RowToList fields list
+      , ColumnTypes list columns
+      , RowToList columns columnList
+      , QualifiedColumns columnList name qualified
+      , Union qualified columns all
+      , SymbolListSingleton name single
+      ) ⇒
+      SourceColumns (Table name fields) all single
 
 -- | Aliased tables
-instance
+else instance
       ( RowToList source list
-      , QualifiedColumns list alias aliased
-      , Union aliased source fields
+      , ColumnTypes list columns
+      , RowToList columns columnList
+      , QualifiedColumns columnList alias aliased
+      , Union aliased columns fields
       , SymbolListSingleton alias single
       ) ⇒
       SourceColumns (As alias (Table name source)) fields single
 
 -- | Aliased subqueries
-instance
-      ( QueryMustBeAliased rest alias
+else instance
+      ( SelectQuery q s f fd projection
       , RowToList projection list
       , QualifiedColumns list alias aliased
       , Union projection aliased fields
       , SymbolListSingleton alias single
       ) ⇒
-      SourceColumns (Select s projection (From f fd rest)) fields single
+      SourceColumns (As alias q) fields single
 
----------------------------Resume machinery------------------------------------------
-
--- | Most SQL statement constructors accept a `rest` type parameter that refers to next statements
--- |
--- | Such parameter is initially filled with `E`, meaning that the query ends there
--- |
--- | This type class replaces the (nested) final `E` for the next statement
-class Resume a b c | a → b, a b → c where
-      resume ∷ a → b → c
-
-instance Resume rest b c ⇒ Resume (Select s p rest) b (Select s p c) where
-      resume (Select s rest) b = Select s $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (From f fd rest) b (From f fd c) where
-      resume (From f rest) b = From f $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Where cd rest) b (Where cd c) where
-      resume (Where f rest) b = Where f $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (GroupBy f rest) b (GroupBy f c) where
-      resume (GroupBy f rest) b = GroupBy f $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (OrderBy f rest) b (OrderBy f c) where
-      resume (OrderBy f rest) b = OrderBy f $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Limit n rest) b (Limit n c) where
-      resume (Limit rest) b = Limit $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Offset rest) b (Offset c) where
-      resume (Offset n rest) b = Offset n $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Update n f rest) b (Update n f c) where
-      resume (Update rest) b = Update $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Set p rest) b (Set p c) where
-      resume (Set p rest) b = Set p $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Delete rest) b (Delete c) where
-      resume (Delete rest) b = Delete $ resume rest b
-
-else instance Resume (As alias E) b (As alias b) where
-      resume (As _) b = As b
-
-else instance Resume rest b c ⇒ Resume (Create rest) b (Create c) where
-      resume (Create rest) b = Create $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Drop rest) b (Drop c) where
-      resume (Drop rest) b = Drop $ resume rest b
-
-else instance Resume rest b c ⇒ Resume (Alter rest) b (Alter c) where
-      resume (Alter rest) b = Alter $ resume rest b
-
-else instance Resume E b b where
-      resume _ b = b
-
-else instance Resume b a c ⇒ Resume a b c where
-      resume a b = resume b a
+-- | Subqueries must be aliased
+else instance Fail (Text "Expected query to end in AS statement") ⇒ SourceColumns q fields aliases
 
 ---------------------------Table machinery------------------------------------------
 
--- | Helper data type for extending TABLE syntax
-newtype T (t ∷ Type) rest = T rest
+-- | TABLE clause for CREATE, ALTER and DROP
+data T (t ∷ Type) q = T q
 
 -- | Acceptable table operations
-class ToTable (q ∷ Type) (t ∷ Type) | q → t
+class ToTable (q ∷ Type) (t ∷ Type)
+
+-- | CREATE TABLE
+instance TableChecks (Table name columns) ⇒ ToTable Create (Table name columns)
+
+-- | ALTER TABLE
+else instance ToTable Alter (Table name fields)
+
+-- | DROP TABLE
+else instance ToTable Drop (Table name fields)
+
+else instance Fail (Text "TABLE must follow CREATE, ALTER or DROP") ⇒ ToTable q t
 
 -- | Table up for modification
-table ∷ ∀ name q fields sql. ToTable q (Table name fields) ⇒ Resume q (Table name fields) sql ⇒ Table name fields → q → sql
-table _ q = resume q Table
+table ∷ ∀ name q fields. ToTable q (Table name fields) ⇒ Table name fields → q → T (Table name fields) q
+table _ q = T q
 
 ---------------------------CREATE------------------------------------------
 
-newtype Create rest = Create rest
+data Create = Create
 
 -- | CREATE ...
-create ∷ Create E
-create = Create E
+create ∷ Create
+create = Create
 
 ---------------------------TABLE------------------------------------------
 
@@ -1706,9 +1620,6 @@ CREATE TABLE table_definition
 where table_definition is the Table type
 
 -}
-
--- | CREATE TABLE
-instance TableChecks (Table name columns) ⇒ ToTable (Create E) (Table name columns)
 
 -- | Reused by CREATE and ALTER
 class TableChecks (t ∷ Type)
@@ -1886,11 +1797,11 @@ else instance CheckComposite tn name t rest ⇒ CheckComposite tn name t (Cons n
 
 ---------------------------ALTER------------------------------------------
 
-newtype Alter rest = Alter rest
+data Alter = Alter
 
 -- ALTER ...
-alter ∷ Alter E
-alter = Alter E
+alter ∷ Alter
+alter = Alter
 
 ---------------------------TABLE------------------------------------------
 
@@ -2004,11 +1915,9 @@ ALTER TABLE table_definition
 ADD column_definition
 -}
 
-instance ToTable (Alter E) (Table name fields)
-
 ---------------------------ADD--------------------------------------------
 
-newtype Add (name ∷ Symbol) rest = Add rest
+data Add (name ∷ Symbol) column q = Add column q
 
 -- | ALTER table ADD objects
 class ToAdd (q ∷ Type)
@@ -2024,17 +1933,17 @@ add ∷
       TableChecks (Table name extended) ⇒
       Proxy object →
       q →
-      Alter (Table name columns) →
-      Alter (T (Table name columns) (Add object q))
-add _ column (Alter _) = Alter <<< T $ Add column
+      T (Table name columns) Alter →
+      Add object q (T (Table name columns) Alter)
+add _ column t = Add column t
 
 ---------------------------DROP------------------------------------------
 
-newtype Drop rest = Drop rest
+data Drop = Drop
 
 -- | DROP ...
-drop ∷ Drop E
-drop = Drop E
+drop ∷ Drop
+drop = Drop
 
 ---------------------------TABLE------------------------------------------
 
@@ -2050,5 +1959,3 @@ full drop table syntax supported by droplet
 DROP TABLE table_definition
 where table_definition is the Table type
 -}
-
-instance ToTable (Drop E) (Table name fields)

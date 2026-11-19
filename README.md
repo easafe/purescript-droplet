@@ -91,15 +91,11 @@ recipient = Proxy
 date :: Proxy "date"
 date = Proxy
 
--- alias
-u :: Proxy "u"
-u = Proxy
-
-m :: Proxy "m"
-m = Proxy
-
-t :: Proxy "t"
-t = Proxy
+-- alternatively, column names can be derived from the table definition
+--usr = columns users -- usr.id, usr.name, usr.birthday
+--qu = qualified @"u" users -- qu.id is the same as u ... id
+-- or written inline
+--anotherId = col @"id"
 ```
 
 (Don't worry, table creation, typing and migration can be automated with [pebble](https://github.com/easafe/haskell-pebble))
@@ -137,14 +133,14 @@ selectUserMessages userId =
 joinUserMessages :: _
 joinUserMessages =
       select (u ... name /\ -- `alias ... column` is equivalent to SQL alias.column
-              (t ... name # as recipient) /\ -- `name` is displayed as recipient
+              (t ... name # as @"recipient") /\ -- `name` is displayed as recipient
               date) #
-      from (((messages # as m)
+      from (((messages # as @"m")
             `join`
-            (users # as u) #
+            (users # as @"u") #
             on (m ... sender .=. u ... id))
             `join`
-            (users # as t) #
+            (users # as @"t") #
             on (m ... recipient .=. t ... id))
 ```
 

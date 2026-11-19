@@ -24,7 +24,7 @@ import Prelude
 import Data.BigInt (BigInt)
 import Data.Maybe (Maybe)
 import Data.Tuple.Nested (type (/\))
-import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapDefinition, class UnwrapNullable, E, Path, Star)
+import Droplet.Language.Internal.Definition (class AppendPath, class ToValue, class UnwrapNullable, E, Path, Star)
 import Prim.Row (class Cons)
 import Type.Equality (class TypeEquals)
 import Type.Proxy (Proxy)
@@ -66,14 +66,9 @@ instance TextColumn (Maybe String)
 
 class ToArrayAgg (f ∷ Type) (fields ∷ Row Type) (t ∷ Type) | f → fields t
 
-instance (Cons name t e fields, UnwrapDefinition t u) ⇒ ToArrayAgg (Proxy name) fields u
+instance Cons name t e fields ⇒ ToArrayAgg (Proxy name) fields t
 
-instance
-      ( AppendPath alias name fullPath
-      , Cons fullPath t e fields
-      , UnwrapDefinition t u
-      ) ⇒
-      ToArrayAgg (Path alias name) fields u
+instance (AppendPath alias name fullPath, Cons fullPath t e fields) ⇒ ToArrayAgg (Path alias name) fields t
 
 -- | Function arguments must match input type
 class MatchArgumentList (input ∷ Type) (args ∷ Type) (fields ∷ Row Type)
@@ -91,20 +86,9 @@ else instance MatchArgument i fields t ⇒ ToCoalesce i fields t
 
 class MatchArgument (a ∷ Type) (fields ∷ Row Type) (t ∷ Type) | a → t
 
-instance
-      ( Cons name t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
-      ) ⇒
-      MatchArgument (Proxy name) fields v
+instance (Cons name t d fields, UnwrapNullable t v) ⇒ MatchArgument (Proxy name) fields v
 
-else instance
-      ( AppendPath alias name fullPath
-      , Cons fullPath t d fields
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
-      ) ⇒
-      MatchArgument (Path alias name) fields v
+else instance (AppendPath alias name fullPath, Cons fullPath t d fields, UnwrapNullable t v) ⇒ MatchArgument (Path alias name) fields v
 
 else instance (UnwrapNullable o t, TypeEquals fd fields) ⇒ MatchArgument (PgFunction i a fd o) fields t
 

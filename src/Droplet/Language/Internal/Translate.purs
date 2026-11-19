@@ -3,15 +3,14 @@
 -- | Do not import this module directly, it will break your code and make it not type safe. Use the sanitized `Droplet.Driver` instead
 module Droplet.Language.Internal.Translate
       ( Query(..)
-      , QueryState
       , class FilteredQuery
       , class TranslateFieldDefinition
       , class QualifiedProjection
-      , class TranslateSource
+      , class QualifiedSubQuery
       , class ToNakedProjection
+      , class NakedSubQuery
       , class SingleQualifiedColumn
-      , class TranslateConditions
-      , class TranslateColumn
+      , class ColumnAlias
       , class NoAggregations
       , class AggregatedQuery
       , class ToReferenceDefinition
@@ -24,42 +23,38 @@ module Droplet.Language.Internal.Translate
       , class SingleColumn
       , class ToConstraintDefinition
       , class ToNullableDefinition
-      , class ArgumentList
       , class ReferenceList
       , class ToCompositeConstraintDefinition
-      , class QueryMustNotBeAliased
       , class ToQuery
-      , class TranslateNakedColumn
-      , class NameList
-      , class NameValuePairs
-      , class ValueList
-      , class Translate
-      , translateSource
+      , class ToStatement
+      , class ToColumns
+      , class ToSource
+      , class ToExpression
+      , class ToExpressionList
+      , class ToSetPairs
+      , class ToRows
+      , toStatement
+      , toColumns
+      , toSource
+      , toExpression
+      , toExpressionList
+      , toSetPairs
+      , toRows
       , toQuery
       , toConstraintDefinition
       , toCompositeConstraintDefinition
-      , argumentList
-      , translateNakedColumn
       , toReferenceDefinition
       , toNullableDefinition
-      , translateColumn
       , compositeFieldList
       , translateCompositeConstraint
       , toJoinType
       , translateFieldDefinition
-      , nameList
-      , translateConditions
-      , nameValuePairs
-      , valueList
-      , translate
       , buildQuery
       , unsafeBuildQuery
       ) where
 
 import Prim hiding (Constraint)
 
-import Control.Monad.State (State)
-import Control.Monad.State as CMS
 import Data.Array ((..), (:))
 import Data.Array as DA
 import Data.Array.NonEmpty (NonEmptyArray)
@@ -72,19 +67,19 @@ import Data.String as DST
 import Data.String.Regex as DSR
 import Data.String.Regex.Flags (global)
 import Data.String.Regex.Unsafe as DSRU
-import Data.Traversable as DF
-import Data.Traversable as DT
 import Data.Tuple (Tuple(..))
 import Data.Tuple as DTP
 import Data.Tuple.Nested (type (/\), (/\))
-import Droplet.Language.Internal.Condition (BinaryOperator(..), Exists, In, IsNull, IsNotNull, Not, Op(..))
-import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToType, class ToValue, class UnwrapDefinition, class UnwrapNullable, C, Column, Composite, Constraint, Default, E(..), ForeignKey, Identity, Path, PrimaryKey, Star, Table, Unique)
+import Droplet.Language.Internal.Ast (Expression, JoinType, SortDirection, Source, Statement)
+import Droplet.Language.Internal.Ast as DLIA
+import Droplet.Language.Internal.Condition (Exists, In, IsNull, IsNotNull, Not, Op(..))
+import Droplet.Language.Internal.Definition (class AppendPath, class IsNullable, class ToParameters, class ToType, class ToValue, class UnwrapNullable, C, Column, Composite, Constraint, Default, E, Empty, ForeignKey, Identity, Path, PrimaryKey, Star, Table, Unique)
 import Droplet.Language.Internal.Definition as DLID
 import Droplet.Language.Internal.Function (Aggregate(..), PgFunction(..))
-import Droplet.Language.Internal.Syntax (class ConstraintsToRowList, class JoinedToMaybe, class OnlyAggregations, class QueryOptionallyAliased, class ToProjection, class ToSingleColumn, class UniqueColumnNames, Add, Alter(..), As(..), Create, DefaultValues(..), Delete(..), Distinct(..), Drop, From(..), GroupBy(..), Inclusion(..), Inner, Insert(..), Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), T(..), Union(..), Update(..), Values(..), Where(..))
-import Droplet.Language.Internal.Token (addKeyword, allKeyword, alterKeyword, andKeyword, array_aggFunctionName, asKeyword, ascKeyword, atSymbol, byKeyword, closeBracket, comma, constraintKeyword, countFunctionName, createKeyword, defaultKeyword, deleteKeyword, descKeyword, distinctKeyword, dotSymbol, dropKeyword, equalsSymbol, existsKeyword, foreignKeyKeyword, fromKeyword, greaterEqualsThanSymbol, greaterThanSymbol, groupByKeyword, identityKeyword, inKeyword, innerKeyword, insertKeyword, isNotNullKeyword, isNullKeyword, joinKeyword, leftKeyword, lesserEqualsThanSymbol, lesserThanSymbol, limitKeyword, notEqualsSymbol, notKeyword, notNullKeyword, offsetKeyword, onKeyword, openBracket, orKeyword, orderKeyword, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, returningKeyword, selectKeyword, setKeyword, space, starSymbol, string_aggFunctionName, tableKeyword, unionKeyword, uniqueKeyword, updateKeyword, valuesKeyword, whereKeyword)
+import Droplet.Language.Internal.Syntax (class ColumnTypes, class ConstraintsToRowList, class IsSubQuery, class OnlyAggregations, class SelectQuery, class ToProjection, class ToReturning, class UniqueColumnNames, Add, Alter, As(..), Create, DefaultValues, Delete, Distinct(..), Drop, From(..), GroupBy(..), Inclusion(..), Inner, Into(..), Join(..), Limit(..), Offset(..), On(..), OrderBy(..), Outer, Plan, Prepare(..), Returning(..), Select(..), Set(..), Side, Sort(..), T, Union(..), Update, Values(..), Where(..))
+import Droplet.Language.Internal.Token (array_aggFunctionName, atSymbol, closeBracket, comma, constraintKeyword, countFunctionName, dotSymbol, foreignKeyKeyword, identityKeyword, notNullKeyword, openBracket, parameterSymbol, primaryKeyKeyword, quoteSymbol, referencesKeyword, space, string_aggFunctionName, uniqueKeyword)
 import Foreign (Foreign)
-import Prelude (class Show, Unit, bind, discard, map, otherwise, pure, show, ($), (<$>), (<<<), (<>), (==), (||))
+import Prelude (class Show, Unit, map, show, ($), (<$>), (<<<), (<>))
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Nub, class Union)
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
@@ -94,113 +89,125 @@ import Type.Data.Boolean (class And)
 import Type.Proxy (Proxy(..))
 import Type.RowList (class RowListRemove, class RowListSet)
 
---this is all really ugly right now
-
 data Query (projection ∷ Row Type) = Query (Maybe Plan) String (Array Foreign)
-
-type QueryState = { plan ∷ Maybe Plan, parameters ∷ Array Foreign, bracketed ∷ Boolean }
 
 instance Show (Query projection) where
       show (Query _ q _) = q
 
 -- | Builds a SQL query
+-- |
+-- | Statements are lowered to `Droplet.Language.Internal.Ast` and then printed
 class ToQuery (q ∷ Type) (projection ∷ Row Type) | q → projection where
-      toQuery ∷ q → State QueryState String
-
--- | Fully formed queries in the shape of SELECT ... FROM ...
-instance
-      ( --aggregation errors
-        AggregatedQuery s rest
-      , QueryMustNotBeAliased rest
-      , --on condition errors
-        FilteredQuery f fields
-      --condition errors
-      , FilteredQuery rest fields
-      , --alias errors
-        QualifiedProjection s fields qual
-      , --qualified columns projection
-        Union qual projection all
-      , Nub all final
-      , Translate (Select s projection (From f fields rest))
-      ) ⇒
-      ToQuery (Select s projection (From f fields rest)) final where
-      toQuery q = translate q
+      toQuery ∷ q → Query projection
 
 -- | "Naked" queries in the shape of SELECT ...
 instance
       ( ToNakedProjection s projection
       , Nub projection unique
       , UniqueColumnNames projection unique
-      , Translate (Select s p E)
+      , ToStatement (Select s)
       ) ⇒
-      ToQuery (Select s p E) unique where
-      toQuery q = translate q
+      ToQuery (Select s) unique where
+      toQuery q = fromStatement (toStatement q)
 
 -- | UNION
-instance
+else instance
       ( ToQuery q final
       , ToQuery r p
-      , Translate (Union q r)
+      , ToStatement (Union q r)
       ) ⇒
       ToQuery (Union q r) final where
-      toQuery q = translate q
+      toQuery q = fromStatement (toStatement q)
 
--- | INSERT DEFAULT VALUES ... RETURNING
-instance
-      ( ToProjection f fields Nil projection
-      , Translate (Insert (Into name fields DefaultValues (Returning f)))
-      ) ⇒
-      ToQuery (Insert (Into name fields DefaultValues (Returning f))) projection where
-      toQuery q = translate q
+-- | PREPARE
+else instance ToQuery q projection ⇒ ToQuery (Prepare q) projection where
+      toQuery (Prepare q plan) = case toQuery q of
+            Query _ sql parameters → Query (Just plan) sql parameters
 
 -- | INSERT ... RETURNING
-instance
-      ( ToProjection f fields Nil projection
-      , Translate (Insert (Into name fields fieldNames (Values v (Returning f))))
+else instance
+      ( ToReturning q fields
+      , RowToList fields list
+      , ColumnTypes list columns
+      , ToProjection f columns Nil projection
+      , ToStatement (Returning f q)
       ) ⇒
-      ToQuery (Insert (Into name fields fieldNames (Values v (Returning f)))) projection where
-      toQuery q = translate q
+      ToQuery (Returning f q) projection where
+      toQuery q = fromStatement (toStatement q)
 
 -- | INSERT DEFAULT VALUES
-instance Translate (Insert (Into name fields DefaultValues E)) ⇒ ToQuery (Insert (Into name fields DefaultValues E)) () where
-      toQuery q = translate q
+else instance ToStatement (Into name fields DefaultValues) ⇒ ToQuery (Into name fields DefaultValues) () where
+      toQuery q = fromStatement (toStatement q)
 
 -- | INSERT
-instance Translate (Insert (Into name fields fieldNames (Values v E))) ⇒ ToQuery (Insert (Into name fields fieldNames (Values v E))) () where
-      toQuery q = translate q
+else instance ToStatement (Values v (Into name fields fieldNames)) ⇒ ToQuery (Values v (Into name fields fieldNames)) () where
+      toQuery q = fromStatement (toStatement q)
 
 -- | UPDATE
-instance Translate (Update table fields (Set values rest)) ⇒ ToQuery (Update table fields (Set values rest)) () where
-      toQuery q = translate q
+else instance ToStatement (Set values (Update table fields)) ⇒ ToQuery (Set values (Update table fields)) () where
+      toQuery q = fromStatement (toStatement q)
+
+-- | UPDATE ... WHERE
+else instance ToStatement (Where c (Set values (Update table fields))) ⇒ ToQuery (Where c (Set values (Update table fields))) () where
+      toQuery q = fromStatement (toStatement q)
 
 -- | DELETE
-instance Translate (Delete (From f fields rest)) ⇒ ToQuery (Delete (From f fields rest)) () where
-      toQuery q = translate q
+else instance ToStatement (From f fields projection Delete) ⇒ ToQuery (From f fields projection Delete) () where
+      toQuery q = fromStatement (toStatement q)
+
+-- | DELETE ... WHERE
+else instance ToStatement (Where c (From f fields projection Delete)) ⇒ ToQuery (Where c (From f fields projection Delete)) () where
+      toQuery q = fromStatement (toStatement q)
 
 -- | CREATE TABLE
-instance Translate (Create (Table name fields)) ⇒ ToQuery (Create (Table name fields)) () where
-      toQuery q = translate q
+else instance ToStatement (T (Table name fields) Create) ⇒ ToQuery (T (Table name fields) Create) () where
+      toQuery q = fromStatement (toStatement q)
 
--- | ALTER TABLE
-instance Translate (Alter (T (Table name fields) rest)) ⇒ ToQuery (Alter (T (Table name fields) rest)) () where
-      toQuery q = translate q
+-- | ALTER TABLE ... ADD
+else instance ToStatement (Add n column (T (Table name fields) Alter)) ⇒ ToQuery (Add n column (T (Table name fields) Alter)) () where
+      toQuery q = fromStatement (toStatement q)
 
 -- | DROP TABLE
-instance Translate (Drop (Table name fields)) ⇒ ToQuery (Drop (Table name fields)) () where
-      toQuery q = translate q
+else instance ToStatement (T (Table name fields) Drop) ⇒ ToQuery (T (Table name fields) Drop) () where
+      toQuery q = fromStatement (toStatement q)
 
 -- | Unsafe queries
-instance ToQuery (Query projection) projection where
-      toQuery (Query plan q parameters) = do
-            CMS.put { plan, parameters, bracketed: false }
-            pure q
+else instance ToQuery (Query projection) projection where
+      toQuery q = q
+
+-- | Prevents top level queries to end in AS
+else instance Fail (Text "AS statement cannot be top level") ⇒ ToQuery (As alias q) projection where
+      toQuery _ = Query Nothing "" []
+
+-- | Fully formed queries in the shape of SELECT ... FROM ...
+else instance
+      ( SelectQuery q s f fields projection
+      --aggregation errors
+      , AggregatedQuery s q
+      --on and where condition errors
+      , FilteredQuery q fields
+      --alias errors
+      , QualifiedProjection s fields qual
+      --qualified columns projection
+      , Union qual projection all
+      , Nub all final
+      , ToStatement q
+      ) ⇒
+      ToQuery q final where
+      toQuery q = fromStatement (toStatement q)
 
 -- | Asserts that queries not using GROUP BY do not mix aggregated and non aggregated columns
 class AggregatedQuery (s ∷ Type) (q ∷ Type)
 
-instance AggregatedQuery s rest ⇒ AggregatedQuery s (Where c rest)
+instance AggregatedQuery s (GroupBy g q)
 
-else instance AggregatedQuery s (GroupBy f rest)
+else instance AggregatedQuery s q ⇒ AggregatedQuery s (Where c q)
+
+else instance AggregatedQuery s q ⇒ AggregatedQuery s (OrderBy o q)
+
+else instance AggregatedQuery s q ⇒ AggregatedQuery s (Limit n q)
+
+else instance AggregatedQuery s q ⇒ AggregatedQuery s (Offset q)
 
 else instance AggregatedQuery s q ⇒ AggregatedQuery (Distinct s) q
 
@@ -234,43 +241,20 @@ instance Fail (Text "Projection cannot include aggregations. Are you missing a G
 
 else instance IsValidAggregation s t
 
--- | Prevents top level queries to end in AS
-class QueryMustNotBeAliased (q ∷ Type)
-
-instance QueryMustNotBeAliased rest ⇒ QueryMustNotBeAliased (Where c rest)
-
-instance QueryMustNotBeAliased rest ⇒ QueryMustNotBeAliased (GroupBy f rest)
-
-instance QueryMustNotBeAliased rest ⇒ QueryMustNotBeAliased (OrderBy f rest)
-
-instance QueryMustNotBeAliased rest ⇒ QueryMustNotBeAliased (Limit n rest)
-
-instance QueryMustNotBeAliased rest ⇒ QueryMustNotBeAliased (Offset rest)
-
-instance Fail (Text "AS statement cannot be top level") ⇒ QueryMustNotBeAliased (As alias E)
-
-instance QueryMustNotBeAliased E
-
-instance QueryMustNotBeAliased (Query projection)
-
 -- | Validates qualified columns that `ToProjection` didn't have the context for
 class QualifiedProjection (s ∷ Type) (outer ∷ Row Type) (projection ∷ Row Type) | s → outer projection
 
 instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , JoinedToMaybe t u
-      , UnwrapDefinition u v
-      , Cons fullPath v () projection
+      , Cons fullPath t () projection
       ) ⇒
       QualifiedProjection (Path alias name) outer projection
 
 else instance
       ( AppendPath table name fullPath
       , Cons fullPath t e outer
-      , JoinedToMaybe t u
-      , UnwrapDefinition u v
-      , Cons alias v () projection
+      , Cons alias t () projection
       ) ⇒
       QualifiedProjection (As alias (Path table name)) outer projection
 
@@ -304,37 +288,70 @@ else instance
       ) ⇒
       QualifiedProjection (Tuple s t) outer projection
 
-else instance
-      ( Union outer fields all
-      , Nub all nubbed
-      , FilteredQuery rest nubbed
-      , FilteredQuery f nubbed
-      , QualifiedProjection s nubbed projection
-      , RowToList projection list
-      , SingleQualifiedColumn list rest single
-      ) ⇒
-      QualifiedProjection (Select s p (From f fields rest)) outer single
-
 else instance QualifiedProjection s outer projection ⇒ QualifiedProjection (Distinct s) outer projection
 
-else instance QualifiedProjection s outer ()
+else instance (IsSubQuery s is, QualifiedSubQuery is s outer projection) ⇒ QualifiedProjection s outer projection
+
+-- | Subqueries have access to the outer scope, so their conditions and projections must be checked against it
+class QualifiedSubQuery (is ∷ Boolean) (s ∷ Type) (outer ∷ Row Type) (projection ∷ Row Type) | is s → outer projection
+
+instance QualifiedSubQuery False s outer ()
+
+else instance
+      ( SelectQuery q s f fields p
+      , Union outer fields all
+      , Nub all nubbed
+      , FilteredQuery q nubbed
+      , QualifiedProjection s nubbed projection
+      , RowToList projection list
+      , SingleQualifiedColumn list alias single
+      ) ⇒
+      QualifiedSubQuery True (As alias q) outer single
+
+else instance
+      ( SelectQuery q s f fields p
+      , Union outer fields all
+      , Nub all nubbed
+      , FilteredQuery q nubbed
+      , QualifiedProjection s nubbed projection
+      , RowToList projection list
+      , SingleQualifiedColumn list Empty single
+      ) ⇒
+      QualifiedSubQuery True q outer single
 
 -- | Projects a single qualified column, if it exists
-class SingleQualifiedColumn (fields ∷ RowList Type) (q ∷ Type) (single ∷ Row Type) | fields → q single
+class SingleQualifiedColumn (fields ∷ RowList Type) (alias ∷ Symbol) (single ∷ Row Type) | fields alias → single
 
-instance SingleQualifiedColumn RL.Nil q ()
+instance SingleQualifiedColumn RL.Nil alias ()
 
-else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () single) ⇒ SingleQualifiedColumn (RL.Cons name (Maybe t) RL.Nil) q single
+else instance (ColumnAlias alias name final, Cons final (Maybe t) () single) ⇒ SingleQualifiedColumn (RL.Cons name (Maybe t) RL.Nil) alias single
 
-else instance (QueryOptionallyAliased q name alias, Cons alias (Maybe t) () single) ⇒ SingleQualifiedColumn (RL.Cons name t RL.Nil) q single
+else instance (ColumnAlias alias name final, Cons final (Maybe t) () single) ⇒ SingleQualifiedColumn (RL.Cons name t RL.Nil) alias single
+
+-- | Use the column name unless an alias was given
+class ColumnAlias (alias ∷ Symbol) (name ∷ Symbol) (final ∷ Symbol) | alias name → final
+
+instance ColumnAlias Empty name name
+
+else instance ColumnAlias alias name alias
 
 -- | would be nice to dry this like tocondition, but gotta find a way to only check `Path`s
 -- | Checks for invalid qualified columns usage in conditional clauses
 class FilteredQuery (q ∷ Type) (outer ∷ Row Type)
 
-instance FilteredQuery cond outer ⇒ FilteredQuery (Where cond rest) outer
+instance (FilteredQuery cond outer, FilteredQuery q outer) ⇒ FilteredQuery (Where cond q) outer
 
-else instance FilteredQuery cond outer ⇒ FilteredQuery (Join k f q r a (On cond rest)) outer
+else instance FilteredQuery q outer ⇒ FilteredQuery (GroupBy g q) outer
+
+else instance FilteredQuery q outer ⇒ FilteredQuery (OrderBy o q) outer
+
+else instance FilteredQuery q outer ⇒ FilteredQuery (Limit n q) outer
+
+else instance FilteredQuery q outer ⇒ FilteredQuery (Offset q) outer
+
+else instance FilteredQuery f outer ⇒ FilteredQuery (From f fields projection q) outer
+
+else instance FilteredQuery cond outer ⇒ FilteredQuery (On cond j) outer
 
 else instance (FilteredQuery (Op a b) outer, FilteredQuery (Op c d) outer) ⇒ FilteredQuery (Op (Op a b) (Op c d)) outer
 
@@ -347,70 +364,61 @@ else instance (AppendPath alias name fullPath, Cons fullPath t e outer, IsNullab
 else instance
       (
         -- exists support arbitrary queries, so we gotta repeat all of these....
-        AggregatedQuery s rest
-      , QueryMustNotBeAliased rest
+        SelectQuery q s f fields p
+      , AggregatedQuery s q
       , QualifiedProjection s outer o
       , Union outer fields os
       , Nub os allOut
-      , FilteredQuery rest allOut
+      , FilteredQuery q allOut
       ) ⇒
-      FilteredQuery (Op Exists (Select s p (From f fields rest))) outer
+      FilteredQuery (Op Exists q) outer
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t v
       ) ⇒
       FilteredQuery (Op In (Op (Path alias name) (NonEmptyArray v))) outer
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , UnwrapDefinition t v
-      , UnwrapNullable v w
+      , UnwrapNullable t w
       , AppendPath otherAlias otherName otherFullPath
       , Cons otherFullPath u f outer
-      , UnwrapDefinition u z
-      , UnwrapNullable z w
+      , UnwrapNullable u w
       ) ⇒
       FilteredQuery (Op (Path alias name) (Path otherAlias otherName)) outer
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , UnwrapDefinition t v
-      , UnwrapNullable v w
+      , UnwrapNullable t w
       , Cons otherName u f outer
-      , UnwrapDefinition u z
-      , UnwrapNullable z w
+      , UnwrapNullable u w
       ) ⇒
       FilteredQuery (Op (Path alias name) (Proxy otherName)) outer
 
 else instance
       ( Cons name t f outer
-      , UnwrapDefinition t v
-      , UnwrapNullable v w
+      , UnwrapNullable t w
       , AppendPath alias otherName fullPath
       , Cons fullPath u e outer
-      , UnwrapDefinition u z
-      , UnwrapNullable z w
+      , UnwrapNullable u w
       ) ⇒
       FilteredQuery (Op (Proxy name) (Path alias otherName)) outer
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t v
       ) ⇒
       FilteredQuery (Op (Path alias name) v) outer
 
 else instance
       ( AppendPath alias name fullPath
       , Cons fullPath t e outer
-      , UnwrapDefinition t u
-      , UnwrapNullable u v
+      , UnwrapNullable t v
       ) ⇒
       FilteredQuery (Op v (Path alias name)) outer
 
@@ -426,499 +434,287 @@ instance
       ) ⇒
       ToNakedProjection (Tuple s t) projection
 
-else instance
-      ( --let ToProjection figure out alias and outer since this is necessarily a subquery
-        ToProjection (Select s p (From f fields rest)) () Nil projection
-      , QualifiedProjection s fields refs
-      , RowToList projection pro
-      , ToSingleColumn pro name t
-      , Cons name t () single
-      ) ⇒
-      ToNakedProjection (Select s p (From f fields rest)) single
-
 else instance ToNakedProjection s projection ⇒ ToNakedProjection (Distinct s) projection
 
-else instance ToProjection s () Nil projection ⇒ ToNakedProjection s projection
+else instance (IsSubQuery s is, NakedSubQuery is s projection) ⇒ ToNakedProjection s projection
 
--- | Print SQL statements
-class Translate q where
-      translate ∷ q → State QueryState String
+-- | Subqueries in naked selects are necessarily correlated to nothing, but their own qualified columns still need checking
+class NakedSubQuery (is ∷ Boolean) (s ∷ Type) (projection ∷ Row Type) | is s → projection
 
--- | End of query
-instance Translate E where
-      translate _ = pure ""
-
--- | PREPARE
-instance Translate s ⇒ Translate (Prepare s) where
-      translate (Prepare s plan) = do
-            CMS.modify_ (_ { plan = Just plan })
-            translate s
-
--- | Print naked selects
-class TranslateNakedColumn q where
-      translateNakedColumn ∷ q → State QueryState String
-
-instance Reflectable name String ⇒ TranslateNakedColumn (As name Int) where
-      translateNakedColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
-
-instance (Reflectable name String, ArgumentList args) ⇒ TranslateNakedColumn (As name (PgFunction inp args fields out)) where
-      translateNakedColumn (As func) = do
-            q ← printFunction func
-            pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
-
-instance (TranslateNakedColumn s, TranslateNakedColumn t) ⇒ TranslateNakedColumn (Tuple s t) where
-      translateNakedColumn (Tuple s t) = do
-            q ← translateNakedColumn s
-            otherQ ← translateNakedColumn t
-            pure $ q <> comma <> otherQ
-
-instance Translate (Select s ss (From f fields rest)) ⇒ TranslateNakedColumn (Select s ss (From f fields rest)) where
-      translateNakedColumn s = do
-            CMS.modify_ (_ { bracketed = true })
-            translate s
-
-instance TranslateNakedColumn s ⇒ Translate (Select s pp E) where
-      translate (Select s _) = do
-            q ← translateNakedColumn s
-            pure $ selectKeyword <> q
-
--- | Fully clothed selects
-else instance (TranslateColumn s, Translate rest) ⇒ Translate (Select s projection rest) where
-      translate (Select s rest) = do
-            --hack
-            { bracketed: needsOpenBracket } ← CMS.get
-            q ← translateColumn s
-            otherQ ← translate rest
-            { bracketed: needsCloseBracket } ← CMS.get
-            let sel = selectKeyword <> q <> otherQ
-            let
-                  opened
-                        | needsOpenBracket = openBracket <> sel
-                        | otherwise = sel
-            let
-                  closed
-                        | needsCloseBracket = opened <> closeBracket
-                        | otherwise = opened
-            CMS.modify_ $ _ { bracketed = false }
-            pure closed
-
--- | Print selected columns
-class TranslateColumn q where
-      translateColumn ∷ q → State QueryState String
-
-instance Reflectable name String ⇒ TranslateColumn (Proxy name) where
-      translateColumn name = pure $ quote name
+instance ToProjection s () Nil projection ⇒ NakedSubQuery False s projection
 
 else instance
-      ( Reflectable fullPath String
-      , Reflectable name String
-      , Reflectable alias String
-      , AppendPath alias name fullPath
+      ( --let ToProjection figure out alias and outer since this is necessarily a subquery
+        ToProjection (As alias q) () Nil projection
+      , SelectQuery q s f fields p
+      , QualifiedProjection s fields refs
       ) ⇒
-      TranslateColumn (Path alias name) where
-      translateColumn _ = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name) <> " " <> quote (Proxy ∷ _ fullPath)
-
-else instance TranslateColumn Star where
-      translateColumn _ = pure starSymbol
-
-else instance Reflectable name String ⇒ TranslateColumn (As name Int) where
-      translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
-
-else instance Reflectable name String ⇒ TranslateColumn (As name Boolean) where
-      translateColumn (As n) = pure $ show n <> asKeyword <> quote (Proxy ∷ _ name)
-
-else instance (Reflectable name String, TranslateConditions (Op one another)) ⇒ TranslateColumn (As name (Op one another)) where
-      translateColumn (As conditions) = do
-            n ← translateConditions conditions
-            pure $ n <> asKeyword <> quote (Proxy ∷ _ name)
-
-else instance (Reflectable name String, NameList inp, ArgumentList rest) ⇒ TranslateColumn (As name (Aggregate inp rest fields out)) where
-      translateColumn (As agg) = do
-            q ← printAggregation agg
-            pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
-
-else instance (Reflectable name String, ArgumentList args) ⇒ TranslateColumn (As name (PgFunction inp args fields out)) where
-      translateColumn (As func) = do
-            q ← printFunction func
-            pure $ q <> asKeyword <> quote (Proxy ∷ _ name)
-
-else instance (Reflectable name String, Reflectable alias String) ⇒ TranslateColumn (As alias (Proxy name)) where
-      translateColumn _ = pure $ quote (Proxy ∷ _ name) <> asKeyword <> quote (Proxy ∷ _ alias)
+      NakedSubQuery True (As alias q) projection
 
 else instance
-      ( Reflectable fullPath String
-      , Reflectable alias String
-      , Reflectable name String
-      , Reflectable table String
-      , AppendPath table name fullPath
+      ( ToProjection q () Nil projection
+      , SelectQuery q s f fields p
+      , QualifiedProjection s fields refs
       ) ⇒
-      TranslateColumn (As alias (Path table name)) where
-      translateColumn _ = pure $ quotePath (Proxy ∷ _ table) (Proxy ∷ _ name) <> asKeyword <> quote (Proxy ∷ _ alias)
+      NakedSubQuery True q projection
 
-else instance (TranslateColumn s, TranslateColumn t) ⇒ TranslateColumn (Tuple s t) where
-      translateColumn (Tuple s t) = do
-            sQ ← translateColumn s
-            tQ ← translateColumn t
-            pure $ sQ <> comma <> tQ
+------------------------Lowering to Ast---------------------------
 
-else instance TranslateColumn s ⇒ TranslateColumn (Distinct s) where
-      translateColumn (Distinct s) = do
-            q ← translateColumn s
-            pure $ distinctKeyword <> q
-
-else instance Translate q ⇒ TranslateColumn q where
-      translateColumn s = do
-            CMS.modify_ (_ { bracketed = true })
-            translate s
-
--- | FROM
-instance (Reflectable name String, Translate rest) ⇒ Translate (From (Table name fields) fields rest) where
-      translate (From _ rest) = do
-            q ← translate rest
-            pure $ fromKeyword <> quote (Proxy ∷ _ name) <> q
-
-else instance (Translate (Join k fields l r a more), Translate rest) ⇒ Translate (From (Join k fields l r a more) fields rest) where
-      translate (From j rest) = do
-            q ← translate j
-            otherQ ← translate rest
-            pure $ fromKeyword <> q <> otherQ
-
-else instance (TranslateSource q, Translate rest) ⇒ Translate (From q fields rest) where
-      translate (From s rest) = do
-            q ← translateSource s
-            otherQ ← translate rest
-            pure $ fromKeyword <> q <> otherQ
-
--- | Print field source
-class TranslateSource (q ∷ Type) where
-      translateSource ∷ q → State QueryState String
-
-instance Translate (Select s ppp more) ⇒ TranslateSource (Select s ppp more) where
-      translateSource s = do
-            CMS.modify_ (_ { bracketed = true })
-            translate s
-
-instance (Reflectable name String, Reflectable alias String) ⇒ TranslateSource (As alias (Table name fd)) where
-      translateSource _ = pure $ quote (Proxy ∷ _ name) <> asKeyword <> quote (Proxy ∷ _ alias)
-
-instance Reflectable name String ⇒ TranslateSource (Table name fd) where
-      translateSource _ = pure $ quote (Proxy ∷ _ name)
-
-instance (ToJoinType k, Translate (Join k fields l r a rest)) ⇒ TranslateSource (Join k fields l r a rest) where
-      translateSource j = translate j
-
--- | JOIN
-instance
-      ( ToJoinType k
-      , TranslateSource l
-      , TranslateSource r
-      , Translate rest
-      ) ⇒
-      Translate (Join k fields l r a rest) where
-      translate (Join l r rest) = do
-            left ← translateSource l
-            right ← translateSource r
-            q ← translate rest
-            pure $ left <> toJoinType (Proxy ∷ _ k) <> right <> q
-
--- | Print join type
-class ToJoinType (k ∷ Side) where
-      toJoinType ∷ Proxy k → String
-
-instance ToJoinType Inner where
-      toJoinType _ = innerKeyword <> joinKeyword
-
-instance ToJoinType Outer where
-      toJoinType _ = leftKeyword <> joinKeyword
-
--- | ON
-instance (TranslateConditions c, Translate rest) ⇒ Translate (On c rest) where
-      translate (On c rest) = do
-            q ← translateConditions c
-            otherQ ← translate rest
-            pure $ onKeyword <> q <> otherQ
-
--- | (SELECT ... FROM ...) AS
-instance Reflectable name String ⇒ Translate (As name E) where
-      translate _ = do
-            CMS.modify_ (_ { bracketed = false })
-            pure $ closeBracket <> asKeyword <> quote (Proxy ∷ _ name)
-
--- | WHERE
-instance (TranslateConditions c, Translate rest) ⇒ Translate (Where c rest) where
-      translate (Where c rest) = do
-            q ← translateConditions c
-            otherQ ← translate rest
-            pure $ whereKeyword <> q <> otherQ
-
--- | Print logical conditions
-class TranslateConditions c where
-      translateConditions ∷ c → State QueryState String
-
-instance Translate (Select s p (From f fd rest)) ⇒ TranslateConditions (Op Exists (Select s p (From f fd rest))) where
-      translateConditions (Op _ _ s) = do
-            q ← translate s
-            pure $ existsKeyword <> openBracket <> q <> closeBracket
-
-else instance TranslateConditions a ⇒ TranslateConditions (Op IsNotNull a) where
-      translateConditions (Op _ _ s) = do
-            q ← translateConditions s
-            pure $ q <> isNotNullKeyword
-
-else instance TranslateConditions a ⇒ TranslateConditions (Op IsNull a) where
-      translateConditions (Op _ _ s) = do
-            q ← translateConditions s
-            pure $ q <> isNullKeyword
-
-else instance TranslateConditions a ⇒ TranslateConditions (Op Not a) where
-      translateConditions (Op _ _ s) = do
-            q ← translateConditions s
-            pure $ notKeyword <> q
-
-else instance (TranslateConditions a, TranslateConditions b) ⇒ TranslateConditions (Op In (Op a (NonEmptyArray b))) where
-      translateConditions (Op _ _ (Op _ fd values)) = do
-            q ← translateConditions fd
-            parameters ← DT.traverse translateConditions values
-            pure $ q <> inKeyword <> openBracket <> DST.joinWith ", " (DAN.toArray parameters) <> closeBracket
-
-else instance (TranslateConditions a, TranslateConditions b) ⇒ TranslateConditions (Op a b) where
-      translateConditions (Op operator a b) = do
-            q ← translateConditions a
-            otherQ ← translateConditions b
-            pure $
-                  if operator == Just And || operator == Just Or then
-                        openBracket <> q <> printOperator operator <> otherQ <> closeBracket
-                  else
-                        q <> printOperator operator <> otherQ
-
-else instance Reflectable name String ⇒ TranslateConditions (Proxy name) where
-      translateConditions name = pure $ quote name
-
-else instance (Reflectable alias String, Reflectable name String) ⇒ TranslateConditions (Path alias name) where
-      translateConditions _ = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name)
-
-else instance ToValue v ⇒ TranslateConditions v where
-      translateConditions p = do
-            { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ DLID.toValue p }
-            pure $ "$" <> show (DA.length parameters)
-
-printOperator ∷ Maybe BinaryOperator → String
-printOperator = case _ of
-      Nothing → ""
-      Just op → case op of
-            Equals → equalsSymbol
-            NotEquals → notEqualsSymbol
-            LesserThan → lesserThanSymbol
-            GreaterThan → greaterThanSymbol
-            LesserEqualsThan → lesserEqualsThanSymbol
-            GreaterEqualsThan → greaterEqualsThanSymbol
-            And → andKeyword
-            Or → orKeyword
-
--- | GROUP BY
-instance (NameList f, Translate rest) ⇒ Translate (GroupBy f rest) where
-      translate (GroupBy fields rest) = do
-            q ← translate rest
-            pure $ groupByKeyword <> nameList fields <> q
-
--- | UNION
-instance (Translate s, Translate r) ⇒ Translate (Union s r) where
-      translate (Union inclusion s r) = do
-            q ← translate s
-            otherQ ← translate r
-            pure $ openBracket <> q <> unionKeyword <> printInclusion inclusion <> otherQ <> closeBracket
-
-printInclusion ∷ Inclusion → String
-printInclusion = case _ of
-      All → allKeyword
-      Unique → ""
-
--- | INSERT DEFAULT VALUES
-instance
-      ( Reflectable name String
-      , Translate rest
-      ) ⇒
-      Translate (Insert (Into name fields DefaultValues rest)) where
-      translate (Insert (Into DefaultValues rest)) = do
-            otherQ ← translate rest
-            pure $ insertKeyword
-                  <> quote (Proxy ∷ _ name)
-                  <> space
-                  <> defaultKeyword
-                  <> valuesKeyword
-                  <> otherQ
-
--- | INSERT
-else instance
-      ( Reflectable name String
-      , NameList fieldNames
-      , ValueList v
-      , Translate rest
-      ) ⇒
-      Translate (Insert (Into name fields fieldNames (Values v rest))) where
-      translate (Insert (Into fieldNames (Values v rest))) = do
-            q ← valueList v
-            otherQ ← translate rest
-            pure $ insertKeyword
-                  <> quote (Proxy ∷ _ name)
-                  <> space
-                  <> openBracket
-                  <> nameList fieldNames
-                  <> closeBracket
-                  <> valuesKeyword
-                  <> space
-                  <> openBracket
-                  <> q
-                  <> closeBracket
-                  <> otherQ
-
--- | Names (possibly) separated by comma
+-- | Lower a type checked statement to its plain representation
 -- |
--- | Used by INSERT, ORDER BY
-class NameList fieldNames where
-      nameList ∷ fieldNames → String
+-- | Statements are nested with the last clause outermost, so each instance lowers the inner statement and appends its own clause
+class ToStatement q where
+      toStatement ∷ q → Statement
 
-instance Reflectable name String ⇒ NameList (Proxy name) where
-      nameList name = quote name
-
-instance (Reflectable alias String, Reflectable name String) ⇒ NameList (Path alias name) where
-      nameList _ = quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name)
-
-instance NameList Star where
-      nameList _ = starSymbol
-
---e.g. array_agg (field order by field)
-instance (NameList f, NameList g) ⇒ NameList (OrderBy f g) where
-      nameList (OrderBy f g) = nameList g <> orderKeyword <> byKeyword <> nameList f
-
-instance (NameList f, NameList rest) ⇒ NameList (Tuple f rest) where
-      nameList (Tuple f rest) = nameList f <> comma <> nameList rest
-
--- | Name list for functions, or when fields and parameters can be mixed
-class ArgumentList v where
-      argumentList ∷ v → State QueryState String
-
-instance Reflectable name String ⇒ ArgumentList (Proxy name) where
-      argumentList name = pure $ quote name
-
-else instance (Reflectable alias String, Reflectable name String) ⇒ ArgumentList (Path alias name) where
-      argumentList _ = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name)
-
-else instance (ArgumentList s, Translate (OrderBy f E)) ⇒ ArgumentList (OrderBy f s) where
-      argumentList (OrderBy f s) = do
-            q ← translate (OrderBy f E)
-            ns ← argumentList s
-            pure $ ns <> q
-
-else instance Reflectable name String ⇒ ArgumentList (Sort (Proxy name)) where
-      argumentList s = pure $ quote (Proxy ∷ _ name) <> case s of
-            Desc → descKeyword
-            Asc → ascKeyword
-
-else instance (Reflectable alias String, Reflectable name String) ⇒ ArgumentList (Sort (Path alias name)) where
-      argumentList s = pure $ quotePath (Proxy ∷ _ alias) (Proxy ∷ _ name) <> case s of
-            Desc → descKeyword
-            Asc → ascKeyword
-
-else instance (ArgumentList args) ⇒ ArgumentList (PgFunction input args fields output) where
-      argumentList func = printFunction func
-
---hack for functions that take no arguments
-else instance ArgumentList Unit where
-      argumentList _ = pure ""
-
-else instance ArgumentList E where
-      argumentList _ = pure ""
-
-else instance (ArgumentList f, ArgumentList rest) ⇒ ArgumentList (Tuple f rest) where
-      argumentList (Tuple f rest) = do
-            af ← argumentList f
-            ar ← argumentList rest
-            pure $ af <> comma <> ar
-
-else instance ValueList v ⇒ ArgumentList v where
-      argumentList v = valueList v
-
-class ValueList fieldValues where
-      valueList ∷ fieldValues → State QueryState String
-
-instance (ValueList p, ValueList rest) ⇒ ValueList (Tuple p rest) where
-      valueList (Tuple p rest) = do
-            q ← valueList p
-            otherQ ← valueList rest
-            pure $ q <> comma <> otherQ
-
-else instance ValueList u ⇒ ValueList (Array u) where
-      valueList values = do
-            q ← DF.traverse valueList values
-            let sep = closeBracket <> comma <> openBracket --work around Translate Insert adding brackets
-            pure $ DST.joinWith sep q
-
-else instance ValueList Default where
-      valueList _ = pure defaultKeyword
-
-else instance ToValue p ⇒ ValueList p where
-      valueList p = do
-            { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ DLID.toValue p }
-            pure $ "$" <> show (DA.length parameters)
-
--- | UPDATE
-instance (Reflectable name String, NameValuePairs pairs, Translate rest) ⇒ Translate (Update name fields (Set pairs rest)) where
-      translate (Update (Set pairs rest)) = do
-            q ← nameValuePairs pairs
-            otherQ ← translate rest
-            pure $ updateKeyword
-                  <> quote (Proxy ∷ _ name)
-                  <> setKeyword
-                  <> q
-                  <> otherQ
-
--- | UPDATE list
-class NameValuePairs pairs where
-      nameValuePairs ∷ pairs → State QueryState String
-
-instance Reflectable name String ⇒ NameValuePairs (Op (Proxy name) Default) where
-      nameValuePairs (Op _ name _) = pure $ DR.reflectType name <> equalsSymbol <> defaultKeyword
-
-else instance (Reflectable name String, ToValue p) ⇒ NameValuePairs (Op (Proxy name) p) where
-      nameValuePairs (Op _ name p) = do
-            { parameters } ← CMS.modify $ \s@{ parameters } → s { parameters = DA.snoc parameters $ DLID.toValue p }
-            pure $ DR.reflectType name <> equalsSymbol <> "$" <> show (DA.length parameters)
-
-instance (NameValuePairs p, NameValuePairs rest) ⇒ NameValuePairs (Tuple p rest) where
-      nameValuePairs (Tuple p rest) = do
-            q ← nameValuePairs p
-            otherQ ← nameValuePairs rest
-            pure $ q <> comma <> otherQ
+-- | SELECT
+instance ToColumns s ⇒ ToStatement (Select s) where
+      toStatement (Select s) = [ DLIA.Select (toColumns s) ]
 
 -- | DELETE
-instance Translate (From f fields rest) ⇒ Translate (Delete (From f fields rest)) where
-      translate (Delete fr) = do
-            q ← translate fr
-            pure $ deleteKeyword <> q
+instance ToStatement Delete where
+      toStatement _ = [ DLIA.Delete ]
 
--- | RETURNING
-instance (NameList fieldNames) ⇒ Translate (Returning fieldNames) where
-      translate (Returning fieldNames) = pure $ returningKeyword <> nameList fieldNames
+-- | UPDATE
+instance Reflectable name String ⇒ ToStatement (Update name fields) where
+      toStatement _ = [ DLIA.Update (DR.reflectType (Proxy ∷ _ name)) ]
+
+-- | SET
+instance (ToStatement q, ToSetPairs pairs) ⇒ ToStatement (Set pairs q) where
+      toStatement (Set pairs q) = DA.snoc (toStatement q) (DLIA.Set (toSetPairs pairs))
+
+-- | FROM
+instance (ToStatement q, ToSource f) ⇒ ToStatement (From f fields projection q) where
+      toStatement (From f q) = DA.snoc (toStatement q) (DLIA.From (toSource f))
+
+-- | WHERE
+instance (ToStatement q, ToExpression c) ⇒ ToStatement (Where c q) where
+      toStatement (Where c q) = DA.snoc (toStatement q) (DLIA.Where (toExpression c))
+
+-- | GROUP BY
+instance (ToStatement q, ToExpressionList f) ⇒ ToStatement (GroupBy f q) where
+      toStatement (GroupBy f q) = DA.snoc (toStatement q) (DLIA.GroupBy (toExpressionList f))
 
 -- | ORDER BY
-instance (ArgumentList f, Translate rest) ⇒ Translate (OrderBy f rest) where
-      translate (OrderBy f rest) = do
-            q ← translate rest
-            nf ← argumentList f
-            pure $ orderKeyword <> byKeyword <> nf <> q
+instance (ToStatement q, ToExpressionList f) ⇒ ToStatement (OrderBy f q) where
+      toStatement (OrderBy f q) = DA.snoc (toStatement q) (DLIA.OrderBy (toExpressionList f))
 
 -- | LIMIT
-instance (Reflectable n Int, Translate rest) ⇒ Translate (Limit n rest) where
-      translate (Limit rest) = do
-            q ← translate rest
-            pure $ limitKeyword <> show (DR.reflectType (Proxy ∷ _ n)) <> q
+instance (ToStatement q, Reflectable n Int) ⇒ ToStatement (Limit n q) where
+      toStatement (Limit q) = DA.snoc (toStatement q) (DLIA.Limit (DR.reflectType (Proxy ∷ _ n)))
 
 -- | OFFSET
-instance Translate rest ⇒ Translate (Offset rest) where
-      translate (Offset n rest) = do
-            q ← translate rest
-            pure $ offsetKeyword <> show n <> q
+instance ToStatement q ⇒ ToStatement (Offset q) where
+      toStatement (Offset n q) = DA.snoc (toStatement q) (DLIA.Offset n)
+
+-- | INSERT DEFAULT VALUES
+instance Reflectable name String ⇒ ToStatement (Into name fields DefaultValues) where
+      toStatement _ = [ DLIA.InsertDefaultValues (DR.reflectType (Proxy ∷ _ name)) ]
+
+-- | INSERT ... VALUES
+instance (Reflectable name String, ToExpressionList fieldNames, ToRows v) ⇒ ToStatement (Values v (Into name fields fieldNames)) where
+      toStatement (Values v (Into fieldNames)) = [ DLIA.InsertInto (DR.reflectType (Proxy ∷ _ name)) (toExpressionList fieldNames), DLIA.Values (toRows v) ]
+
+-- | RETURNING
+instance (ToStatement q, ToExpressionList f) ⇒ ToStatement (Returning f q) where
+      toStatement (Returning f q) = DA.snoc (toStatement q) (DLIA.Returning (toExpressionList f))
+
+-- | UNION
+instance (ToStatement q, ToStatement r) ⇒ ToStatement (Union q r) where
+      toStatement (Union inclusion q r) = [ DLIA.Union isAll (toStatement q) (toStatement r) ]
+            where
+            isAll = case inclusion of
+                  All → true
+                  Unique → false
+
+-- | Lower SELECT projections
+class ToColumns s where
+      toColumns ∷ s → Array Expression
+
+instance Reflectable name String ⇒ ToColumns (Proxy name) where
+      toColumns _ = [ DLIA.Column (DR.reflectType (Proxy ∷ _ name)) ]
+
+-- | Columns in the format alias.name must be aliased to avoid problems with ambiguous column names and *
+else instance (Reflectable alias String, Reflectable name String) ⇒ ToColumns (Path alias name) where
+      toColumns _ = [ DLIA.Labeled (qualifiedColumn (Proxy ∷ _ alias) (Proxy ∷ _ name)) (DR.reflectType (Proxy ∷ _ alias) <> dotSymbol <> DR.reflectType (Proxy ∷ _ name)) ]
+
+else instance ToColumns Star where
+      toColumns _ = [ DLIA.Star ]
+
+else instance Reflectable alias String ⇒ ToColumns (As alias Int) where
+      toColumns (As n) = [ DLIA.As (DLIA.Literal (show n)) (DR.reflectType (Proxy ∷ _ alias)) ]
+
+else instance Reflectable alias String ⇒ ToColumns (As alias Boolean) where
+      toColumns (As b) = [ DLIA.As (DLIA.Literal (show b)) (DR.reflectType (Proxy ∷ _ alias)) ]
+
+else instance (Reflectable alias String, ToExpression (Op one another)) ⇒ ToColumns (As alias (Op one another)) where
+      toColumns (As op) = [ DLIA.As (toExpression op) (DR.reflectType (Proxy ∷ _ alias)) ]
+
+else instance (Reflectable alias String, ToExpression (Aggregate inp rest fields out)) ⇒ ToColumns (As alias (Aggregate inp rest fields out)) where
+      toColumns (As agg) = [ DLIA.As (toExpression agg) (DR.reflectType (Proxy ∷ _ alias)) ]
+
+else instance (Reflectable alias String, ToExpression (PgFunction inp args fields out)) ⇒ ToColumns (As alias (PgFunction inp args fields out)) where
+      toColumns (As func) = [ DLIA.As (toExpression func) (DR.reflectType (Proxy ∷ _ alias)) ]
+
+else instance (Reflectable alias String, Reflectable name String) ⇒ ToColumns (As alias (Proxy name)) where
+      toColumns _ = [ DLIA.As (DLIA.Column (DR.reflectType (Proxy ∷ _ name))) (DR.reflectType (Proxy ∷ _ alias)) ]
+
+else instance (Reflectable alias String, Reflectable table String, Reflectable name String) ⇒ ToColumns (As alias (Path table name)) where
+      toColumns _ = [ DLIA.As (qualifiedColumn (Proxy ∷ _ table) (Proxy ∷ _ name)) (DR.reflectType (Proxy ∷ _ alias)) ]
+
+else instance (ToColumns s, ToColumns t) ⇒ ToColumns (Tuple s t) where
+      toColumns (Tuple s t) = toColumns s <> toColumns t
+
+else instance ToColumns s ⇒ ToColumns (Distinct s) where
+      toColumns (Distinct s) = [ DLIA.Distinct (toColumns s) ]
+
+-- | Aliased subquery
+else instance (Reflectable alias String, ToStatement q) ⇒ ToColumns (As alias q) where
+      toColumns (As q) = [ DLIA.As (DLIA.SubQueryExpression (toStatement q)) (DR.reflectType (Proxy ∷ _ alias)) ]
+
+-- | Subquery
+else instance ToStatement q ⇒ ToColumns q where
+      toColumns q = [ DLIA.SubQueryExpression (toStatement q) ]
+
+-- | Lower FROM sources
+class ToSource f where
+      toSource ∷ f → Source
+
+instance Reflectable name String ⇒ ToSource (Table name fields) where
+      toSource _ = DLIA.Table (DR.reflectType (Proxy ∷ _ name))
+
+else instance (Reflectable name String, Reflectable alias String) ⇒ ToSource (As alias (Table name fields)) where
+      toSource _ = DLIA.AliasedTable (DR.reflectType (Proxy ∷ _ name)) (DR.reflectType (Proxy ∷ _ alias))
+
+else instance (ToJoinType k, ToSource l, ToSource r, ToExpression c) ⇒ ToSource (On c (Join k fields l r a)) where
+      toSource (On c (Join l r)) = DLIA.Join (toJoinType (Proxy ∷ _ k)) (toSource l) (toSource r) (toExpression c)
+
+-- | Aliased subquery
+else instance (Reflectable alias String, ToStatement q) ⇒ ToSource (As alias q) where
+      toSource (As q) = DLIA.SubQuery (toStatement q) (DR.reflectType (Proxy ∷ _ alias))
+
+class ToJoinType (k ∷ Side) where
+      toJoinType ∷ Proxy k → JoinType
+
+instance ToJoinType Inner where
+      toJoinType _ = DLIA.InnerJoin
+
+instance ToJoinType Outer where
+      toJoinType _ = DLIA.LeftJoin
+
+-- | Lower conditions, function arguments and other expressions
+class ToExpression e where
+      toExpression ∷ e → Expression
+
+-- | EXISTS
+instance ToStatement q ⇒ ToExpression (Op Exists q) where
+      toExpression (Op _ _ q) = DLIA.Exists (toStatement q)
+
+-- | IS NOT NULL
+else instance ToExpression a ⇒ ToExpression (Op IsNotNull a) where
+      toExpression (Op _ _ a) = DLIA.IsNotNull (toExpression a)
+
+-- | IS NULL
+else instance ToExpression a ⇒ ToExpression (Op IsNull a) where
+      toExpression (Op _ _ a) = DLIA.IsNull (toExpression a)
+
+-- | NOT
+else instance ToExpression a ⇒ ToExpression (Op Not a) where
+      toExpression (Op _ _ a) = DLIA.Not (toExpression a)
+
+-- | IN
+else instance (ToExpression a, ToExpression b) ⇒ ToExpression (Op In (Op a (NonEmptyArray b))) where
+      toExpression (Op _ _ (Op _ a values)) = DLIA.In (toExpression a) (map toExpression (DAN.toArray values))
+
+-- | Comparisons, AND, OR
+else instance (ToExpression a, ToExpression b) ⇒ ToExpression (Op a b) where
+      toExpression (Op operator a b) = DLIA.Operation operator (toExpression a) (toExpression b)
+
+else instance Reflectable name String ⇒ ToExpression (Proxy name) where
+      toExpression _ = DLIA.Column (DR.reflectType (Proxy ∷ _ name))
+
+else instance (Reflectable alias String, Reflectable name String) ⇒ ToExpression (Path alias name) where
+      toExpression _ = qualifiedColumn (Proxy ∷ _ alias) (Proxy ∷ _ name)
+
+else instance ToExpression Star where
+      toExpression _ = DLIA.Star
+
+else instance Reflectable name String ⇒ ToExpression (Sort (Proxy name)) where
+      toExpression s = DLIA.Sorted (DLIA.Column (DR.reflectType (Proxy ∷ _ name))) (sortDirection s)
+
+else instance (Reflectable alias String, Reflectable name String) ⇒ ToExpression (Sort (Path alias name)) where
+      toExpression s = DLIA.Sorted (qualifiedColumn (Proxy ∷ _ alias) (Proxy ∷ _ name)) (sortDirection s)
+
+-- | e.g., string_agg(field, separator ORDER BY field)
+else instance (ToExpressionList f, ToExpression s) ⇒ ToExpression (OrderBy f s) where
+      toExpression (OrderBy f s) = DLIA.OrderedBy (toExpression s) (toExpressionList f)
+
+else instance ToExpressionList args ⇒ ToExpression (PgFunction input args fields output) where
+      toExpression (PgFunction name args) = DLIA.Function name (toExpressionList args)
+
+else instance (ToExpression inp, ToExpressionList rest) ⇒ ToExpression (Aggregate inp rest fields out) where
+      toExpression = case _ of
+            Count f → DLIA.Function countFunctionName [ toExpression f ]
+            StringAgg f rest → DLIA.Function string_aggFunctionName ([ toExpression f ] <> toExpressionList rest)
+            ArrayAgg f → DLIA.Function array_aggFunctionName [ toExpression f ]
+
+else instance ToExpression Default where
+      toExpression _ = DLIA.DefaultValue
+
+-- | Parameters
+else instance ToValue v ⇒ ToExpression v where
+      toExpression v = DLIA.Parameter (DLID.toValue v)
+
+-- | Lower comma separated lists
+class ToExpressionList e where
+      toExpressionList ∷ e → Array Expression
+
+instance (ToExpressionList e, ToExpressionList f) ⇒ ToExpressionList (Tuple e f) where
+      toExpressionList (Tuple e f) = toExpressionList e <> toExpressionList f
+
+-- | Functions without arguments
+else instance ToExpressionList Unit where
+      toExpressionList _ = []
+
+-- | Aggregates without extra arguments
+else instance ToExpressionList E where
+      toExpressionList _ = []
+
+else instance ToExpression e ⇒ ToExpressionList e where
+      toExpressionList e = [ toExpression e ]
+
+-- | Lower INSERT values: arrays are multiple rows, anything else a single row
+class ToRows v where
+      toRows ∷ v → Array (Array Expression)
+
+instance ToExpressionList v ⇒ ToRows (Array v) where
+      toRows = map toExpressionList
+
+else instance ToExpressionList v ⇒ ToRows v where
+      toRows v = [ toExpressionList v ]
+
+-- | Lower UPDATE SET pairs
+class ToSetPairs pairs where
+      toSetPairs ∷ pairs → Array (Tuple String Expression)
+
+instance (Reflectable name String, ToExpression v) ⇒ ToSetPairs (Op (Proxy name) v) where
+      toSetPairs (Op _ _ v) = [ Tuple (DR.reflectType (Proxy ∷ _ name)) (toExpression v) ]
+
+instance (ToSetPairs p, ToSetPairs rest) ⇒ ToSetPairs (Tuple p rest) where
+      toSetPairs (Tuple p rest) = toSetPairs p <> toSetPairs rest
+
+-- | Print a lowered statement
+fromStatement ∷ ∀ projection. Statement → Query projection
+fromStatement statement = Query Nothing query parameters
+      where
+      { query, parameters } = DLIA.print statement
+
+qualifiedColumn ∷ ∀ alias name. Reflectable alias String ⇒ Reflectable name String ⇒ Proxy alias → Proxy name → Expression
+qualifiedColumn alias name = DLIA.QualifiedColumn (DR.reflectType alias) (DR.reflectType name)
+
+sortDirection ∷ ∀ f. Sort f → SortDirection
+sortDirection = case _ of
+      Asc → DLIA.Ascending
+      Desc → DLIA.Descending
 
 -- | CREATE TABLE
 instance
@@ -929,15 +725,8 @@ instance
       , TranslateCompositeConstraint composites
       , Reflectable name String
       ) ⇒
-      Translate (Create (Table name columns)) where
-      translate _ = do
-            pure $ createKeyword
-                  <> tableKeyword
-                  <> quote (Proxy ∷ _ name)
-                  <> space
-                  <> openBracket
-                  <> DST.joinWith comma (translateFieldDefinition (Proxy ∷ _ columnList) <> translateCompositeConstraint (Proxy ∷ _ composites))
-                  <> closeBracket
+      ToStatement (T (Table name columns) Create) where
+      toStatement _ = [ DLIA.CreateTable (DR.reflectType (Proxy ∷ _ name)) (translateFieldDefinition (Proxy ∷ _ columnList) <> translateCompositeConstraint (Proxy ∷ _ composites)) ]
 
 -- |
 class TranslateFieldDefinition (list ∷ RowList Type) where
@@ -1101,29 +890,15 @@ instance CompositeFieldList Nil where
 instance (CompositeFieldList rest, Reflectable name String) ⇒ CompositeFieldList (Cons name t rest) where
       compositeFieldList _ = quote (Proxy ∷ _ name) : compositeFieldList (Proxy ∷ _ rest)
 
--- | ALTER TABLE
+-- | ALTER TABLE ... ADD
 instance
-      ( Reflectable name String
-      , Translate rest
-      ) ⇒
-      Translate (Alter (T (Table name fields) rest)) where
-      translate (Alter (T rest)) = do
-            q ← translate rest
-            pure $ alterKeyword
-                  <> tableKeyword
-                  <> quote (Proxy ∷ _ name)
-                  <> space
-                  <> q
-
--- | ADD
-instance
-      ( Reflectable name String
+      ( Reflectable tableName String
+      , Reflectable name String
       , SingleColumn name column columnList
       , TranslateFieldDefinition columnList
       ) ⇒
-      Translate (Add name column) where
-      translate _ = do
-            pure $ addKeyword <> (DM.fromMaybe "" <<< DA.head $ translateFieldDefinition (Proxy ∷ _ columnList))
+      ToStatement (Add name column (T (Table tableName fields) Alter)) where
+      toStatement _ = [ DLIA.AlterTableAdd (DR.reflectType (Proxy ∷ _ tableName)) (DM.fromMaybe "" <<< DA.head $ translateFieldDefinition (Proxy ∷ _ columnList)) ]
 
 class SingleColumn (name ∷ Symbol) (c ∷ Type) (output ∷ RowList Type) | name c → output
 
@@ -1132,40 +907,14 @@ instance SingleColumn name (Proxy t) (Cons name t Nil)
 instance SingleColumn name (Column t constraints) (Cons name (Column t constraints) Nil)
 
 -- | DROP TABLE
-instance Reflectable name String ⇒ Translate (Drop (Table name fields)) where
-      translate _ = do
-            pure $ dropKeyword
-                  <> tableKeyword
-                  <> quote (Proxy ∷ _ name)
-
-printAggregation ∷ ∀ inp fields rest out. NameList inp ⇒ ArgumentList rest ⇒ Aggregate inp rest fields out → State QueryState String
-printAggregation = case _ of
-      Count f → pure $ countFunctionName <> openBracket <> nameList f <> closeBracket
-      StringAgg f rest → do
-            nrest ← argumentList rest
-            pure $ string_aggFunctionName <> openBracket <> nameList f <> comma <> nrest <> closeBracket
-      ArrayAgg f → pure $ array_aggFunctionName <> openBracket <> nameList f <> closeBracket
-
-printFunction ∷ ∀ inp fields args out. ArgumentList args ⇒ PgFunction inp args fields out → State QueryState String
-printFunction (PgFunction name args) = do
-      nf ← argumentList args
-      pure $ name <> openBracket <> nf <> closeBracket
+instance Reflectable name String ⇒ ToStatement (T (Table name fields) Drop) where
+      toStatement _ = [ DLIA.DropTable (DR.reflectType (Proxy ∷ _ name)) ]
 
 quote ∷ ∀ alias. Reflectable alias String ⇒ Proxy alias → String
 quote name = quoteSymbol <> DR.reflectType name <> quoteSymbol
 
--- | Columns in the format alias.name must be aliased to avoid problems with ambiguous column names and *
-quotePath ∷ ∀ alias name. Reflectable alias String ⇒ Reflectable name String ⇒ Proxy alias → Proxy name → String
-quotePath alias name = quote alias <> dotSymbol <> quote name
-
 buildQuery ∷ ∀ q projection. ToQuery q projection ⇒ q → Query projection
-buildQuery qr = Query plan q parameters
-      where
-      q /\ { plan, parameters } = CMS.runState (toQuery qr)
-            { plan: Nothing
-            , parameters: []
-            , bracketed: false
-            }
+buildQuery = toQuery
 
 unsafeBuildQuery ∷
       ∀ projection parameters parameterList.

@@ -12,7 +12,6 @@ module Droplet.Language.Internal.Definition
       , Composite
       , Path
       , ForeignKey
-      , Joined
       , PrimaryKey
       , Constraint
       , Unique
@@ -26,7 +25,15 @@ module Droplet.Language.Internal.Definition
       , class ToValue
       , class UnwrapDefinition
       , class AppendPath
+      , class ColumnInScope
       , star
+      , col
+      , columns
+      , qualified
+      , class ColumnsOf
+      , columnsOf
+      , class QualifiedColumnsOf
+      , qualifiedColumnsOf
       , toType
       , toParameters
       , fromValue
@@ -65,10 +72,13 @@ import Data.Tuple.Nested ((/\))
 import Droplet.Language.Internal.Token (bigIntegerType, booleanType, dateTimeType, dateType, dotSymbol, integerType, numberType, stringType)
 import Foreign (Foreign)
 import Foreign as F
-import Prim.Row (class Cons)
-import Prim.RowList (RowList, Cons, Nil)
+import Prim.Row (class Cons, class Lacks)
+import Prim.RowList (class RowToList, RowList, Cons, Nil)
 import Prim.Symbol (class Append)
+import Prim.TypeError (class Fail, Beside, QuoteLabel, Text)
 import Record as R
+import Record.Builder (Builder)
+import Record.Builder as RB
 import Type.Proxy (Proxy(..))
 
 foreign import readInt ∷ Foreign → Nullable Int
@@ -85,9 +95,6 @@ type Empty = ""
 type Dot = "."
 
 data Composite (name ∷ Symbol)
-
--- | A trick to mark left joined columns as nullable
-data Joined (t ∷ Type)
 
 data Star = Star
 
@@ -119,6 +126,46 @@ path ∷ ∀ alias field path pathField. Append alias Dot path ⇒ Append path f
 path _ _ = Path
 
 infix 7 path as ...
+
+-- | A column name, e.g. `col @"name"`. Same as `Proxy ∷ Proxy "name"`
+col ∷ ∀ @name. Proxy name
+col = Proxy
+
+-- | A record of column names for each column of a table
+-- |
+-- | ```purescript
+-- | u = columns users
+-- | query = select (u.id /\ u.name) # from users -- SELECT "id", "name" FROM "users"
+-- | ```
+columns ∷ ∀ name fields list record. RowToList fields list ⇒ ColumnsOf list () record ⇒ Table name fields → Record record
+columns _ = RB.buildFromScratch (columnsOf (Proxy ∷ _ list))
+
+class ColumnsOf (list ∷ RowList Type) (from ∷ Row Type) (to ∷ Row Type) | list from → to where
+      columnsOf ∷ Proxy list → Builder (Record from) (Record to)
+
+instance ColumnsOf Nil record record where
+      columnsOf _ = identity
+
+instance (IsSymbol name, ColumnsOf rest from some, Lacks name some, Cons name (Proxy name) some to) ⇒ ColumnsOf (Cons name t rest) from to where
+      columnsOf _ = RB.insert (Proxy ∷ _ name) (Proxy ∷ _ name) <<< columnsOf (Proxy ∷ _ rest)
+
+-- | A record of qualified column names (alias.column) for each column of a table
+-- |
+-- | ```purescript
+-- | u = qualified @"u" users
+-- | query = select u.name # from (users # as @"u") -- SELECT "u"."name" "u.name" FROM "users" AS "u"
+-- | ```
+qualified ∷ ∀ @alias name fields list record. RowToList fields list ⇒ QualifiedColumnsOf alias list () record ⇒ Table name fields → Record record
+qualified _ = RB.buildFromScratch (qualifiedColumnsOf (Proxy ∷ _ alias) (Proxy ∷ _ list))
+
+class QualifiedColumnsOf (alias ∷ Symbol) (list ∷ RowList Type) (from ∷ Row Type) (to ∷ Row Type) | alias list from → to where
+      qualifiedColumnsOf ∷ Proxy alias → Proxy list → Builder (Record from) (Record to)
+
+instance QualifiedColumnsOf alias Nil record record where
+      qualifiedColumnsOf _ _ = identity
+
+instance (IsSymbol name, QualifiedColumnsOf alias rest from some, Lacks name some, Cons name (Path alias name) some to) ⇒ QualifiedColumnsOf alias (Cons name t rest) from to where
+      qualifiedColumnsOf alias _ = RB.insert (Proxy ∷ _ name) (Path ∷ Path alias name) <<< qualifiedColumnsOf alias (Proxy ∷ _ rest)
 
 -- | Converts a PureScript value into Postgres
 class ToValue v where
@@ -242,8 +289,6 @@ class UnwrapDefinition (w ∷ Type) (t ∷ Type) | w → t
 
 instance UnwrapDefinition (Column t c) t
 
-else instance UnwrapDefinition t u ⇒ UnwrapDefinition (Joined t) u
-
 else instance UnwrapDefinition t t
 
 -- | Convenience to remove nullable wrappers
@@ -255,11 +300,7 @@ else instance UnwrapNullable t t
 
 class IsNullable (t ∷ Type)
 
-instance IsNullable (Column (Maybe t) c)
-
 instance IsNullable (Maybe t)
-
-instance IsNullable (Joined t)
 
 class ToParameters record (list ∷ RowList Type) where
       toParameters ∷ Proxy list → Record record → Array (Tuple String Foreign)
@@ -278,6 +319,17 @@ instance
       toParameters _ record = (DR.reflectType name /\ toValue (R.get name record)) : toParameters (Proxy ∷ Proxy rest) record
             where
             name = Proxy ∷ Proxy name
+
+-- | Type of a column in scope, with a clearer error than a row mismatch when it is not
+class ColumnInScope (name ∷ Symbol) (list ∷ RowList Type) (t ∷ Type) | name list → t
+
+instance ColumnInScope name (Cons name t rest) t
+
+else instance ColumnInScope name rest t ⇒ ColumnInScope name (Cons other u rest) t
+
+else instance
+      Fail (Beside (Text "Column ") (Beside (QuoteLabel name) (Text " is not in scope. Columns that exist on both sides of a JOIN must be qualified with their table name or alias, and tables joined more than once must be aliased"))) ⇒
+      ColumnInScope name Nil t
 
 -- | Simplify append qualifying column names
 class AppendPath (alias ∷ Symbol) (name ∷ Symbol) (fullPath ∷ Symbol) | alias name → fullPath

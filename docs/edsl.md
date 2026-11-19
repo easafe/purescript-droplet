@@ -42,34 +42,12 @@ Since the columns are at the type level, we need `Proxy`s to represent their nam
 ```haskell
 id :: Proxy "id"
 id = Proxy
-
-name :: Proxy "name"
-name = Proxy
-
-date :: Proxy "date"
-date = Proxy
-
-birthday :: Proxy "birthday"
-birthday = Proxy
-
-sender :: Proxy "sender"
-sender = Proxy
-
-recipient :: Proxy "recipient"
-recipient = Proxy
 ```
 
-and aliases, as well
+or visible type applications
 
 ```haskell
-m :: Proxy "m"
-m = Proxy
-
-u :: Proxy "u"
-u = Proxy
-
-t :: Proxy "t"
-t = Proxy
+select (id # as @"user_id") ...
 ```
 
 * Query types
@@ -77,11 +55,11 @@ t = Proxy
 The eDSL is designed to be composable, and resemble SQL syntax as much as possible so the generated code is a direct equivalent. For those reasons, function types are somewhat opaque. On the other hand, data types (such as for SELECT, WHERE or JOIN) can become quite verbose quite fast. Luckily, when writing queries, type annotations are optional: the type checker should be able to infer the type of valid queries without any hints. That being said, specially when debugging type errors in your queries, it might be useful to know some of the conventions employed in the eDSL.
 
 ```haskell
--- select :: forall s projection. ToSelect s => s -> Select s projection E
--- from :: forall f q columns sql. ToFrom f q columns => Resume q (From f columns E) sql => f -> q -> sql
--- wher :: forall c q sql. ToWhere c q => Resume q (Where c E) sql => c -> q -> sql
+-- select :: forall s. ToSelect s => s -> Select s
+-- from :: forall f q columns projection. ToFrom f q columns projection => f -> q -> From f columns projection q
+-- wher :: forall c q. ToWhere c q => c -> q -> Where c q
 
-exampleQuery :: Select (Proxy "name") (name :: String) (From (Table "users" Users) Users (Where (Op (Proxy "id") Int) E))
+exampleQuery :: Where (Op (Proxy "id") Int) (From (Table "users" Users) _ (name :: String) (Select (Proxy "name")))
 exampleQuery = select name # from users # wher (id .=. 9)
 ```
 
@@ -95,10 +73,6 @@ To aid composition, functions are designed to be take the current query as their
 
 Type classes like `ToFrom`, `ToWhere` etc., serve to tell which statements are allowed in sequence (e.g., FROM can only follow after SELECT or DELETE, etc). These type classes have no function members
 
-* `Resume` type class
-
-The end of a statement is marked by the `E` data type. The type class `Resume` can replace it with a further statement, for example, `Select s projection E` => `Select s projection (From f columns E)`
-
 Lastly, tuples (via `/\`) stand in for commas, e.g., `select (column /\ column2 /\ columnN) ... groupBy (column /\ column2 /\ columnN) ... orderBy (column /\ column2 /\ columnN)` == `SELECT column, column2, columnN ... GROUP BY column, column2, columnN ... ORDER BY column, column2, columnN`
 
 ## SELECT
@@ -106,7 +80,7 @@ Lastly, tuples (via `/\`) stand in for commas, e.g., `select (column /\ column2 
 SELECT is typed as
 
 ```haskell
-select :: forall s projection. ToSelect s => s -> Select s projection E
+select :: forall s. ToSelect s => s -> Select s
 ```
 
 ### Projections
@@ -114,37 +88,39 @@ select :: forall s projection. ToSelect s => s -> Select s projection E
 `select` can project columns, literals, subqueries, functions and ```*```.
 
 ```haskell
-selectColumn :: forall projection. Select (Proxy "id") projection E
+selectColumn :: Select (Proxy "id")
 selectColumn = select id
 
 -- literals must be aliased
-selectLiteral :: forall projection. Select (As "m" Int) projection E
-selectLiteral = select (3 # as m)
+selectLiteral :: Select (As "m" Int)
+selectLiteral = select (3 # as @"m")
 
-selectStar :: forall projection. Select Star projection E
+selectStar :: Select Star
 selectStar = select star
 
 -- same as SELECT table alias.column name
-selectQualifiedColumn :: forall projection. Select (Path "u" "id") projection E
+selectQualifiedColumn :: Select (Path "u" "id")
 selectQualifiedColumn = select (u ... id)
 
 -- functions must be aliased
-selectCount :: forall projection columns. Select (As "u" (Aggregate Star E columns BigInt)) projection E
-selectCount = select (count star # as u)
+selectCount :: forall columns. Select (As "u" (Aggregate Star E columns BigInt))
+selectCount = select (count star # as @"u")
 
 selectSubQuery :: _
-selectSubQuery = select (select name # from users # wher (u ... id .=. id) # orderBy id # limit (Proxy :: _ 1)) # from (messages # as u)
+selectSubQuery = select (select name # from users # wher (u ... id .=. id) # orderBy id # limit @1) # from (messages # as @"u")
 
-selectManyColumns :: forall projection. Select (Tuple (Proxy "id") (Tuple (Proxy "name") (Tuple (As "u" Int) (Path "m" "id")))) projection E
-selectManyColumns = select (id /\ name /\ (5 # as u) /\ m ... id)
+selectManyColumns :: Select (Tuple (Proxy "id") (Tuple (Proxy "name") (Tuple (As "u" Int) (Path "m" "id"))))
+selectManyColumns = select (id /\ name /\ (5 # as @"u") /\ m ... id)
 ```
 
-In the case of fully formed SELECT statements, `projection` becomes a `Row Type` of the output. Note that columns constraints and other type wrappers are removed. For example, selecting id from `Users` yields ```(id :: Int)``` and not ```(id :: Column Int (PrimaryKey /\ Identity))```
+Once FROM is applied, the third type parameter of `From` is the `projection`: a `Row Type` of the output. Note that columns constraints and other type wrappers are removed. For example, selecting id from `Users` yields ```(id :: Int)``` and not ```(id :: Column Int (PrimaryKey /\ Identity))```
 
 ```haskell
-exampleProjection :: Select (Tuple (Proxy "id") (Proxy "name")) (id :: Int, name :: String) _
+exampleProjection :: From (Table "users" Users) _ (id :: Int, name :: String) (Select (Tuple (Proxy "id") (Proxy "name")))
 exampleProjection = select (id /\ name) # from users
 ```
+
+In the examples below, `_` stands for type parameters that are not relevant to the point being made
 
 Note that `select` on its own accepts any column name. Queries are checked only after FROM is used.
 
@@ -154,7 +130,7 @@ Subqueries must return a single column and zero or one results (by including a L
 
 ```haskell
 subQueryExample :: _
-subQueryExample = select (select name # from users # wher (u ... id .=. id) # orderBy id # limit (Proxy :: _ 1)) # from (messages # as u)
+subQueryExample = select (select name # from users # wher (u ... id .=. id) # orderBy id # limit @1) # from (messages # as @"u")
 ```
 
 ### Functions
@@ -188,32 +164,32 @@ func = function "func"
 Be aware that functions must be aliased
 
 ```haskell
-selectCoalesce :: Select (As "u" (PgFunction (Tuple (Proxy "id") Int) (Tuple (Proxy "id") Int) Users (Maybe Int))) (u :: Maybe Int) _
-selectCoalesce = select (coalesce (id /\ 4) # as u) # from users
+selectCoalesce :: From _ _ (u :: Maybe Int) (Select (As "u" (PgFunction (Tuple (Proxy "id") Int) (Tuple (Proxy "id") Int) _ (Maybe Int))))
+selectCoalesce = select (coalesce (id /\ 4) # as @"u") # from users
 ```
 
 ### DISTINCT
 
 ```haskell
-distinct :: forall s. ToSelect s => s -> Distinct s
+distinct :: forall s. ToSelectColumns s => s -> Distinct s
 ```
 
-DISTINCT is subject the same rules as SELECT.
+DISTINCT is subject to the same rules as SELECT, and must wrap the whole list of selected columns.
 
 ```haskell
-selectDistinctColumn :: Select (Distinct (Proxy "id")) (id :: Int) _
+selectDistinctColumn :: From _ _ (id :: Int) (Select (Distinct (Proxy "id")))
 selectDistinctColumn = select (distinct id) # from users
 
-selectDistinctColumns :: Select (Distinct (Tuple (Proxy "id") (Tuple (Proxy "name") (Proxy "birthday")))) (birthday :: Maybe Date, id :: Int, name :: String) _
+selectDistinctColumns :: From _ _ (birthday :: Maybe Date, id :: Int, name :: String) (Select (Distinct (Tuple (Proxy "id") (Tuple (Proxy "name") (Proxy "birthday")))))
 selectDistinctColumns = select (distinct $ id /\ name /\ birthday) # from users
 ```
 
 ### FROM
 
-FROM statement keeps track of columns in scope. For this reason, its type is a bit more complex than SELECT
+FROM statement keeps track of the columns in scope and computes the query projection. For this reason, its type is a bit more complex than SELECT
 
 ```haskell
-from :: forall f q columns sql. ToFrom f q columns => Resume q (From f columns E) sql => f -> q -> sql
+from :: forall f q columns projection. ToFrom f q columns projection => f -> q -> From f columns projection q
 ```
 
 The type parameter `f`, indicating the source of columns, can be a
@@ -223,18 +199,18 @@ The type parameter `f`, indicating the source of columns, can be a
 We can select tables as they are
 
 ```haskell
-fromTable :: Select (Proxy "id") (id :: Int) _
+fromTable :: From _ _ (id :: Int) _
 fromTable = select id # from users
 ```
 
 or with a alias
 
 ```haskell
-fromTableAlias :: Select (Proxy "id") (id :: Int) _
-fromTableAlias = select id # from (users # as u) -- SELECT id FROM users AS u
+fromTableAlias :: From _ _ (id :: Int) _
+fromTableAlias = select id # from (users # as @"u") -- SELECT id FROM users AS u
 
-fromTableAlias2 :: Select (Path "u" "id") ("u.id" :: Int) _
-fromTableAlias2 = select (u ... id) # from (users # as u) -- SELECT u.id FROM users AS u
+fromTableAlias2 :: From _ _ ("u.id" :: Int) _
+fromTableAlias2 = select (u ... id) # from (users # as @"u") -- SELECT u.id FROM users AS u
 ```
 
 * Sub query
@@ -242,8 +218,8 @@ fromTableAlias2 = select (u ... id) # from (users # as u) -- SELECT u.id FROM us
 Subqueries in FROM must have an alias
 
 ```haskell
-fromSubQuery :: Select (Proxy "name") (name :: String) _
-fromSubQuery = select name # from (select star # from users # as u) -- SELECT name FROM (SELECT * FROM users) AS u
+fromSubQuery :: From _ _ (name :: String) _
+fromSubQuery = select name # from (select star # from users # as @"u") -- SELECT name FROM (SELECT * FROM users) AS u
 ```
 
 * Join
@@ -273,11 +249,11 @@ the columns `id` and `name` are not visible -- they must be accessed through `(a
 Returns a cartesian product of both expressions
 
 ```haskell
-queryInnerJoin :: Select (Path "u" "name") ("u.name" :: String) _
-queryInnerJoin = select (u ... name) # from ((messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT u.name FROM messages AS m INNER JOIN users AS u ON m.sender = u.id
+queryInnerJoin :: From _ _ ("u.name" :: String) _
+queryInnerJoin = select (u ... name) # from ((messages # as @"m") `join` (users # as @"u") # on (m ... sender .=. u ... id)) -- SELECT u.name FROM messages AS m INNER JOIN users AS u ON m.sender = u.id
 
-queryInnerJoin2 :: Select (Tuple (Proxy "name") (Proxy "sender")) ( name :: String, sender :: Int) _
-queryInnerJoin2 = select (name /\ sender) # from ((select sender # from messages # as m) `join` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT name, sender FROM (SELECT "sender" FROM messages) AS m INNER JOIN users AS u ON m.sender = u.id
+queryInnerJoin2 :: From _ _ (name :: String, sender :: Int) _
+queryInnerJoin2 = select (name /\ sender) # from ((select sender # from messages # as @"m") `join` (users # as @"u") # on (m ... sender .=. u ... id)) -- SELECT name, sender FROM (SELECT "sender" FROM messages) AS m INNER JOIN users AS u ON m.sender = u.id
 ```
 
 2. LEFT OUTER JOIN
@@ -285,61 +261,61 @@ queryInnerJoin2 = select (name /\ sender) # from ((select sender # from messages
 Returns a cartesian product of both expressions plus each row in the left hand expression that had no match on the right side. Right side columns will become `Maybe` in the projection type.
 
 ```haskell
-queryOuterJoin :: Select (Tuple (Proxy "name") (Path "m" "sender")) ("name" :: Maybe String, "m.sender" :: Int) _
-queryOuterJoin = select (name /\ m ... sender) # from ((messages # as m) `leftJoin` (users # as u) # on (m ... sender .=. u ... id)) -- SELECT name, m.sender FROM messages AS m OUTER JOIN users AS u ON m.sender = u.id
+queryOuterJoin :: From _ _ ("name" :: Maybe String, "m.sender" :: Int) _
+queryOuterJoin = select (name /\ m ... sender) # from ((messages # as @"m") `leftJoin` (users # as @"u") # on (m ... sender .=. u ... id)) -- SELECT name, m.sender FROM messages AS m OUTER JOIN users AS u ON m.sender = u.id
 ```
 
 ### GROUP BY
 
 ```haskell
-groupBy:: forall f s q sql grouped columns. ToGroupBy q s columns => GroupByFields f columns grouped => ValidGroupByProjection s grouped => Resume q (GroupBy f E) sql => f -> q -> sql
+groupBy :: forall f s q grouped columns. ToGroupBy q s columns => GroupedColumns f columns grouped => ValidGroupByProjection s grouped => f -> q -> GroupBy f q
 ```
 
 Expectedly, GROUP BY queries limit SELECT projections to grouped columns or aggregations
 
 ```haskell
 selectGroupBy :: _
-selectGroupBy = select ((count id # as b) /\ name) # from users # groupBy (id /\ name) # orderBy id
+selectGroupBy = select ((count id # as @"b") /\ name) # from users # groupBy (id /\ name) # orderBy id
 ```
 
 ### ORDER BY
 
 ```haskell
-orderBy :: forall f q sql. ToOrderBy f q => Resume q (OrderBy f E) sql => f -> q -> sql
+orderBy :: forall f q. ToOrderBy f q => f -> q -> OrderBy f q
 ```
 
 Currently, ORDER BY statements can sort queries only by columns. Note that in DISTINCT queries only the projected columns can be used for sorting.
 
 ```haskell
-selectOrderBy :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") E))
+selectOrderBy :: OrderBy (Proxy "id") (From (Table "users" Users) _ (name :: String) (Select (Proxy "name")))
 selectOrderBy = select name # from users # orderBy id
 ```
 
 ### LIMIT
 
 ```haskell
-limit :: forall q sql. ToLimit q => Resume q (Limit n E) sql => Proxy n -> q -> sql
+limit :: forall @n q. ToLimit q => q -> Limit n q
 ```
 
 LIMIT must always follow ORDER BY (or OFFSET), as otherwise query order is unspecified.
 
 ```haskell
-selectLimit :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") (Limit 1 E)))
-selectLimit = select name # from users # orderBy id # limit (Proxy :: _ 1)
+selectLimit :: Limit 1 (OrderBy (Proxy "id") (From (Table "users" Users) _ (name :: String) (Select (Proxy "name"))))
+selectLimit = select name # from users # orderBy id # limit @1
 ```
 
-Only number literals are currently supported.
+The number of rows is passed as a type level literal, e.g. `limit @10`.
 
 ### OFFSET
 
 ```haskell
-offset :: forall q sql. ToOffset q => Resume q (Offset E) sql => Int -> q -> sql
+offset :: forall q. ToOffset q => Int -> q -> Offset q
 ```
 
 OFFSET must always follow ORDER BY (or LIMIT), as otherwise query order is unspecified.
 
 ```haskell
-selectOffset :: Select (Proxy "name") (name :: String) (From (Table "users" Users ) Users (OrderBy (Proxy "id") (Offset E)))
+selectOffset :: Offset (OrderBy (Proxy "id") (From (Table "users" Users) _ (name :: String) (Select (Proxy "name"))))
 selectOffset = select name # from users # orderBy id # offset 5
 ```
 
@@ -363,7 +339,7 @@ selectUnion = (select id # from users # wher (name .=. "mary")) `union` (select 
 ## WHERE
 
 ```haskell
-wher :: forall c q sql. ToWhere c q => Resume q (Where c E) sql => c -> q -> sql
+wher :: forall c q. ToWhere c q => c -> q -> Where c q
 ```
 
 The usual operators (e.g., equals, not equals, greater/lesser than, etc.) are surrounded by dots (e.g., `.=.`, `.<>.`, `.>.`, `.<.`). In addition, `NOT`, `EXISTS`, `IN` and `IS NOT NULL` are currently supported. `AND` and `OR` are represented by the operators `.&&.` and `.||.` to help avoiding brackets.
@@ -421,7 +397,7 @@ updateWhere = update users # set ((name .=. "Mary") /\ (birthday .=. Nothing)) #
 DELETE queries can be as it is or with a WHERE clause.
 
 ```haskell
-deleteQuery :: Delete (From (Table "users" Users) Users E)
+deleteQuery :: From (Table "users" Users) _ () Delete
 deleteQuery = delete # from users
 
 deleteWhere :: _
@@ -443,22 +419,48 @@ deleteReturning :: _
 deleteReturning = delete # from users # returning birthday
 ```
 
+## Column names
+
+Columns and aliases are type level names. Besides declaring a `Proxy` for each one, names can be written inline with `col` or derived from a table definition with `columns` and `qualified`
+
+```haskell
+col :: forall @name. Proxy name
+columns :: Table name fields -> { column :: Proxy "column", ... }
+qualified :: forall @alias. Table name fields -> { column :: Path alias "column", ... }
+
+columnNames :: _
+columnNames = select (usr.id /\ usr.name) # from users # wher (usr.name .=. "mary")
+      where
+      usr = columns users
+
+qualifiedNames :: _
+qualifiedNames = select u.name # from ((users # as @"u") `join` (messages # as @"m") # on (u.id .=. m.sender))
+      where
+      u = qualified @"u" users
+      m = qualified @"m" messages
+
+inlineNames :: _
+inlineNames = select (col @"n") # from (select (id # as @"n") # from users # as @"t")
+```
+
+Field access is checked like any other record, so a typo is reported where it happens
+
 ## AS
 
 AS can be used to alias columns, tables and queries.
 
 ```haskell
 asColumn :: _
-asColumn = select (id # as m) # from users
+asColumn = select (id # as @"m") # from users
 
 asTable :: _
-asTable = select id # from (users # as m)
+asTable = select id # from (users # as @"m")
 
 asQuery :: _
-asQuery = select id # from (select star # from users # as m)
+asQuery = select id # from (select star # from users # as @"m")
 ```
 
-Be aware of bracketing, `select id # from (select star # from users # as m)` is parsed as `SELECT id FROM (SELECT * FROM users) AS m` whereas `select id # from (select star # from users) # as m` results in a type error.
+Be aware of bracketing, `select id # from (select star # from users # as @"m")` is parsed as `SELECT id FROM (SELECT * FROM users) AS m` whereas `select id # from (select star # from users) # as @"m"` results in a type error.
 
 ## PREPARE
 

@@ -47,6 +47,11 @@ import Droplet.Language.Internal.Definition
       , Table(..)
       , fromValue
       , star
+      , col
+      , columns
+      , qualified
+      , class ColumnsOf
+      , class QualifiedColumnsOf
       , toType
       , toValue
       , (...)
@@ -75,7 +80,7 @@ import Droplet.Language.Internal.Syntax
       , Insert
       , Into
       , OrderBy
-      , Plan
+      , Plan(..)
       , Prepare
       , Alter
       , Select

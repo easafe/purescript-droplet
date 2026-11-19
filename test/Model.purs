@@ -24,8 +24,6 @@ import Effect.Class (liftEffect)
 import Partial.Unsafe as PU
 import Prim.Row (class Nub)
 import Prim.RowList (class RowToList)
-import Test.Spec (Spec)
-import Test.Spec as TS
 import Test.Spec.Assertions as TSA
 
 makeDate ∷ Int → Int → Int → Date
@@ -97,8 +95,17 @@ unsafeResult plan q parameters o = do
                   truncateTables connection
                   TSA.shouldEqual (Right o) r
 
+-- | Fails loudly, and checks that tables are actually empty afterwards: a silently failed cleanup would make every following test fail for the wrong reason
 truncateTables ∷ Connection → Aff Unit
-truncateTables connection = void (DDU.unsafeQuery connection Nothing "select truncate_tables()" {} ∷ Aff (Either PgError (Array {})))
+truncateTables connection = do
+      result ← DDU.unsafeExecute connection Nothing "select truncate_tables()" {}
+      case result of
+            Nothing → do
+                  counted ← DDU.unsafeQuery connection Nothing "select count(*) :: integer as n from users" {} ∷ Aff (Either PgError (Array { n ∷ Int }))
+                  case counted of
+                        Right [ { n: 0 } ] → pure unit
+                        other → TSA.fail $ "Tables are not empty after truncate: " <> show other
+            Just error → TSA.fail $ "Could not truncate tables: " <> show error
 
 insertDefaultRecords ∷ Aff Unit
 insertDefaultRecords = do
@@ -117,8 +124,11 @@ insertDefaultRecords = do
                   void <<< DD.query connection $ insert # into doublePrimaryKey defaultValues
                   void <<< DD.query connection $ insert # into composite (secondId /\ name /\ sender /\ recipient) # values (1 /\ "adam" /\ 1 /\ 2)
 
+-- | Test database name, `droplet` unless overridden by the `DROPLET_DATABASE` environment variable
+foreign import databaseName ∷ String
+
 connectionInfo ∷ Configuration
-connectionInfo = (DD.defaultConfiguration "droplet")
+connectionInfo = (DD.defaultConfiguration databaseName)
       { user = Just "droplet"
       , host = Nothing
       , password = Just "droplet"
